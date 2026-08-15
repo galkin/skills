@@ -1,0 +1,6 @@
+interface:
+  display_name: "Set Up Bite-Size Learning"
+  short_description: "Create a durable bite-size learning project"
+  default_prompt: "Use $setup-bite-size-learning to set up a new learning project."
+policy:
+  allow_implicit_invocation: false
