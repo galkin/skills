@@ -1,0 +1,11 @@
+interface:
+  display_name: forge prompt
+  short_description: Turn a draft prompt or a stated intent into a polished, copy-paste-ready
+    prompt for ChatGPT, Claude, or a deep research agent — via diagnosis and a staged
+    clarification interview.
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  allow_implicit_invocation: false
