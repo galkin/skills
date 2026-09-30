@@ -1,0 +1,14 @@
+interface:
+  display_name: Quiz Generator
+  short_description: Write, improve and audit certification-style quizzes
+  default_prompt: Use $quiz-generator to add a knowledge check to the lesson I name,
+    drawn only from what that lesson teaches.
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true
