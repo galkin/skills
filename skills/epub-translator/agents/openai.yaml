@@ -1,0 +1,4 @@
+interface:
+  display_name: "EPUB Translator"
+  short_description: "Translate EPUB books with resumable review and validated EPUB builds"
+  default_prompt: "Use $epub-translator to translate or resume the requested EPUB books between the source and target languages configured in translation.json, keep series terminology consistent, verify completeness, and build validated EPUBs in the configured target language."

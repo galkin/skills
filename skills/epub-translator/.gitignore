@@ -1,0 +1,12 @@
+# Python bytecode and local test caches.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local environments and macOS metadata.
+.venv/
+.DS_Store
