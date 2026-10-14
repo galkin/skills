@@ -1,0 +1,14 @@
+interface:
+  display_name: Diagram Generator
+  short_description: Decide whether a lesson earns a Mermaid diagram, then write, improve or audit it
+  default_prompt: Use $diagram-generator to add a diagram to the lesson I name, only if one of its
+    mechanisms earns it, drawn only from what that lesson teaches.
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true
