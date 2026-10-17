@@ -23,7 +23,14 @@ import httpx
 
 from lorekeep import frontmatter
 from lorekeep.cli import run
-from lorekeep.edges import CommandResult, Edges, FetcherNotInstalled, PageFetchError, RenderedPage
+from lorekeep.edges import (
+    CommandResult,
+    Edges,
+    FetcherNotInstalled,
+    PageFetchError,
+    RenderedPage,
+    Wait,
+)
 from lorekeep.store import version_name
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -109,32 +116,44 @@ class FakeTransport(httpx.BaseTransport):
 
 
 class FakeFetcher:
-    """The browser: renders the pages it was given (`url → (html file, final url)`)."""
+    """The browser: renders the pages it was given (`url → (html file, final url)`). A page given
+    as a sequence of files renders as the next one on each call, the last one ever after; each
+    call's `CrawlerRunConfig` keywords are recorded in `configs`."""
 
     def __init__(
         self,
-        pages: Mapping[str, tuple[Path | str, str]] | None = None,
+        pages: Mapping[str, tuple[Path | str | Sequence[Path | str], str]] | None = None,
         *,
         installed: bool = True,
         version: str = "0.9.5",
     ) -> None:
-        self.pages = {url: (Path(path), final) for url, (path, final) in (pages or {}).items()}
+        self.pages = {
+            url: (
+                [Path(paths)] if isinstance(paths, (Path, str)) else [Path(p) for p in paths],
+                final,
+            )
+            for url, (paths, final) in (pages or {}).items()
+        }
         self.installed = installed
         self._version = version
         self.calls: list[str] = []
+        self.configs: list[dict[str, Any]] = []
 
     def version(self) -> str:
         if not self.installed:
             raise FetcherNotInstalled()
         return self._version
 
-    def fetch(self, url: str) -> RenderedPage:
+    def fetch(self, url: str, wait: Wait) -> RenderedPage:
         if not self.installed:
             raise FetcherNotInstalled()
+        rendered = sum(1 for call in self.calls if call == url)
         self.calls.append(url)
+        self.configs.append(wait.config())
         if url not in self.pages:
             raise PageFetchError(f"the fake browser has no page for {url}")
-        path, final_url = self.pages[url]
+        paths, final_url = self.pages[url]
+        path = paths[min(rendered, len(paths) - 1)]
         return RenderedPage(html=path.read_text(encoding="utf-8"), final_url=final_url)
 
 

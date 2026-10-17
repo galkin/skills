@@ -115,8 +115,12 @@ matches `host/path` by prefix and the longest matching prefix wins. Its keys:
 - `browser` — `true` sends the first fetch of every page under the prefix straight to the browser
   (Crawl4AI, the `lorekeep[browser]` extra), past the Twin and the static page: for a host whose
   pages build themselves in the browser (`build.nvidia.com`). Without it the browser is still the
-  last step, for a page the plain request could not read (`thin content`, a `403`). A
-  browser-rendered Version is never rechecked.
+  last step, for a page the plain request could not read (`thin content`, a `403`). The browser
+  retries on its own, with no setting: it renders once waiting for the network to go quiet
+  (`networkidle`), again with three more seconds when the Markdown is thin, and a third time
+  waiting up to 15 seconds for the page's main text to grow past the thin threshold. A page still
+  thin after the third render is the error `the browser rendered a shell` and nothing is stored.
+  A browser-rendered Version is never rechecked.
 - `cut` — a list of CSS selectors removed from a page the browser rendered under the prefix
   before conversion (`cut = ["nav", ".cookie-banner"]`); the Original is the rendered document
   before the cut. It changes nothing for a static page or a Twin.

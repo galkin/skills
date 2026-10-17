@@ -111,3 +111,14 @@ pages cut after the sections a test reads; the model card keeps the first 8,000 
 payload `<script>`, which is what makes it thin. `langchain-sql-agent.html` was recorded live the
 same day, because its Original was never stored, and cut to the step whose tab buttons hold the
 comments. Their headers are the minimum a test needs.
+
+## Rendered documents for the fake browser
+
+These are single files, not folders: `FakeFetcher` returns a file as the document the browser
+rendered, and a page given several files renders as the next one on each call.
+
+| File                                          | What it shows                                                        |
+| --------------------------------------------- | -------------------------------------------------------------------- |
+| `build-nemotron-modelcard.rendered-shell.html` | the model card as Crawl4AI 0.9.5 rendered it with its default wait in the second migration (77,433 bytes): the menu, an empty `<main>` holding Next.js's `NEXT_HTTP_ERROR_FALLBACK;404` template, the payload `<script>`s; converts to about 216 bytes of menu |
+| `build-nemotron-modelcard.rendered-card.html`  | the same document with the card's content in `<main>`: synthesised (2026-10-17), because the card is gone upstream and no loaded render was ever kept; the description is the page's own `<meta name="description">`, the two paragraphs are the overview of the earlier hand-written `RENDERED_CARD` |
+| `browser-short-page.html`                     | synthesised: a page short for real, its document as small as its Markdown |

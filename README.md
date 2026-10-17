@@ -119,7 +119,7 @@ inherited.
 | `docs.nvidia.com/openshell/`       | `nvidia`    | primary     | `md-suffix` (Fern)                            |
 | `docs.langchain.com/`              | `langchain` | primary     | `md-suffix` (Mintlify)                        |
 | `cloud.google.com/`                | `google`    | primary     | —                                             |
-| `milvus.io/`                       | `milvus`    | primary     | — (answers `403`; the browser fetches it)     |
+| `milvus.io/`                       | `milvus`    | primary     | —                                             |
 | `claude.termidy.com/`              | `termidy`   | third-party | —                                             |
 | `raw.githubusercontent.com/`       | `github`    | third-party | `raw`                                         |
 | `github.com/`                      | `github`    | third-party | `github-raw`                                  |
@@ -205,9 +205,10 @@ LOREKEEP_STORE=~/orca/sources/agentic-system.design lorekeep index
 ## Smoke test against the live network
 
 The test suite never touches the network. One manual script checks lorekeep against the real
-world: it fetches a Twin, a static page and a page that needs the browser into a temporary Store,
-prints their converters, and restores an older generation of one object from the bucket with
-`restore --generation`. It writes nothing to the bucket.
+world: it fetches a Twin, a static page and, under a temporary `browser = true` rule, a page
+through the browser into a temporary Store, prints their converters, and restores an older
+generation of one object from the bucket with `restore --generation`. It writes nothing to the
+bucket.
 
 ```sh
 uv sync --extra browser

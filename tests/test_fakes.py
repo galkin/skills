@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from lorekeep.edges import CommandResult, Edges, FetcherNotInstalled, RenderedPage
+from lorekeep.edges import CommandResult, Edges, FetcherNotInstalled, RenderedPage, Wait
 from tests.support import FIXTURES, FakeFetcher, FakeRunner, FakeTransport, run_cli, status_in_child
 
 ANTHROPIC_TWIN = "https://platform.claude.com/docs/en/build-with-claude/prompt-caching.md"
@@ -96,17 +96,18 @@ def test_the_fetcher_returns_its_page_and_records_the_call(tmp_path: Path) -> No
     page.write_text("<html><body><nav>menu</nav><p>text</p></body></html>")
     fetcher = FakeFetcher({"https://milvus.io/docs/overview.md": (page, "https://milvus.io/docs")})
 
-    rendered = fetcher.fetch("https://milvus.io/docs/overview.md")
+    rendered = fetcher.fetch("https://milvus.io/docs/overview.md", Wait(wait_until="networkidle"))
 
     assert rendered == RenderedPage(html=page.read_text(), final_url="https://milvus.io/docs")
     assert fetcher.calls == ["https://milvus.io/docs/overview.md"]
+    assert fetcher.configs == [{"wait_until": "networkidle"}]
 
 
 def test_the_fetcher_not_installed_says_so_and_records_no_call(tmp_path: Path) -> None:
     fetcher = FakeFetcher({}, installed=False)
 
     with pytest.raises(FetcherNotInstalled) as raised:
-        fetcher.fetch("https://milvus.io/docs/overview.md")
+        fetcher.fetch("https://milvus.io/docs/overview.md", Wait())
 
     assert "lorekeep[browser]" in str(raised.value)
     assert fetcher.calls == []

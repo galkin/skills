@@ -1,6 +1,6 @@
 """The manual smoke test of lorekeep v1 against the live network; `pytest` never runs it.
 
-It fetches one Twin, one static page and one page that needs the browser into a throw-away Store,
+It fetches one Twin, one static page and one page through the browser into a throw-away Store,
 prints the converter of each, and restores one older generation of one object from the real
 bucket with `restore --generation`, which proves the `#N` syntax the tests could only fake.
 
@@ -36,6 +36,15 @@ PAGES = (
     ),
     ("browser page", "https://milvus.io/docs/overview.md", "via crawl4ai"),
 )
+# Milvus answers a plain client now: this rule, in the throw-away Store only, sends it to the
+# browser, so the browser step is proved whatever the host answers.
+BROWSER_RULE = """
+[[hosts]]
+prefix = "milvus.io/docs/"
+publisher = "milvus"
+authority = "primary"
+browser = true
+"""
 GENERATION = re.compile(r"^gs://[^/]+/(?P<name>[^#]+)#(?P<generation>\d+)$")
 
 
@@ -108,6 +117,8 @@ def main() -> int:
         for store in (pages, restores):
             store.mkdir()
             (store / "lorekeep.toml").write_text(f'bucket = "{args.bucket}"\n')
+        with (pages / "lorekeep.toml").open("a") as config:
+            config.write(BROWSER_RULE)
         fetched = fetch_pages(pages)
         restored = restore_a_generation(restores, args.bucket, args.object)
     print("smoke test passed" if fetched and restored else "smoke test FAILED")
