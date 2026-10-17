@@ -62,6 +62,8 @@ Copies the Store to the Project's bucket (`bucket` in `lorekeep.toml`) with `gcl
 never deleting there and never replacing a Version or an Original; the growing files (`tags.csv`,
 `checks.csv`, `aliases.csv`, `citations.csv`, `datapackage.json`, `lorekeep.toml`) are copied
 every time and the bucket's versioning keeps their history. Regenerates `datapackage.json` first.
+`.cache/` is never backed up, nor is the Index: the Readings in it are rebuilt from the Versions
+and the rules by the next `get`, `search` or `read`, so a restored Store needs nothing more.
 
 - `--dry-run` — `rsync` in dry-run mode; `datapackage.json` is still regenerated; the `cp` of the
   growing files is listed, not run.
@@ -84,8 +86,9 @@ path. The next command that reads the Index picks it up.
 
 `lorekeep index [--store DIR]`
 
-Rebuilds the Index (`sources.db`) from the files. Rarely needed: every reader rebuilds a stale
-Index, every write keeps it current.
+Rebuilds the Index (`sources.db`) from the files, first building the Readings that are missing
+or stale. Rarely needed: every reader rebuilds a stale Index (a change of the `[[readings]]` rules
+makes it stale), every write keeps it current.
 
 - `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
 
@@ -99,8 +102,9 @@ Indexed 2 Versions, 26 Sections, 1 Tag row, 1 Recheck, 0 aliases, 1 Citation int
 
 Builds the Reading of every Version (owner-added ones aside) whose Reading is missing or stale:
 the Version after the `[[readings]]` rules that apply to it, in `.cache/readings/<stem>.md` (see
-[store.md](store.md#readings)). Rarely needed: `get` builds the Reading it returns. A Version no
-rule changes has no Reading. A rule held back by the over-removal guard is named on stderr as
+[store.md](store.md#readings)). Rarely needed: `get` builds the Reading it returns, `recheck` the
+Reading of a changed page, and `search` every missing or stale one when it rebuilds the Index. A
+Version no rule changes has no Reading. A rule held back by the over-removal guard is named on stderr as
 `lorekeep: warning: <url>: rule <name> removed N% (accepted at M%)`.
 
 - `--prefix URL` — only Sources whose `url` starts with this.

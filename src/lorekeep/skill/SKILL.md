@@ -223,16 +223,17 @@ no matches
 
 `lorekeep status [--rules] [--json] [--store DIR]`
 
-Summarises the Store: Versions, Sources, Tags, oldest and newest fetch, Recheck results, hosts no
-rule knows, size, and the Project's settings.
+Summarises the Store: Versions, Sources, Readings and reading rules, Tags, oldest and newest
+fetch, Recheck results, hosts no rule knows, size, and the Project's settings.
 
 - `--rules` — also print the host rules, merged (a Project's own marked `(lorekeep.toml)`).
-- `--json` — print one JSON object instead of lines (no settings, no rules).
+- `--json` — print one JSON object instead of lines (no settings, no host rules).
 - `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
 
 ```text
 Store: /…/store
 5 Versions of 5 Sources
+Readings: 0 of 5 Versions, 0 rules
 Tags: nvidia 5
 Oldest fetched_at: 2026-10-17T17:16:51Z
 Newest fetched_at: 2026-10-17T17:16:52Z
@@ -244,5 +245,5 @@ Freshness window: 30 days
 ```
 
 ```json
-{"versions": 5, "sources": 5, "tags": {"nvidia": 5}, "oldest_fetched_at": "2026-10-17T17:16:51Z", "newest_fetched_at": "2026-10-17T17:16:52Z", "checks": {"unchanged": 0, "changed": 0, "gone": 0, "error": 0}, "unknown_hosts": ["genai.owasp.org", "helm.sh"], "bytes": 133079}
+{"versions": 5, "sources": 5, "tags": {"nvidia": 5}, "oldest_fetched_at": "2026-10-17T17:16:51Z", "newest_fetched_at": "2026-10-17T17:16:52Z", "checks": {"unchanged": 0, "changed": 0, "gone": 0, "error": 0}, "unknown_hosts": ["genai.owasp.org", "helm.sh"], "readings": 0, "rules": 0, "bytes": 133079}
 ```

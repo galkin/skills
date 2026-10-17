@@ -34,6 +34,7 @@ Version, and the Reading says so in `warnings`.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -48,7 +49,10 @@ from lorekeep import frontmatter, sections
 from lorekeep.project import OPERATIONS, ReadingRule
 from lorekeep.store import OWNER_SCHEME, lock, parse_version, stem
 
-READINGS_DIR = Path(".cache") / "readings"
+CACHE_DIR = ".cache"
+"""The Store's folder of what is rebuilt from the Versions: never indexed as a Version, never
+backed up."""
+READINGS_DIR = Path(CACHE_DIR) / "readings"
 READER = "1"
 """The meaning of the operations: part of every `rules` hash, so a change rebuilds every Reading."""
 
@@ -77,7 +81,21 @@ def ensure(
     store: Path, version: Path, rules: Sequence[ReadingRule], *, force: bool = False
 ) -> Reading:
     """The Reading of the Version at `version`, built when missing or stale (always with
-    `force`), inside the Store lock; never called with the lock held."""
+    `force`), inside the Store lock; never called with the lock held. A Reading built or removed
+    is told to the Index (`index.notify_reading`), so its Sections come from the file `get`
+    returns."""
+    return _ensure(store, version, rules, force=force, held=False)
+
+
+def ensure_held(store: Path, version: Path, rules: Sequence[ReadingRule]) -> Reading:
+    """`ensure` for an Index rebuild, which holds the Store lock and indexes every file after:
+    nothing is locked or told to the Index here."""
+    return _ensure(store, version, rules, force=False, held=True)
+
+
+def _ensure(
+    store: Path, version: Path, rules: Sequence[ReadingRule], *, force: bool, held: bool
+) -> Reading:
     head, body = parse_version(version.read_bytes())
     target = reading_path(store, version)
     url = str(head["url"])
@@ -90,13 +108,15 @@ def ensure(
     if not applying and not target.exists():
         return Reading(None, False)
     made = apply(head, body, applying)
-    with lock(store):
+    with contextlib.nullcontext() if held else lock(store):
         if not force:
             current = _current(target, digest)
             if current is not None:
                 return Reading(target, False, current)
         if not made.touched:
-            target.unlink(missing_ok=True)
+            if target.exists():
+                target.unlink()
+                _notify(store, version, held)
             return Reading(None, False, made.warnings)
         fields: dict[str, Any] = {
             "url": url,
@@ -107,7 +127,16 @@ def ensure(
             "warnings": list(made.warnings),
         }
         _write(target, frontmatter.render(fields) + made.body)
+        _notify(store, version, held)
     return Reading(target, True, made.warnings)
+
+
+def _notify(store: Path, version: Path, held: bool) -> None:
+    if held:
+        return
+    from lorekeep import index  # the Index indexes Readings, so it imports this module
+
+    index.notify_reading(store, version)
 
 
 def rules_for(

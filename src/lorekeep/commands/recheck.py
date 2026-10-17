@@ -7,7 +7,7 @@ import argparse
 import sys
 from typing import TYPE_CHECKING
 
-from lorekeep import index, recheck
+from lorekeep import index, readings, recheck
 from lorekeep.commands import plural, scope_tags
 from lorekeep.http import make_client
 from lorekeep.store import RECHECK_RESULTS
@@ -19,7 +19,7 @@ RESULTS: tuple[str, ...] = (*RECHECK_RESULTS, "skipped")
 
 
 def run(args: argparse.Namespace, ctx: Context) -> int:
-    with index.ensured(ctx.store, ctx.project.hosts) as reader:
+    with index.ensured(ctx.store, ctx.project) as reader:
         if args.citations:
             return report_citations(reader)
         scope = index.Scope(tags=scope_tags(args.tag, ctx.tag), publisher=args.publisher)
@@ -47,6 +47,11 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
             counts[answer.result] += 1
             if answer.warning:
                 print(f"lorekeep: warning: {answer.warning}", file=sys.stderr)
+            if answer.result == "changed":
+                # The new Version's Reading now, so the Index never searches its raw text.
+                reading = readings.ensure(ctx.store, answer.path, ctx.project.readings)
+                for warning in reading.warnings:
+                    print(f"lorekeep: warning: {stored.url}: {warning}", file=sys.stderr)
             print(f"{answer.result} {stored.url}")
     summary = ", ".join(f"{counts[result]} {result}" for result in RESULTS)
     print(f"Rechecked {plural(len(versions), 'Source')}: {summary}")
