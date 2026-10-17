@@ -142,8 +142,15 @@ file is written once, and the Index can always be rebuilt from the files.
     that what a migration brings in can be scoped like what a Run fetched.
 46. As the owner, I want `status` to summarise a Store — Versions, Sources, Tags, oldest and newest
     fetch, unknown hosts seen — so that I can see its shape without opening SQLite.
-47. As an agent in any repository, I want one short reference of the commands and their output
-    formats, so that a brief can point at it instead of describing lorekeep.
+47. As an agent in any repository, I want a skill that teaches lorekeep's commands and output
+    formats, shipped inside the package and printed by `lorekeep skill`, so that a brief points at
+    the skill and the guide always matches the installed version.
+48. As the owner, I want `lorekeep skill --install <repo>` to vendor that skill into a repository's
+    `.agents/skills/lorekeep/`, so that every agent tool in that repo finds it the way it finds the
+    other skills.
+49. As a pipeline worker, I want `get --max-age <days>` to override the Project's freshness window
+    for one call, so that a brief can demand a 1-day-fresh page without touching the Store's
+    configuration.
 
 ## Implementation Decisions
 
@@ -152,7 +159,7 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 ### Commands and layout
 
 - A Python 3.12 package managed by `uv`, exposing one console script `lorekeep` with subcommands
-  `get`, `add`, `search`, `index`, `recheck`, `backup`, `restore`, `tag`, `status`. Commands print
+  `get`, `add`, `search`, `index`, `recheck`, `backup`, `restore`, `tag`, `status`, `skill`. Commands print
   human-readable text by default and `--json` for machine use; `get` prints the Version's path on
   its last line in both modes so a shell can capture it.
 - The Store is `SOURCES_ROOT` (an environment variable or `--store`), one flat folder. The Run's
@@ -198,7 +205,9 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 
 - `httpx` runs through an `hishel` file cache in the user's cache directory (never the Store) so a
   repeat request is conditional for free.
-- Freshness: if the latest Version is younger than `freshness_days` and `--fresh` is absent,
+- Freshness: the window is `freshness_days` from `lorekeep.toml` (default 30) unless `--max-age
+  <days>` is given on the call; `--fresh` is `--max-age 0`. If the latest Version is younger than
+  the window,
   return it and append the Tag if missing. Otherwise send a conditional request (`If-None-Match`,
   `If-Modified-Since`); `304` → append a `checks.csv` row and return the latest Version; `200` →
   convert, compare `original.sha256` (or the Markdown hash for a Twin) with the latest Version:
@@ -258,6 +267,15 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
   alone (same hash, same bytes).
 - CSV appends and `datapackage.json` regeneration under one `fcntl` lock file in the Store.
 - SQLite in WAL mode with a busy timeout; incremental updates are small transactions.
+
+### The skill (`skill`)
+
+- The package ships a `SKILL.md` (with any reference files beside it) that documents every
+  command, its flags, its output format and the Store's layout for an agent, in the shape the
+  `.agents/skills/` convention expects. `lorekeep skill` prints it; `lorekeep skill --install
+  <repo>` copies the folder to `<repo>/.agents/skills/lorekeep/` and refuses to overwrite a
+  modified copy. The skill is generated from the same declarations the CLI parser uses, so a flag
+  cannot exist in one and not the other.
 
 ### Owner-added Sources (`add`)
 
