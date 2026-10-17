@@ -111,3 +111,17 @@ finds no Section, `search "risk management system high-risk"` answers with `… 
 breadcrumb and a line in the Reading, `status` prints `Readings: 61 of 376 Versions, 3 rules`.
 The engine rules (Fern banner, EUR-Lex articles, Microsoft Learn suffix) go into
 `src/lorekeep/readings.toml` with a test each — dispatched as the last step of this ticket.
+
+**2026-10-17 — live run, round 2 (orchestrator).** `search "llms.txt"` still answered from the
+Mintlify Twins (`docs.langchain.com/`, 22 Versions; `modelcontextprotocol.io/`, 2), which the
+ticket's four prefixes did not cover. A second Haiku subagent (dispatch `ctx_2f103b4a8e6d`) on
+those two prefixes returned three candidates: `drop_leading = "^> "` for both hosts and
+`drop_trailing = "^<div className=\"source-links\">"` for LangChain. `rules check` failed the
+LangChain `drop_leading`: `matches docs.langchain.com--oss-python-deepagents-overview--d3f61289.md:23,
+after the first heading (line 21)` — a quote in the page's body, exactly the case the limit is for.
+The orchestrator replaced `^> ` by the banner's last line, `before exploring further\.$`, on both
+hosts; second check 3 pass; `rules accept`: `Accepted 3 rules, 0 failed`, `Built 24 Readings`
+(`removes = "4 lines"`, `"10 lines"`, `"4 lines"`). The Store: `Readings: 85 of 376 Versions,
+6 rules`. Engine candidates for `readings.toml`: `fern` (the banner), `mintlify` (the banner and,
+if it measures on both hosts, the source-links footer), `eur-lex` (articles), and the Microsoft
+Learn suffix, which is a host rule rather than an engine.
