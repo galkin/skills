@@ -106,6 +106,11 @@ synthesised: `v3.helm.sh` answered `200` itself on that day, not a redirect.
 | `ms-retry-pattern.twin`                | Microsoft Learn Twin of the Retry pattern (`?accept=text/markdown`), headed `# Retry pattern - Azure Architecture Center \| Microsoft Learn`: the first Store's Version body, whole (v1.3 ticket 01) |
 | `eur-lex-ai-act.v1`                    | the AI Act as the first Store's Version holds it (Markdown, served as `text/markdown` for `write_version`): body lines 1–53 (the footer heading `Need help?`, the title block, recitals 1 and 2) and 410–495 (`HAVE ADOPTED THIS REGULATION:` to the first definitions of Article 3), so Articles 1, 2 and 3 stand as bare lines (v1.3 ticket 01) |
 | `readings-fence-table.v1`              | synthesised: 25 lines where `Edit this page on GitHub` stands alone three times, in a fence and in a pipe table, `Article 7` in the fence, `Article 9` right under `## Article 9`, `Article 10` bare (v1.3 ticket 01) |
+| `guardrails-rail-types.notfound.twin`  | Fern's not-found page served `200 text/plain` at `nemo/guardrails/latest/about-nemo-guardrails/library/rail-types.md`: the first Store's Version body, byte for byte (its `sha256` `93f114ec…`), whose type its `original.mediatype` records (v1.3 ticket 04) |
+| `guardrails-rail-types.notfound.404`   | synthesised: that page itself answering `404` with a short HTML body |
+| `guardrails-rail-types.notfound.301`   | synthesised: that page as a `301` to `nemo/guardrails/about-nemo-guardrails-library/rail-types`, the address NVIDIA moved it to |
+| `guardrails-rail-types.moved.html`     | synthesised: the new address's HTML, the first paragraphs of `guardrails-rail-types.twin` |
+| `guardrails-rail-types.moved.twin`     | the body of `guardrails-rail-types.twin`, served as the new address's Twin (`text/markdown`) |
 
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -14,12 +15,14 @@ from lorekeep.project import HostRule
 @dataclass(frozen=True)
 class Request:
     """What a step is asked for: the address as given (sent untouched) and its host rule, with
-    the plain client and the browser to ask it with."""
+    the plain client and the browser to ask it with; `rules`, the whole host table, gives the
+    rule of an address the page was redirected to."""
 
     url: str
     rule: HostRule | None
     client: httpx.Client
     fetcher: PageFetcher | None = None
+    rules: Sequence[HostRule] = ()
 
 
 @dataclass(frozen=True)

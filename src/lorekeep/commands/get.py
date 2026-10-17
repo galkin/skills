@@ -42,7 +42,13 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
 
     with make_client(ctx.edges.transport) as client:
         outcome = cascade.run_cascade(
-            cascade.Request(url=args.url, rule=asked.rule, client=client, fetcher=ctx.edges.fetcher)
+            cascade.Request(
+                url=args.url,
+                rule=asked.rule,
+                client=client,
+                fetcher=ctx.edges.fetcher,
+                rules=rules,
+            )
         )
     if not isinstance(outcome, cascade.Fetched):
         if outcome[-1].final:
