@@ -103,6 +103,9 @@ synthesised: `v3.helm.sh` answered `200` itself on that day, not a redirect.
 | `build-safety-for-agentic-ai.twin`     | the `build.nvidia.com` Twin `nvidia/safety-for-agentic-ai.md` (`text/markdown`), cut from the first Store's Version to the text before `## Minimum System Requirements` (v1.2 ticket 07) |
 | `build-nemotron-nano.twin`             | synthesised: a Twin at `nvidia/nvidia-nemotron-nano-9b-v2.md`, read for the `…/modelcard` page |
 | `build-safety-for-agentic-ai.301`      | synthesised: `nvidia/agentic-ai-safety.md`, a `301` to `nvidia/safety-for-agentic-ai.md` |
+| `ms-retry-pattern.twin`                | Microsoft Learn Twin of the Retry pattern (`?accept=text/markdown`), headed `# Retry pattern - Azure Architecture Center \| Microsoft Learn`: the first Store's Version body, whole (v1.3 ticket 01) |
+| `eur-lex-ai-act.v1`                    | the AI Act as the first Store's Version holds it (Markdown, served as `text/markdown` for `write_version`): body lines 1–53 (the footer heading `Need help?`, the title block, recitals 1 and 2) and 410–495 (`HAVE ADOPTED THIS REGULATION:` to the first definitions of Article 3), so Articles 1, 2 and 3 stand as bare lines (v1.3 ticket 01) |
+| `readings-fence-table.v1`              | synthesised: 25 lines where `Edit this page on GitHub` stands alone three times, in a fence and in a pipe table, `Article 7` in the fence, `Article 9` right under `## Article 9`, `Article 10` bare (v1.3 ticket 01) |
 
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and

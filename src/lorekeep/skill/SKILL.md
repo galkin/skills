@@ -36,7 +36,9 @@ commands (`recheck`, `tag add`, `backup`, `restore`, `index`, `skill`, host rule
 
 ## How a Run works
 
-1. Need a page: `lorekeep get --json <url>`, then read the file at `path`.
+1. Need a page: `lorekeep get --json <url>`, then read the file at `path`. When the JSON has
+   `version`, `path` is a **Reading**: the Version with the publisher's banner and chrome dropped
+   by the Project's rules, every other line verbatim; `version` is the evidence, `url` the citation.
 2. Append every `get --json` line to your own log; the Tag says only that the guide read a
    Source, so your log is the record of what you read and what failed; `asked` in each line is
    the address as you gave it, `#fragment` included. For an exit `1`, append the address and the
@@ -88,6 +90,7 @@ one page get one Version.
 | `is third-party under the <prefix> rule`            | report it if the guide treats the page as primary            |
 | `returning the stored Version`                      | use it; the publisher could not be asked or dropped the page |
 | `the Index was missing or stale and was rebuilt`    | nothing                                                      |
+| `rule <name> removed N% (accepted at M%)`           | report; the Reading kept what that rule would have dropped   |
 
 A Version's warnings print on every `get` that returns it (`fresh` and `unchanged` too); one
 stored by an older lorekeep has none recorded. Exit `0` can still be a menu or a page that lost a
@@ -102,10 +105,6 @@ On exit `1` nothing was stored:
 - `thin content` (Markdown under 600 characters or 40 words from a page with five times as much
   text) needs the browser (`lorekeep[browser]`), which waits longer before `rendered a shell`.
 - `unsupported media type` and `could not convert` errors are the owner's to fix.
-
-```text
-lorekeep: error: nothing stored for https://example.test/slow: the host rule names no Twin; https://example.test/slow failed (ReadTimeout)
-```
 
 ## `lorekeep get`
 
@@ -126,7 +125,7 @@ fence; the browser, last. A PDF Version (`markitdown …`) may run words togethe
 - `--json` — print one JSON object instead of the path.
 - `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
 
-Text output: the Version's absolute path, one line. `--json` output, here for a host no rule
+Text output: the absolute path of the Reading, else the Version, one line. `--json` output, here for a host no rule
 knows, asked with a fragment:
 
 ```text

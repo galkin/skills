@@ -28,15 +28,23 @@ def plural(count: int, word: str, plural_word: str | None = None) -> str:
 
 
 def version_json(
-    store: Path, path: Path, outcome: str, *, asked: str, requested_url: str | None = None
+    store: Path,
+    path: Path,
+    outcome: str,
+    *,
+    asked: str,
+    requested_url: str | None = None,
+    reading: Path | None = None,
 ) -> dict[str, Any]:
     """The one JSON object `get --json` and `add --json` print: the Version as its file says,
     the command's argument exactly as given (`asked`, a fragment kept), the normalised address
     the caller asked for (`requested_url`, the Version's `url` when not given), when its
-    publisher last confirmed it, and what the call did (`outcome`)."""
+    publisher last confirmed it, and what the call did (`outcome`). With a `reading`, `path` is
+    the Reading's and `version` the Version's; every other field stays the Version's."""
     head = read_head(path)
+    paths = {"path": str(reading), "version": str(path)} if reading else {"path": str(path)}
     return {
-        "path": str(path),
+        **paths,
         "url": head["url"],
         "asked": asked,
         "requested_url": requested_url or head["url"],

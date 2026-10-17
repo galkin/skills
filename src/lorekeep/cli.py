@@ -16,6 +16,7 @@ from lorekeep.commands import add as add_command
 from lorekeep.commands import backup as backup_command
 from lorekeep.commands import get as get_command
 from lorekeep.commands import index as index_command
+from lorekeep.commands import read as read_command
 from lorekeep.commands import recheck as recheck_command
 from lorekeep.commands import search as search_command
 from lorekeep.commands import skill as skill_command
@@ -127,6 +128,11 @@ def build_parser() -> argparse.ArgumentParser:
     index = command("index", "rebuild the Index from the Store's files")
     _store_flag(index)
 
+    read = command("read", "build the Readings that are missing or stale")
+    read.add_argument("--prefix", metavar="URL", help="only Sources whose url starts so")
+    read.add_argument("--force", action="store_true", help="rebuild every Reading in scope")
+    _store_flag(read)
+
     recheck = command("recheck", "ask publishers whether their Sources changed")
     _scope_tags(recheck)
     recheck.add_argument("--publisher", help="only Sources of this publisher")
@@ -204,6 +210,7 @@ HANDLERS: dict[str, Callable[[argparse.Namespace, Context], int]] = {
     "add": add_command.run,
     "search": search_command.run,
     "index": index_command.run,
+    "read": read_command.run,
     "recheck": recheck_command.run,
     "backup": backup_command.run_backup,
     "restore": backup_command.run_restore,

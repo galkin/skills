@@ -1,0 +1,5 @@
+# The package's default reading rules, one [[readings]] table per rule, keyed by `engine` (or by
+# `prefix`). A Project's `lorekeep.toml` extends them, and replaces a rule with the same engine or
+# prefix and operation. Empty on purpose: the engine rules (the Fern banner, EUR-Lex articles,
+# the Microsoft Learn title suffix) come from the live run of `rules check` and `rules accept`
+# on the first Store (v1.3 ticket 03), with the measurements they were accepted at.

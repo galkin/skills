@@ -93,6 +93,24 @@ Index, every write keeps it current.
 Indexed 2 Versions, 26 Sections, 1 Tag row, 1 Recheck, 0 aliases, 1 Citation into /…/store/sources.db
 ```
 
+## `lorekeep read`
+
+`lorekeep read [--prefix URL] [--force] [--store DIR]`
+
+Builds the Reading of every Version (owner-added ones aside) whose Reading is missing or stale:
+the Version after the `[[readings]]` rules that apply to it, in `.cache/readings/<stem>.md` (see
+[store.md](store.md#readings)). Rarely needed: `get` builds the Reading it returns. A Version no
+rule changes has no Reading. A rule held back by the over-removal guard is named on stderr as
+`lorekeep: warning: <url>: rule <name> removed N% (accepted at M%)`.
+
+- `--prefix URL` — only Sources whose `url` starts with this.
+- `--force` — rebuild every Reading in scope, current or not.
+- `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
+
+```text
+Built 3 Readings, 41 current
+```
+
 ## `lorekeep skill`
 
 `lorekeep skill [--install REPO [--force]]`
@@ -131,6 +149,23 @@ longest shorter prefix that names a `twin` — `github.com/<org>/` with only `pu
 `authority` keeps `github-raw`, while `docs.langchain.com/` replaced without `twin` has no Twin —
 and `status --rules` marks them `(inherited)`; `browser` and `cut` are never inherited. A rule
 changed after pages were stored does not reach them on Recheck (see `recheck` above).
+
+`[[readings]]` rules make Readings (see [store.md](store.md#readings)), over the package's
+defaults (`readings.toml`); a Project rule with the same `prefix` or `engine` and operation
+replaces a default. Each rule has `prefix` (`host/path`, longest wins) or `engine` (`fern`,
+`mintlify`, `sphinx`, `eur-lex`, `pdf`), exactly one operation — `drop_leading`,
+`drop_trailing`, `drop_lines`, `strip_title_suffix`, or `heading_before` with `level` — whose value
+is a regular expression, and `accepted` (a date) and `removes` (the share of lines in percent it
+removed when accepted; a rule that removes more than twice that from a Version is not applied to
+it). For example:
+
+```toml
+[[readings]]
+prefix = "docs.nvidia.com/"
+drop_leading = "llms\\.txt|For clean Markdown"
+accepted = 2026-10-17
+removes = 4
+```
 
 A law or standard is `primary` where its issuer publishes the text, its official journal:
 EUR-Lex for EU law, the Federal Register, nist.gov for NIST. An institution's reproduction of it
