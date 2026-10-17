@@ -51,9 +51,12 @@ are lower-case. `match_headers` is optional.
 | `exam-guide.html-as-pdf`               | HTML served as `text/html` under a URL ending in `.pdf` (never handed to MarkItDown)       |
 | `exam-guide.zip`                       | a body served as `application/zip`, a media type no step takes                             |
 | `exam-guide.not-a-pdf`                 | HTML bytes served as `application/pdf` (refused, not guessed at)                           |
+| `vllm-cli-serve.v1`                    | Markdown body of the vLLM `cli/serve` Version as v1 stored it, cut: an inline ```` ``` ```` after `Example (new format):`, headings with `[¶](…)` permalinks |
+| `trtllm-kv-cache.v1`                    | hand-written Markdown as v1 wrote it: `free\_gpu\_memory\_fraction`, `[#](…)` heading permalinks, text before the first heading |
 
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and
 NVIDIA responses carry the headers as received. The `403`, `304`, `google-md-answers-html`,
-`js-only.html`, `.noisy`, `.changed`, `.alias`, `google-overview.html`, `timeout`, `relative-links.html`, the PDF and its three `exam-guide.*` variants are synthesised. A ticket may add further synthesised folders in the
-same format; keep this table current.
+`js-only.html`, `.noisy`, `.changed`, `.alias`, `google-overview.html`, `timeout`, `relative-links.html`, the PDF and its three `exam-guide.*` variants are synthesised. The two `.v1` folders are Markdown bodies for `write_version`, served as
+`text/markdown`; the vLLM one is cut from the first migration's Store (2026-10-17). A ticket may add
+further synthesised folders in the same format; keep this table current.

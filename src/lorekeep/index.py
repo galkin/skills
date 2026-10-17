@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS sections(
   id INTEGER PRIMARY KEY,
   file TEXT NOT NULL,
   heading TEXT NOT NULL,
+  heading_line INTEGER,
   line INTEGER NOT NULL,
   body TEXT NOT NULL,
   ord INTEGER NOT NULL
@@ -95,6 +96,13 @@ WHERE v.file = (
   LIMIT 1
 );
 """
+
+
+SCHEMA_VERSION = "2"
+"""Recorded in `meta`; an Index built with another schema is stale and is rebuilt from scratch.
+2: `sections.heading_line` beside `sections.line`, which is now the Section's first text line."""
+
+_SCHEMA_KEY = "schema"
 
 
 def _connect(store: Path) -> sqlite3.Connection:
@@ -169,6 +177,7 @@ def _looks_current(store: Path) -> bool:
 def _rebuild_locked(store: Path, rules: Sequence[HostRule]) -> Counts:
     con = _connect(store)
     try:
+        _drop_old_schema(con)
         con.executescript(_SCHEMA)
         con.execute("BEGIN IMMEDIATE")
         try:
@@ -198,6 +207,17 @@ def _rebuild_locked(store: Path, rules: Sequence[HostRule]) -> Counts:
     finally:
         con.close()
     return Counts(versions, sections, tags, checks, aliases, len(cited), tuple(warnings))
+
+
+def _drop_old_schema(con: sqlite3.Connection) -> None:
+    """Drop the Section tables of an Index built with an older schema, so `_SCHEMA` recreates
+    them; every other table keeps its shape and is refilled as usual."""
+    try:
+        recorded = con.execute("SELECT value FROM meta WHERE key = ?", (_SCHEMA_KEY,)).fetchone()
+    except sqlite3.Error:
+        recorded = None
+    if recorded is None or recorded[0] != SCHEMA_VERSION:
+        con.executescript("DROP TABLE IF EXISTS sections_fts; DROP TABLE IF EXISTS sections;")
 
 
 def _read_citations(
@@ -275,8 +295,9 @@ def _index_version(con: sqlite3.Connection, path: Path) -> int:
         sections.split(body.decode("utf-8", errors="replace"), first_line)
     ):
         cursor = con.execute(
-            "INSERT INTO sections(file, heading, line, body, ord) VALUES(?, ?, ?, ?, ?)",
-            (path.name, section.heading, section.line, section.body, order),
+            "INSERT INTO sections(file, heading, heading_line, line, body, ord) "
+            "VALUES(?, ?, ?, ?, ?, ?)",
+            (path.name, section.heading, section.heading_line, section.line, section.body, order),
         )
         con.execute(
             "INSERT INTO sections_fts(rowid, heading, body) VALUES(?, ?, ?)",
@@ -322,7 +343,7 @@ so a commit can tell that `versions` still accounts for every `.md` file."""
 
 def _write_meta(con: sqlite3.Connection, store: Path, ignored: int) -> None:
     con.execute("DELETE FROM meta")
-    values = [*_fingerprint(store), (_IGNORED, str(ignored))]
+    values = [*_fingerprint(store), (_IGNORED, str(ignored)), (_SCHEMA_KEY, SCHEMA_VERSION)]
     con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", values)
 
 
@@ -333,6 +354,8 @@ def _is_current(store: Path, con: sqlite3.Connection) -> bool:
     except sqlite3.Error:
         return False
     recorded.pop(_IGNORED, None)
+    if recorded.pop(_SCHEMA_KEY, None) != SCHEMA_VERSION:
+        return False
     return bool(recorded) and recorded == dict(_fingerprint(store))
 
 
@@ -416,7 +439,7 @@ def _agrees(con: sqlite3.Connection, store: Path, touched: dict[str, bool]) -> b
     ignored as many as there are `.md` files, and every watched file the commit did not touch
     is as `meta` recorded it."""
     recorded = dict(con.execute("SELECT key, value FROM meta").fetchall())
-    if not recorded:
+    if not recorded or recorded.get(_SCHEMA_KEY) != SCHEMA_VERSION:
         return False
     current = dict(_fingerprint(store))
     md_files = con.execute("SELECT count(*) FROM versions").fetchone()[0] + _ignored_of(con)
@@ -440,8 +463,12 @@ def _agrees(con: sqlite3.Connection, store: Path, touched: dict[str, bool]) -> b
 
 @dataclass(frozen=True)
 class Hit:
+    """`line` is the file's line of the first match in the Section (its first text line when no
+    line holds a query word as written); `heading_line` its heading's (`None` before any)."""
+
     file: str
     line: int
+    heading_line: int | None
     heading: str
     snippet: str
     url: str
@@ -557,22 +584,26 @@ class Reader:
         distinct Sources the same query matches under other Tags (`None` when the scope is
         every Tag)."""
         con = self.con
+        needle = unescape(query)
         if exact:
             match_from = "sections s"
-            match_where = "instr(s.body, ?) > 0"
+            match_where = f"instr({_UNESCAPED_BODY}, ?) > 0"
             order = "s.file, s.ord"
             snippet = "s.body"
-            match_args: list[object] = [query]
+            match_args: list[object] = [needle]
+            words = [needle]
         else:
             match_from = "sections_fts JOIN sections s ON s.id = sections_fts.rowid"
             match_where = "sections_fts MATCH ?"
             order = "bm25(sections_fts, 2.0, 1.0), s.file, s.ord"
             snippet = "snippet(sections_fts, 1, '[', ']', '…', 16)"
             match_args = [_fts_query(query)]
+            words = [unescape(word).casefold() for word in query.split()]
         filters, filter_args = _filters(scope)
         tag_filter, tag_args = _tag_filter(scope.tags)
         rows = con.execute(
-            f"SELECT s.file, s.line, s.heading, {snippet}, l.url FROM {match_from} "
+            f"SELECT s.file, s.line, s.heading_line, s.heading, s.body, {snippet}, l.url "
+            f"FROM {match_from} "
             f"JOIN latest l ON l.file = s.file WHERE {match_where}{filters}{tag_filter} "
             f"ORDER BY {order} LIMIT ?",
             [*match_args, *filter_args, *tag_args, limit],
@@ -580,13 +611,14 @@ class Reader:
         hits = [
             Hit(
                 file=file,
-                line=line,
+                line=line + _match_offset(body, words, exact=exact),
+                heading_line=heading_line,
                 heading=heading,
-                snippet=_snippet(text, query) if exact else _one_line(text),
+                snippet=_snippet(unescape(text), needle) if exact else unescape(_one_line(text)),
                 url=url,
                 tags=_tags_of(con, url),
             )
-            for file, line, heading, text, url in rows
+            for file, line, heading_line, heading, body, text, url in rows
         ]
         other: int | None = None
         if scope.tags is not None:
@@ -659,6 +691,27 @@ class Reader:
             checks=checks,
             unknown_hosts=sorted(hosts),
         )
+
+
+_UNESCAPED_BODY = r"replace(replace(s.body, '\_', '_'), '\*', '*')"
+"""`s.body` with `unescape` applied, in SQL."""
+
+
+def unescape(text: str) -> str:
+    r"""Text with a converter's Markdown escapes of `_` and `*` undone, so `free\_gpu` reads as
+    `free_gpu` (both sides of an `--exact` comparison go through it)."""
+    return text.replace("\\_", "_").replace("\\*", "*")
+
+
+def _match_offset(body: str, words: Sequence[str], *, exact: bool) -> int:
+    """How many lines into `body` the first line holding one of `words` sits (as written for
+    `--exact`, case-insensitively otherwise, after `unescape`); 0 when none does, as with a
+    stemmed match."""
+    for offset, line in enumerate(body.split("\n")):
+        text = unescape(line) if exact else unescape(line).casefold()
+        if any(word in text for word in words):
+            return offset
+    return 0
 
 
 def _fts_query(query: str) -> str:

@@ -14,8 +14,12 @@ if TYPE_CHECKING:
     from lorekeep.cli import Context
 
 
+TOP = "(top)"
+"""The heading path printed for text before a Version's first heading."""
+
+
 def run(args: argparse.Namespace, ctx: Context) -> int:
-    if not args.query.strip():
+    if args.query is None or not args.query.strip():
         print("lorekeep: error: the search query is empty", file=sys.stderr)
         return 2
     scope = index.Scope(
@@ -30,6 +34,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
             {
                 "file": str(ctx.store / hit.file),
                 "line": hit.line,
+                "heading_line": hit.heading_line,
                 "heading": hit.heading,
                 "snippet": hit.snippet,
                 "url": hit.url,
@@ -40,7 +45,9 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
         print(json.dumps({"results": results, "other_tags": other or 0}, ensure_ascii=False))
         return 0
     for hit in hits:
-        print(f"{ctx.store / hit.file}:{hit.line} | {hit.heading} | {hit.snippet}")
-    if other is not None:
+        print(f"{ctx.store / hit.file}:{hit.line} | {hit.heading or TOP} | {hit.snippet}")
+    if not hits:
+        print("no matches")
+    if other:
         print(f"+{other} matches under other tags (--all)")
     return 0

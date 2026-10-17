@@ -7,6 +7,7 @@ import os
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +77,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="lorekeep",
         description="Keep the Sources a Project's Runs read, with their Provenance, in one Store.",
     )
+    parser.add_argument(
+        "--version", action="version", version=f"lorekeep {metadata.version('lorekeep')}"
+    )
     commands = parser.add_subparsers(dest="command", metavar="<command>", required=True)
 
     def command(name: str, help_text: str) -> argparse.ArgumentParser:
@@ -106,7 +110,11 @@ def build_parser() -> argparse.ArgumentParser:
     _store_flag(add)
 
     search = command("search", "search the Sections of the Store's latest Versions")
-    search.add_argument("query", help="words to search for, or a string with --exact")
+    search.add_argument(
+        "query",
+        nargs="?",
+        help="words to search for, or a string with --exact; after `--` when it starts with -",
+    )
     _scope_tags(search)
     search.add_argument("--all", action="store_true", help="search every Tag")
     search.add_argument("--publisher", help="only Sources of this publisher")
@@ -153,6 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
     _store_flag(tag_add)
 
     status = command("status", "summarise the Store")
+    status.add_argument("--rules", action="store_true", help="also print the host rules")
     _json_flag(status)
     _store_flag(status)
 
@@ -211,10 +220,16 @@ def run(
     """Run one command; return its exit code. Output goes to `sys.stdout` and `sys.stderr`."""
     env = os.environ if env is None else env
     store_module.forget_ignored()
+    argv, query = _query_after_dashes(list(argv))
     try:
-        args = build_parser().parse_args(list(argv))
+        args = build_parser().parse_args(argv)
     except SystemExit as exit_:
         return exit_.code if isinstance(exit_.code, int) else 1
+    if query is not None:
+        if args.query is not None:
+            print("lorekeep: error: search takes one query; quote it", file=sys.stderr)
+            return 2
+        args.query = query
     if args.command == "skill":
         # The skill belongs to the package, not to a Store: it needs neither Store nor Tag.
         return skill_command.run(args)
@@ -231,6 +246,17 @@ def run(
         return 2
     ctx = Context(store=store, project=project, tag=tag, edges=edges or Edges.production())
     return HANDLERS[args.command](args, ctx)
+
+
+def _query_after_dashes(argv: list[str]) -> tuple[list[str], str | None]:
+    """`search … -- QUERY …`: the one argument after `--` is the query, whatever it starts with,
+    and the flags around it stay flags (argparse alone would read every later word as a query)."""
+    if argv[:1] != ["search"] or "--" not in argv:
+        return argv, None
+    at = argv.index("--")
+    if at + 1 == len(argv):
+        return argv[:at], None
+    return argv[:at] + argv[at + 2 :], argv[at + 1]
 
 
 def main() -> int:

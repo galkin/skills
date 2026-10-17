@@ -117,7 +117,8 @@ Text output: the new Version's path. `--json` output: the same object as `get --
 
 Searches the Sections (the text under each heading) of the latest Version of every Source in
 scope, ranked by BM25. Word forms match (`caching` finds `cached`). The scope is the Run's Tag;
-without one, the whole Store.
+without one, the whole Store. A query that starts with `-` goes after `--`:
+`lorekeep search -- '--enable-auto-tool-choice' --exact`.
 
 - `--tag TAG` — limit the scope to this Tag; repeat it for several (default: `$LOREKEEP_TAG`,
   else everything).
@@ -126,25 +127,28 @@ without one, the whole Store.
 - `--authority A` — only Sources of this authority (`primary`, `official`, `third-party`,
   `generated`).
 - `--exact` — a case-sensitive substring match on the text as written, not a word search; use it
-  for identifiers (`cache_control`, `max_tokens`).
+  for identifiers (`cache_control`, `max_tokens`). `\_` and `\*` in the text match `_` and `*`.
 - `--limit N` — how many results (default: 5).
 - `--json` — print one JSON object instead of lines.
 - `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
 
 Text output: one line per result, `file:line | heading path | snippet`, with the matched words in
-`[brackets]`; open the file at that line. The last line counts the Sources the same query matches
-outside the scope; it is omitted when the scope is already everything. A `+N` above zero means
-another Run's Sources answer too: widen with `--all` or `--tag`.
+`[brackets]`; `line` is the line of the first match in the Section (its first line when only a
+word form matched), so open the file there. Text before a page's first heading shows `(top)`.
+No result prints `no matches`. A last line `+N matches under other tags (--all)` means another
+Run's Sources answer too: widen with `--all` or `--tag`; it is absent when N is 0 or the scope is
+already everything.
 
 ```text
 /…/store/platform.claude.com--docs-en-build-with-claude-prompt-caching--f264876f.md:690 | Caching strategies and considerations > Tracking cache performance | Monitor [cache] performance using these API response fields…
 +2 matches under other tags (--all)
 ```
 
-`--json` output: one object; `other_tags` is `0` when the scope is everything.
+`--json` output: one object; `other_tags` is `0` when the scope is everything; `heading_line` is
+the line of the Section's heading (`null`, with `heading` `""`, before the first heading).
 
 ```json
-{"results": [{"file": "/…/store/platform.claude.com--…--f264876f.md", "line": 690,
+{"results": [{"file": "/…/store/platform.claude.com--…--f264876f.md", "line": 690, "heading_line": 684,
               "heading": "Caching strategies and considerations > Tracking cache performance",
               "snippet": "Monitor [cache] performance…",
               "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
@@ -156,11 +160,12 @@ When the Index is missing or out of date, `search` rebuilds it first and says so
 
 ## `lorekeep status`
 
-`lorekeep status [--json] [--store DIR]`
+`lorekeep status [--rules] [--json] [--store DIR]`
 
 Summarises the Store: Versions, Sources, Tags, the oldest and newest fetch, Recheck results, hosts
 matched by no rule, its size, and the Project's settings.
 
+- `--rules` — also print the host rules.
 - `--json` — print one JSON object instead of lines.
 - `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
 
@@ -177,12 +182,16 @@ Unknown hosts: none
 Size on disk: 521577 bytes
 Bucket: none
 Freshness window: 30 days
+```
+
+With `--rules`, the host rules follow; one from the Project's `lorekeep.toml` is marked
+`(lorekeep.toml)`:
+
+```text
 Host rules (8):
   platform.claude.com/  anthropic  primary  twin=md-suffix
   …
 ```
-
-A host rule from the Project's `lorekeep.toml` is marked `(lorekeep.toml)`.
 
 `--json` output (settings and host rules are not part of it):
 
