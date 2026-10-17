@@ -242,7 +242,7 @@ def latest(store: Path, url: str, rules: Sequence[HostRule]) -> VersionInfo | No
     aliases = {row.alias: row.url for row in read_rows(store, AliasRow)}
     wanted = aliases.get(wanted, wanted)
     found = index.lookup(store, wanted)
-    if found is not None:
+    if not isinstance(found, index.Unanswered):
         return found
     versions = [info for info in scan(store) if info.url == wanted]
     if not versions:

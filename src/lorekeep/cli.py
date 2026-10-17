@@ -13,6 +13,8 @@ from typing import Any
 from lorekeep.commands import add as add_command
 from lorekeep.commands import backup as backup_command
 from lorekeep.commands import get as get_command
+from lorekeep.commands import index as index_command
+from lorekeep.commands import search as search_command
 from lorekeep.edges import Edges
 from lorekeep.project import AUTHORITIES, Project, ProjectError, load_project
 
@@ -205,8 +207,8 @@ def _not_yet(args: argparse.Namespace, ctx: Context) -> int:
 HANDLERS: dict[str, Callable[[argparse.Namespace, Context], int]] = {
     "get": get_command.run,
     "add": add_command.run,
-    "search": _not_yet,
-    "index": _not_yet,
+    "search": search_command.run,
+    "index": index_command.run,
     "recheck": _not_yet,
     "backup": backup_command.run_backup,
     "restore": backup_command.run_restore,
@@ -231,7 +233,11 @@ def run(
         return 1
     try:
         store = resolve_store(args, env)
-        tag = resolve_tag(args, env) if args.command in NEEDS_TAG else None
+        if args.command in NEEDS_TAG:
+            tag = resolve_tag(args, env)
+        else:
+            # A scoped command's default scope is the Run's Tag, when the Run has one.
+            tag = env.get("LOREKEEP_TAG") or None
         project = load_project(store)
     except (UsageError, ProjectError) as error:
         print(f"lorekeep: error: {error}", file=sys.stderr)

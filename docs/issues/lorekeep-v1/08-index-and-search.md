@@ -4,12 +4,16 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `index` on a Store of Versions written by ticket 01's fixture helper (Twin bodies as they are) builds `sources.db`; deleting it and running `index` again gives identical row counts
-- [ ] a page without headings is split into Sections of at most ~4 KB; a code fence is never cut; every Section's `line` points at its heading (or the first line of its slice) in the file
-- [ ] `search 'prompt caching'` returns ranked lines with `file:line`, heading path and a snippet; `caching` matches `cached`
-- [ ] results and `+N` cover only each Source's latest Version (a URL with two Versions both matching appears once); the final line counts Sources, not Sections, under other Tags; `--all` includes them and drops the line; without `LOREKEEP_TAG` the scope is everything and no line is printed; `--tag`, `--publisher`, `--authority` filter
-- [ ] `--exact 'cache_control'` matches only Sections containing that exact string and not a Section containing "cache control"
-- [ ] `--json` prints `{results: [...], other_tags: N}` with the spec's fields
-- [ ] `search` on a Store without `sources.db` builds it under `.lorekeep.lock` and answers; the `meta` table holds the file count and the CSV sizes and mtimes
+- [x] `index` on a Store of Versions written by ticket 01's fixture helper (Twin bodies as they are) builds `sources.db`; deleting it and running `index` again gives identical row counts
+- [x] a page without headings is split into Sections of at most ~4 KB; a code fence is never cut; every Section's `line` points at its heading (or the first line of its slice) in the file
+- [x] `search 'prompt caching'` returns ranked lines with `file:line`, heading path and a snippet; `caching` matches `cached`
+- [x] results and `+N` cover only each Source's latest Version (a URL with two Versions both matching appears once); the final line counts Sources, not Sections, under other Tags; `--all` includes them and drops the line; without `LOREKEEP_TAG` the scope is everything and no line is printed; `--tag`, `--publisher`, `--authority` filter
+- [x] `--exact 'cache_control'` matches only Sections containing that exact string and not a Section containing "cache control"
+- [x] `--json` prints `{results: [...], other_tags: N}` with the spec's fields
+- [x] `search` on a Store without `sources.db` builds it under `.lorekeep.lock` and answers; the `meta` table holds the file count and the CSV sizes and mtimes
+
+## Comments
+
+2026-10-17 — Decisions made while building this ticket. (1) `lorekeep.index` holds `rebuild(store)` (takes the Store lock, empties and refills every table in one transaction, in place), `ensure(store)` (builds a missing Index under the lock, checking again once it holds it), `search(store, query, Scope, limit=, exact=)`, `fingerprint(store)` / `is_current(store, con)` and `lookup`. `meta` keys are `md_files` and `<csv>:size` / `<csv>:mtime` (`st_mtime_ns`) for `tags.csv`, `checks.csv`, `aliases.csv` and `citations.csv`, with the value `missing` for an absent file; ticket 14 reuses `is_current` for its staleness check. The `citations` table is created empty; ingesting it is ticket 14. (2) The latest Version of each Source is the SQL view `latest`, which gives the scan's answer (latest `checks.csv` row's `sha256`, else newest `fetched_at`); `search` and `+N` read only it. (3) `lookup` now has three answers: a Version, `None` (a current Index has no such URL — no scan) and `index.UNANSWERED` (missing, stale or unreadable Index — the Store scans); `store.latest` was changed by that one line. A lookup already falls back to the scan when `meta` does not match the files, so a Version added after `index` is never missed even before ticket 14. `search` builds the Index only when the file is missing, as the ticket says; rebuilding a stale one is ticket 14. (4) Each word of a query is quoted as an FTS5 phrase, so user input is never FTS5 syntax (`OR`, `-`, `"` are words) and the words are AND-ed; an empty query is an error. (5) `file` in text and JSON output is the Version's full path (Store folder joined with its name), the same form `get` prints, so an agent can open it at once; snippets mark matches with `[` `]`, on one line. (6) Text before a file's first heading is a Section with the heading path `""`; a heading with no text under it yields no Section; a prose paragraph over 4 KB is cut at line boundaries, a code fence over 4 KB stays whole. (7) `+N` keeps `--publisher` / `--authority` and counts latest Versions' Sources outside the Tag scope; `--json` gives `other_tags: 0` when the scope is everything. (8) `cli.run` hands `LOREKEEP_TAG` to commands that do not require a Tag (`search`, `recheck`) as their default scope; `--tag` still overrides it.
