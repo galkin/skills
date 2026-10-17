@@ -1,10 +1,12 @@
 """The Twin kinds a host rule may name, in one place: how a page address becomes its Twin's
 address and back, and what media types a Twin may answer.
 
-`md-suffix`: the page's path with `page_suffix` (when any) replaced by `.md`. `accept-header`:
-the page's address with `accept=text/markdown` in the query. `raw`: the address as given is its
-own Twin and answers plain text. The path and the raw query pieces are handled as given, so what
-goes on the wire keeps its encoding.
+`md-suffix`: the page's path with `page_suffix` (when any) replaced by `.md`; it may answer plain
+text that is not HTML (Fern serves some Twins so). `accept-header`: the page's address with
+`accept=text/markdown` in the query. `raw`: the address as given is its own Twin and answers plain
+text. `github-raw`: a `github.com/<owner>/<repo>/blob/<ref>/<path>` page's Twin is
+`raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>`, which answers plain text. The path and
+the raw query pieces are handled as given, so what goes on the wire keeps its encoding.
 """
 
 from __future__ import annotations
@@ -17,6 +19,8 @@ MARKDOWN = "text/markdown"
 PLAIN_TEXT = "text/plain"
 ACCEPT_PIECE = "accept=text/markdown"
 MD = ".md"
+GITHUB = "github.com"
+GITHUB_RAW = "raw.githubusercontent.com"
 
 
 def is_accept_piece(piece: str) -> bool:
@@ -47,8 +51,31 @@ def to_page(path: str, pieces: list[str], rule: HostRule) -> tuple[str, list[str
     return path, pieces
 
 
-def media_types(rule: HostRule | None) -> tuple[str, ...]:
-    """What a Twin may answer: Markdown, or plain text too from a raw file host."""
-    if rule is not None and rule.twin == "raw":
-        return (MARKDOWN, PLAIN_TEXT)
-    return (MARKDOWN,)
+def to_raw(host: str, path: str) -> tuple[str, str] | None:
+    """The raw file's host and path for a GitHub `blob` page's; `None` for any other address."""
+    pieces = path.split("/")
+    if host.lower() != GITHUB or len(pieces) < 6 or pieces[3] != "blob" or not all(pieces[1:6]):
+        return None
+    _, owner, repo, _, ref, *rest = pieces
+    return GITHUB_RAW, "/".join(("", owner, repo, ref, *rest))
+
+
+def to_blob(host: str, path: str) -> tuple[str, str] | None:
+    """The GitHub `blob` page's host and path for a raw file's (the reverse of `to_raw`)."""
+    pieces = path.split("/")
+    if host.lower() != GITHUB_RAW or len(pieces) < 5 or not all(pieces[1:5]):
+        return None
+    _, owner, repo, ref, *rest = pieces
+    return GITHUB, "/".join(("", owner, repo, "blob", ref, *rest))
+
+
+def accepts(mediatype: str, body: bytes, rule: HostRule | None) -> bool:
+    """Whether a Twin may answer `mediatype` with `body`: Markdown always; plain text from a raw
+    file host, or under `md-suffix` when the body is not HTML."""
+    if mediatype == MARKDOWN:
+        return True
+    if mediatype != PLAIN_TEXT or rule is None:
+        return False
+    if rule.twin in ("raw", "github-raw"):
+        return True
+    return rule.twin == "md-suffix" and not body.lstrip().startswith(b"<")

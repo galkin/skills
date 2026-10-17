@@ -1,0 +1,9 @@
+{
+  "url": "https://raw.githubusercontent.com/NVIDIA-AI-Blueprints/rag/main/README.md",
+  "status": 200,
+  "headers": {
+    "content-type": "text/plain; charset=utf-8",
+    "etag": "\"02df6475e6e42cf704fe2dc4e81629b32fef8b3658f5bf8bee2e519b0df29342\""
+  },
+  "body": "body.md"
+}

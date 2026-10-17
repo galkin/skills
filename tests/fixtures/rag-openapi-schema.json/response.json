@@ -1,0 +1,10 @@
+{
+  "url": "https://docs.nvidia.com/rag/latest/_static/api_reference/openapi_schema_rag_server.json",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json",
+    "etag": "\"bd0b65a2e2e18da08fde0f88e471a4e6\"",
+    "last-modified": "Thu, 04 Jun 2026 16:36:53 GMT"
+  },
+  "body": "body.json"
+}

@@ -1,6 +1,7 @@
 """The page itself over plain HTTP, fetched once and converted by the step its media type names.
 
-The response's media type — never the URL's extension — picks the converter; a media type no
+The response's media type — never the URL's extension — picks the converter (HTML, PDF, or a text
+format kept verbatim: JSON, YAML, plain text, CSV, XML); a media type no
 converter takes is reported as unsupported and nothing is stored. An HTML stub that only says
 `<meta http-equiv="refresh">` is followed like a redirect, and never converted.
 """
@@ -13,7 +14,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from lorekeep.cascade import html, pdf
+from lorekeep.cascade import html, pdf, verbatim
 from lorekeep.cascade.html import convert_html, refresh_target
 from lorekeep.cascade.pdf import convert_pdf
 from lorekeep.cascade.step import Converted, Fallthrough, Fetched, Request, Same
@@ -26,11 +27,16 @@ Converter = Callable[[bytes, str, str | None], Converted | Fallthrough]
 
 HTML_TYPES = ("text/html", "application/xhtml+xml")
 PDF_TYPES = ("application/pdf",)
-STEP_MEDIA_TYPES: Mapping[str, tuple[str, ...]] = {html.NAME: HTML_TYPES, pdf.NAME: PDF_TYPES}
+STEP_MEDIA_TYPES: Mapping[str, tuple[str, ...]] = {
+    html.NAME: HTML_TYPES,
+    pdf.NAME: PDF_TYPES,
+    verbatim.NAME: verbatim.TYPES,
+}
 """The media types each converter of this step reads, by the first word of its `converter`."""
 CONVERTERS: Mapping[str, Converter] = {
     **dict.fromkeys(HTML_TYPES, convert_html),
     **dict.fromkeys(PDF_TYPES, convert_pdf),
+    **{mediatype: verbatim.converter_for(mediatype) for mediatype in verbatim.TYPES},
 }
 MAX_REFRESHES = 5
 REFUSED = (403, 429)
@@ -40,7 +46,7 @@ REFUSED = (403, 429)
 @dataclass(frozen=True)
 class PageStep:
     """The page step; `name` is set when it rereads a Version one of its converters wrote
-    (`trafilatura`, `markitdown`), and then only that converter's media types pass."""
+    (`trafilatura`, `markitdown`, `verbatim`), and then only that converter's media types pass."""
 
     name: str | None = None
 

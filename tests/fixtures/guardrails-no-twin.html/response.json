@@ -1,0 +1,8 @@
+{
+  "url": "https://docs.nvidia.com/nemo/guardrails/latest/about/release-notes",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html; charset=utf-8"
+  },
+  "body": "body.html"
+}

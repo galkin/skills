@@ -1,0 +1,4 @@
+---
+ingestor:
+  replicas: 2
+  vectorstore: milvus

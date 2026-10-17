@@ -1,0 +1,3 @@
+RAG blueprint notes
+
+Set APP_VECTORSTORE_URL before starting the ingestor.

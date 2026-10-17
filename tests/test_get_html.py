@@ -254,12 +254,12 @@ def test_the_media_type_decides_the_step_not_the_url(tmp_path: Path) -> None:
     page = "https://example.test/guide/sub/page.html"
     transport = FakeTransport.from_fixtures("relative-links.html")
     transport.fixtures = [
-        replace(f, headers={"content-type": "application/json"}) for f in transport.fixtures
+        replace(f, headers={"content-type": "application/octet-stream"}) for f in transport.fixtures
     ]
     edges = Edges(transport=transport, fetcher=FakeFetcher(), runner=FakeRunner())
 
     result = get(store, edges, page)
 
     assert result.exit_code != 0
-    assert "application/json" in result.stderr
+    assert "application/octet-stream" in result.stderr
     assert list(store.iterdir()) == []

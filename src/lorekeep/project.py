@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 AUTHORITIES = ("primary", "official", "third-party", "generated")
-TWIN_KINDS = ("md-suffix", "accept-header", "raw")
+TWIN_KINDS = ("md-suffix", "accept-header", "raw", "github-raw")
 DEFAULT_FRESHNESS_DAYS = 30
 PROJECT_FILE = "lorekeep.toml"
 
-TwinKind = Literal["md-suffix", "accept-header", "raw"]
+TwinKind = Literal["md-suffix", "accept-header", "raw", "github-raw"]
 
 
 class ProjectError(Exception):

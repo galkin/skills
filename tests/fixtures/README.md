@@ -51,9 +51,22 @@ are lower-case. `match_headers` is optional.
 | `exam-guide.html-as-pdf`               | HTML served as `text/html` under a URL ending in `.pdf` (never handed to MarkItDown)       |
 | `exam-guide.zip`                       | a body served as `application/zip`, a media type no step takes                             |
 | `exam-guide.not-a-pdf`                 | HTML bytes served as `application/pdf` (refused, not guessed at)                           |
+| `langchain-sql-agent.twin`             | Mintlify Twin of LangChain's `sql-agent` page (`text/markdown`): code, no tables           |
+| `langchain-tools.twin`                 | Mintlify Twin of LangChain's `tools` page: code and pipe tables                            |
+| `guardrails-jailbreak-protection.twin` | Fern Twin of a NeMo Guardrails page on `docs.nvidia.com`: code and pipe tables             |
+| `dynamo-fast-model-loading.twin`       | Fern Twin of a Dynamo page (`text/markdown`)                                               |
+| `dynamo-fast-model-loading.plain`      | the same bytes served as `text/plain` (a Fern Twin that does not say Markdown)             |
+| `guardrails-no-twin.html`              | a page under a Fern rule whose `.md` has no fixture (`404`), so the page is converted      |
+| `github-docker-compose.raw`            | a raw YAML file behind a GitHub `blob/` page (`text/plain`)                                |
+| `github-readme.raw`                    | a raw `README.md` behind a GitHub `blob/` page (`text/plain`)                              |
+| `rag-openapi-schema.json`              | NVIDIA RAG's OpenAPI schema (`application/json`), cut to one path                          |
+| `verbatim-notes.text`, `verbatim-values.yaml`, `verbatim-models.csv`, `verbatim-feed.xml` | plain text, YAML, CSV and XML served under their media types |
 
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and
-NVIDIA responses carry the headers as received. The `403`, `304`, `google-md-answers-html`,
+NVIDIA responses carry the headers as received. The LangChain, Guardrails, Dynamo and GitHub bodies
+were recorded whole from the live hosts on 2026-10-17 (v1.1 ticket 01) with their `content-type`,
+`etag` and `last-modified`; the OpenAPI schema was recorded then and cut to its first path. The
+`.plain` variant, `guardrails-no-twin.html` and the four `verbatim-*` files are synthesised. The `403`, `304`, `google-md-answers-html`,
 `js-only.html`, `.noisy`, `.changed`, `.alias`, `google-overview.html`, `timeout`, `relative-links.html`, the PDF and its three `exam-guide.*` variants are synthesised. A ticket may add further synthesised folders in the
 same format; keep this table current.

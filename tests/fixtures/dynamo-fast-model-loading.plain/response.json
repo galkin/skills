@@ -1,0 +1,9 @@
+{
+  "url": "https://docs.nvidia.com/dynamo/latest/kubernetes/model-deployment/model-loading/fast-model-loading.md",
+  "status": 200,
+  "headers": {
+    "content-type": "text/plain; charset=utf-8",
+    "etag": "W/\"ca0b5fd329b0df0cd52d3e09e4c6bce5\""
+  },
+  "body": "body.md"
+}

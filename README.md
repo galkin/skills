@@ -71,15 +71,27 @@ freshness_days = 30                         # how old a Version may be before `g
 prefix = "docs.example.com/api/"            # required: matched on host/path, longest prefix wins
 publisher = "example"                       # required: who authored the pages
 authority = "primary"                       # required: primary | official | third-party | generated
-twin = "md-suffix"                          # md-suffix | accept-header | raw; absent: no Twin
+twin = "md-suffix"                          # md-suffix | accept-header | raw | github-raw; absent: no Twin
 page_suffix = ".html"                       # what md-suffix replaces; absent: .md is appended
 browser = true                              # go straight to the browser on a first fetch
 cut = ["nav", ".cookie-banner"]             # CSS selectors removed from a rendered page
 ```
 
 `twin` says where the publisher serves the same page as Markdown — the **Twin**, which `get`
-prefers to any conversion: `md-suffix` replaces `page_suffix` (or appends) with `.md`,
-`accept-header` adds `?accept=text/markdown`, `raw` means the URL itself answers plain text.
+prefers to any conversion:
+
+- `md-suffix` replaces `page_suffix` (or appends) with `.md` (Fern and Mintlify sites serve one);
+  `text/markdown` is accepted, and `text/plain` when the body is not HTML.
+- `accept-header` adds `?accept=text/markdown`.
+- `raw` means the URL itself answers plain text.
+- `github-raw` reads a `github.com/<owner>/<repo>/blob/<ref>/<path>` page from
+  `raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>` and stores it under the `blob` address
+  (`converter: raw-twin`): Markdown and `.txt` as published, any other file as `# <path>` and one
+  fence named by its extension.
+
+A Twin that answers `404` or anything but Markdown is skipped and the page itself is converted.
+Files served as JSON, YAML, plain text, CSV or XML need no rule: they are stored verbatim in one
+fence (`converter: verbatim`).
 
 ### The default host table
 
@@ -88,16 +100,24 @@ The package ships the hosts probed so far in
 `lorekeep.toml` with the same `prefix` replaces the default one; any other rule is added beside
 them. `lorekeep status` prints the merged table, marking the Project's rules `(lorekeep.toml)`.
 
-| Prefix                       | Publisher   | Authority   | Twin                         |
-| ---------------------------- | ----------- | ----------- | ---------------------------- |
-| `platform.claude.com/`       | `anthropic` | primary     | `md-suffix`                  |
-| `docs.aws.amazon.com/`       | `aws`       | primary     | `md-suffix`, `.html` → `.md` |
-| `learn.microsoft.com/`       | `microsoft` | primary     | `accept-header`              |
-| `docs.nvidia.com/`           | `nvidia`    | primary     | —                            |
-| `cloud.google.com/`          | `google`    | primary     | —                            |
-| `milvus.io/`                 | `milvus`    | primary     | — (answers `403`; the browser fetches it) |
-| `claude.termidy.com/`        | `termidy`   | third-party | —                            |
-| `raw.githubusercontent.com/` | `github`    | third-party | `raw`                        |
+| Prefix                             | Publisher   | Authority   | Twin                                          |
+| ---------------------------------- | ----------- | ----------- | --------------------------------------------- |
+| `platform.claude.com/`             | `anthropic` | primary     | `md-suffix`                                   |
+| `docs.aws.amazon.com/`             | `aws`       | primary     | `md-suffix`, `.html` → `.md`                  |
+| `learn.microsoft.com/`             | `microsoft` | primary     | `accept-header`                               |
+| `docs.nvidia.com/`                 | `nvidia`    | primary     | — (Sphinx and MkDocs sections serve no `.md`) |
+| `docs.nvidia.com/cuvs/`            | `nvidia`    | primary     | `md-suffix` (Fern)                            |
+| `docs.nvidia.com/dynamo/`          | `nvidia`    | primary     | `md-suffix` (Fern)                            |
+| `docs.nvidia.com/nemo/curator/`    | `nvidia`    | primary     | `md-suffix` (Fern)                            |
+| `docs.nvidia.com/nemo/guardrails/` | `nvidia`    | primary     | `md-suffix` (Fern)                            |
+| `docs.nvidia.com/nemo/gym/`        | `nvidia`    | primary     | `md-suffix` (Fern)                            |
+| `docs.nvidia.com/openshell/`       | `nvidia`    | primary     | `md-suffix` (Fern)                            |
+| `docs.langchain.com/`              | `langchain` | primary     | `md-suffix` (Mintlify)                        |
+| `cloud.google.com/`                | `google`    | primary     | —                                             |
+| `milvus.io/`                       | `milvus`    | primary     | — (answers `403`; the browser fetches it)     |
+| `claude.termidy.com/`              | `termidy`   | third-party | —                                             |
+| `raw.githubusercontent.com/`       | `github`    | third-party | `raw`                                         |
+| `github.com/`                      | `github`    | third-party | `github-raw`                                  |
 
 A host matched by no rule is stored with `publisher = <host>` and `authority = third-party`, and
 every `get` of it warns, so the table can be extended. A rule added after a page was fetched does

@@ -66,6 +66,8 @@ Every value is a quoted string. The fields:
     context, not a citation.
   - `generated` — produced by an LLM and added by the owner; never cite it.
 - `converter` — what made the Markdown: `md-twin` (the publisher's own Markdown, as published),
+  `raw-twin` (a GitHub file read from its raw address: Markdown as published, code in one fence),
+  `verbatim` (JSON, YAML, plain text, CSV or XML, as received in one fence),
   `trafilatura <version>` (static HTML), `markitdown <version>` (PDF),
   `trafilatura <version> via crawl4ai <version>` (a page rendered by a browser), `owner`.
 - `etag`, `last_modified` — the server's validators, when it sent them; used for conditional
