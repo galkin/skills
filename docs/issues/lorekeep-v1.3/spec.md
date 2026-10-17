@@ -21,10 +21,10 @@ reads the Reading (`get` returns its path), `search` indexes Readings, the Versi
 evidence and the object of Recheck and Citation. Rules are data in two layers (package defaults
 per engine, the Store's `lorekeep.toml`), limited to operations that cannot alter a line: drop a
 leading or trailing block, drop lines by pattern, drop a heading's suffix, insert a heading before
-lines by pattern. `lorekeep rules propose <prefix>` asks an LLM for candidate rules over a sample
-of the host's Versions, then measures each candidate over every Version of the host and prints
-what it would remove; `--accept` writes the rules that pass the limits into `lorekeep.toml`. `get`
-and `search` never call a model.
+lines by pattern. A subagent on the cheapest model proposes candidate rules over a sample the tool prints;
+`lorekeep rules check` measures every candidate over every Version of the host and prints what it
+would remove; `lorekeep rules accept` writes the rules that pass the limits into `lorekeep.toml`.
+lorekeep itself calls no model and holds no key.
 
 ## User Stories
 
@@ -64,7 +64,7 @@ and `search` never call a model.
     heading.
 - Every kept line of a Reading is byte-equal to a line of the Version; a rule cannot touch a
   fence or a pipe-table line. A rule carries `accepted` (date) and `removes` (the share of lines
-  it removed over the Store's Versions when accepted, as `rules propose` measured it).
+  it removed over the Store's Versions when accepted, as `rules check` measured it).
 - Two layers, as host rules: `src/lorekeep/readings.toml` (engines) and the Store's
   `lorekeep.toml`; a Store rule with the same `prefix`/`engine` and operation replaces the default.
 
@@ -85,37 +85,39 @@ and `search` never call a model.
   Version prints `lorekeep: warning: <url>: rule <name> removed N% (accepted at M%)` and is NOT
   applied to that Version.
 
-### `rules propose` (the one place a model is called)
+### Rules proposed by a subagent (no model inside the tool)
 
-- `lorekeep rules propose PREFIX [--sample N] [--accept] [--store DIR]`: takes up to N (default
-  5) Versions under the prefix (the shortest and the longest among them), sends them with the
-  rule grammar to the model (Anthropic API, `claude-haiku-4-5-20251001`, key from
-  `ANTHROPIC_API_KEY`; the `anthropic` SDK as the extra `lorekeep[rules]` — a new runtime
-  dependency, named here because the task cannot be done without it), and receives candidate
-  rules as TOML. The tool then applies each candidate to every Version under the prefix and
-  prints, per candidate: lines removed or headings inserted in total and per Version (min, median,
-  max), three removed lines as examples, and whether it passes the limits: at most 30% of a
-  Version's lines, never a fence or table line, `drop_leading` only before the first heading.
-- `--accept` appends the passing candidates to the Store's `lorekeep.toml` with `accepted` and
-  `removes`, and rebuilds the Readings under the prefix. Without it nothing is written.
-- Without the extra or the key, the command exits 2 naming what is missing.
+- The owner's decision: lorekeep calls no model and holds no API key; it already runs inside an
+  agentic flow, so the proposer is a subagent the orchestrator launches on the cheapest model
+  available (the Haiku tier) through Orca orchestration, as any worker.
+- The tool gives the proposer its material and judges its answer: `lorekeep rules sample PREFIX`
+  prints the paths of a sample of Versions (shortest, longest, three between); the subagent
+  returns one TOML file of `[[readings]]` candidates in the rule grammar, nothing else;
+  `lorekeep rules check FILE` applies every candidate to every Version under its prefix and prints
+  what it would remove (totals, min/median/max per Version, three examples) and `pass`/`fail`
+  against the limits (at most 30% of a Version's lines, never a fence or table line,
+  `drop_leading` only before the first heading); `lorekeep rules accept FILE` writes the passing
+  rules into the Store's `lorekeep.toml` with `accepted` and `removes` and rebuilds the Readings
+  (`--all` overrides the verdicts). `get` and `search` never involve a model.
+- The brief for the proposer lives in `references/owner.md`: model tier, input, the exact output
+  format, and what the orchestrator does next. Nothing of it is a flag or a key.
 
 ### The skill
 
 - `SKILL.md`: what a Reading is (one sentence), that `path` is the file to read and `version`
   the evidence, that `url` is still what to cite, that a `rule … removed N%` warning means the
   Reading fell back to the Version; the stderr table gains that row.
-- `references/owner.md`: `read`, `rules propose`, the `[[readings]]` keys with one example, the
-  limits, the cycle (a worker's friction → `rules propose` on that host → `--accept` → rebuilt
-  Readings), and that `.cache/` is never backed up.
+- `references/owner.md`: `read`, `rules sample`/`check`/`accept`, the `[[readings]]` keys with one
+  example, the limits, the proposer brief, the cycle (a worker's friction → sample → subagent →
+  check → accept → rebuilt Readings), and that `.cache/` is never backed up.
 - `references/store.md`: `.cache/readings/`, the Reading's frontmatter, `version` in JSON.
 - `GLOSSARY.md`: Reading, reading rule.
 
 ## Testing Decisions
 
 As before: fixtures from the first Store (a Fern Twin with the banner, the EUR-Lex AI Act cut,
-a Microsoft Learn Twin, a Redoc shell), one test per criterion; the model is faked at the seam
-(`Edges` gains a `proposer`), with recorded candidate TOML as the fixture; `pytest`, `ruff`,
+a Microsoft Learn Twin, a Redoc shell), one test per criterion; the proposer's answer is a recorded
+candidate TOML fixture (no seam for a model, there is none); `pytest`, `ruff`,
 `pyright` the gate.
 
 ## Out of Scope
@@ -123,11 +125,11 @@ a Microsoft Learn Twin, a Redoc shell), one test per criterion; the model is fak
 - Any operation that rewrites a line (paraphrase, number or code changes).
 - Digests (LLM summaries as `generated` Sources): a later spec.
 - Readings for `owner:` Sources.
-- Running `rules propose` inside `get` or on a schedule.
+- Any model call inside lorekeep, any API key, any SDK dependency.
 
 ## Further Notes
 
-The first Store's rule set is produced by the implementer of ticket 03 by running
-`rules propose` live on `docs.nvidia.com/`, `eur-lex.europa.eu/`, `learn.microsoft.com/` and
-`docs.nvidia.com/rag/latest/`, with the owner's key; what it proposed and what passed is recorded
-in the ticket, and the engine-level rules among them go into `readings.toml`.
+The first Store's rule set is produced by the orchestrator after ticket 03 lands, running the
+cycle live with a Haiku-tier subagent on `docs.nvidia.com/`, `eur-lex.europa.eu/`,
+`learn.microsoft.com/` and `docs.nvidia.com/rag/latest/`; what was proposed and what passed is
+recorded in the ticket, and the engine-level rules among them go into `readings.toml`.
