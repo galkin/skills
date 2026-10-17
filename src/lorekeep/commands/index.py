@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def run(args: argparse.Namespace, ctx: Context) -> int:
-    counts = index.rebuild(ctx.store, ctx.project.hosts)
+    counts = index.rebuild(ctx.store, ctx.project)
     index.report(counts, note=False)
     print(
         f"Indexed {plural(counts.versions, 'Version')}, {plural(counts.sections, 'Section')}, "

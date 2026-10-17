@@ -16,19 +16,25 @@ if TYPE_CHECKING:
 
 
 def size_on_disk(store: Path) -> int:
-    """The bytes of every file in the Store's flat folder, the Index included."""
+    """The bytes of every file in the Store's flat folder, the Index included (`.cache/` is
+    not: it is rebuilt from the Versions)."""
     return sum(path.stat().st_size for path in store.iterdir() if path.is_file())
 
 
 def run(args: argparse.Namespace, ctx: Context) -> int:
-    with index.ensured(ctx.store, ctx.project.hosts) as reader:
+    with index.ensured(ctx.store, ctx.project) as reader:
         found = reader.summary()
     size = size_on_disk(ctx.store)
     if args.json:
-        print(json.dumps({**asdict(found), "bytes": size}, ensure_ascii=False))
+        rules = len(ctx.project.readings)
+        print(json.dumps({**asdict(found), "rules": rules, "bytes": size}, ensure_ascii=False))
         return 0
     print(f"Store: {ctx.store}")
     print(f"{plural(found.versions, 'Version')} of {plural(found.sources, 'Source')}")
+    print(
+        f"Readings: {found.readings} of {plural(found.versions, 'Version')}, "
+        f"{plural(len(ctx.project.readings), 'rule')}"
+    )
     tags = ", ".join(f"{tag} {count}" for tag, count in found.tags.items())
     print(f"Tags: {tags or 'none'}")
     print(f"Oldest fetched_at: {found.oldest_fetched_at or 'none'}")

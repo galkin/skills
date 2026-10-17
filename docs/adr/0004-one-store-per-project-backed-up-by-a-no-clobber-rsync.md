@@ -13,8 +13,9 @@ never replaced, and a local deletion never reaches it because
 `checks.csv`, `aliases.csv`, `citations.csv`, `datapackage.json`, `lorekeep.toml` — are copied
 plainly, and the
 bucket's own versioning keeps their history. `sources.db` with its `-wal` / `-shm` companions, the
-lock file and any `.tmp-*` a worker is still writing are excluded; the Index is rebuilt, not
-restored.
+lock file, any `.tmp-*` a worker is still writing and everything under `.cache/` (the Readings)
+are excluded; the Index and the Readings are rebuilt from the Versions, not restored (`.cache/`
+amended in v1.3).
 
 `backup` is its own command, run by the pipeline at the end of a unit or on a timer — not after
 every `get`: six workers each listing a bucket of thousands of objects after every page would slow

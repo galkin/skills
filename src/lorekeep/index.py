@@ -1,11 +1,14 @@
 """The Index: `sources.db`, derived from the Store's files.
 
 It holds every Version's Provenance, the rows of `tags.csv`, `checks.csv` and `aliases.csv`, and
-the Versions' Sections with an FTS5 table over them. It is rebuilt in place, in one transaction,
-under the Store lock (`rebuild`, `ensure`); every commit notifies it (`notify`), so it stays
-current between rebuilds. It answers through one `Reader`: `current` opens one over a current
-Index without any lock and never rebuilds (`None` when the Index is missing, stale or
-unreadable, and the caller reads the files); `ensured` brings the Index up to date first.
+the Versions' Sections with an FTS5 table over them, each Section read from the Version's Reading
+where it has one (else the Version) and naming that file. It is rebuilt in place, in one
+transaction, under the Store lock (`rebuild`, `ensure`), which first builds the Readings that are
+missing or stale; every commit and every Reading built or removed notifies it (`notify`,
+`notify_reading`), so it stays current between rebuilds. It answers through one `Reader`:
+`current` opens one over a current Index without any lock and never rebuilds (`None` when the
+Index is missing, stale or unreadable, and the caller reads the files); `ensured` brings the Index
+up to date first.
 """
 
 from __future__ import annotations
@@ -21,10 +24,10 @@ from dataclasses import astuple, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from lorekeep import history, sections
+from lorekeep import history, readings, sections
 from lorekeep import store as store_module
-from lorekeep.frontmatter import FrontmatterError
-from lorekeep.project import HostRule
+from lorekeep.frontmatter import FrontmatterError, parse
+from lorekeep.project import HostRule, Project, ReadingRule
 from lorekeep.provenance import TIME_FORMAT
 from lorekeep.store import (
     CITATIONS_FILE,
@@ -55,19 +58,21 @@ _VERSION_COLUMNS = (
     "warnings",
 )
 _ORIGINAL_COLUMNS = ("url", "mediatype", "sha256", "stored")
-SCHEMA_VERSION = "5"
+SCHEMA_VERSION = "6"
 """Bumped whenever a table's columns or what they hold change, so an Index built by an older
 lorekeep reads as stale and is rebuilt with the new tables (2: `versions.canonical`; 3:
 `sections.heading_line` beside `sections.line`, which is now the Section's first text line; 4:
 `versions.warnings`, the Version's `warnings` as a JSON list; 5: `sections_fts` holds the text
-with its ligatures read as letters)."""
+with its ligatures read as letters; 6: `sections.source`, the file a Section was read from — the
+Version's Reading where it has one — and `versions.reading`)."""
 
 _SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS versions(
   file TEXT PRIMARY KEY,
   {", ".join(f"{column} TEXT" for column in _VERSION_COLUMNS)},
-  {", ".join(f"original_{column} TEXT" for column in _ORIGINAL_COLUMNS)}
+  {", ".join(f"original_{column} TEXT" for column in _ORIGINAL_COLUMNS)},
+  reading TEXT
 );
 CREATE INDEX IF NOT EXISTS versions_url ON versions(url);
 CREATE TABLE IF NOT EXISTS tags(url TEXT, tag TEXT, added_at TEXT);
@@ -79,6 +84,7 @@ CREATE TABLE IF NOT EXISTS citations(work_id TEXT, url TEXT, as_of TEXT);
 CREATE TABLE IF NOT EXISTS sections(
   id INTEGER PRIMARY KEY,
   file TEXT NOT NULL,
+  source TEXT NOT NULL,
   heading TEXT NOT NULL,
   heading_line INTEGER,
   line INTEGER NOT NULL,
@@ -136,24 +142,26 @@ class Counts:
     warnings: tuple[str, ...] = ()
 
 
-def rebuild(store: Path, rules: Sequence[HostRule]) -> Counts:
-    """Empty and refill every table from the Store's files, in place, under the Store lock;
-    `rules` normalise the addresses `citations.csv` names."""
+def rebuild(store: Path, project: Project) -> Counts:
+    """Build the missing or stale Readings, then empty and refill every table from the Store's
+    files, in place, under the Store lock; the Project's host rules normalise the addresses
+    `citations.csv` names."""
     with store_module.lock(store):
-        return _rebuild_locked(store, rules)
+        return _rebuild_locked(store, project)
 
 
-def ensure(store: Path, rules: Sequence[HostRule]) -> Counts | None:
-    """Bring the Index up to date before a reader queries it: compare `meta` with the files
-    without any lock; only when the file is missing or stale take the Store lock, compare again
-    and rebuild in place. Returns the rebuild's counts, or `None` when the Index was current, so
-    six readers finding none produce one build and a query on a current Index never waits."""
-    if _looks_current(store):
+def ensure(store: Path, project: Project) -> Counts | None:
+    """Bring the Index up to date before a reader queries it: compare `meta` with the files and
+    the Project's reading rules without any lock; only when the file is missing or stale take the
+    Store lock, compare again and rebuild in place. Returns the rebuild's counts, or `None` when
+    the Index was current, so six readers finding none produce one build and a query on a
+    current Index never waits."""
+    if _looks_current(store, project.readings):
         return None
     with store_module.lock(store):
-        if _looks_current(store):
+        if _looks_current(store, project.readings):
             return None
-        return _rebuild_locked(store, rules)
+        return _rebuild_locked(store, project)
 
 
 def report(counts: Counts | None, *, note: bool = True) -> None:
@@ -172,12 +180,13 @@ def report(counts: Counts | None, *, note: bool = True) -> None:
         print(warning, file=sys.stderr)
 
 
-def _looks_current(store: Path) -> bool:
-    with current(store) as reader:
+def _looks_current(store: Path, rules: Sequence[ReadingRule]) -> bool:
+    with current(store, rules) as reader:
         return reader is not None
 
 
-def _rebuild_locked(store: Path, rules: Sequence[HostRule]) -> Counts:
+def _rebuild_locked(store: Path, project: Project) -> Counts:
+    built = _ensure_readings(store, project.readings)
     con = _connect(store)
     try:
         if _schema_of(con) != SCHEMA_VERSION:
@@ -203,16 +212,32 @@ def _rebuild_locked(store: Path, rules: Sequence[HostRule]) -> Counts:
             tags = _insert_rows(con, TagRow, store_module.read_rows(store, TagRow))
             checks = _insert_rows(con, RecheckRow, store_module.read_rows(store, RecheckRow))
             aliases = _insert_rows(con, AliasRow, store_module.read_rows(store, AliasRow))
-            cited, warnings = _read_citations(store, rules)
+            cited, warnings = _read_citations(store, project.hosts)
             con.executemany("INSERT INTO citations VALUES(?, ?, ?)", cited)
-            _write_meta(con, store, ignored)
+            _write_meta(con, store, ignored, readings.rules_hash(project.readings))
             con.execute("COMMIT")
         except BaseException:
             con.execute("ROLLBACK")
             raise
     finally:
         con.close()
-    return Counts(versions, sections, tags, checks, aliases, len(cited), tuple(warnings))
+    return Counts(versions, sections, tags, checks, aliases, len(cited), (*built, *warnings))
+
+
+def _ensure_readings(store: Path, rules: Sequence[ReadingRule]) -> list[str]:
+    """Build every Version's Reading that is missing or stale, the Store lock held; the guard's
+    warnings of each one built now (or left out because its only rule was held back), as `read`
+    prints them. A file that is not a Version is left to the rebuild to name."""
+    warnings: list[str] = []
+    for path in sorted(store.glob("*.md")):
+        try:
+            reading = readings.ensure_held(store, path, rules)
+        except FrontmatterError:
+            continue
+        if reading.warnings and (reading.path is None or reading.built):
+            url = store_module.read_head(path)["url"]
+            warnings += [f"lorekeep: warning: {url}: {warning}" for warning in reading.warnings]
+    return warnings
 
 
 def _read_citations(
@@ -275,24 +300,59 @@ def _as_of(text: str | None) -> str | None:
 
 
 def _index_version(con: sqlite3.Connection, path: Path) -> int:
-    """Insert one Version's row and its Sections (with their FTS rows); how many Sections."""
+    """Insert one Version's row and its Sections (with their FTS rows), read from its Reading
+    when it has one; how many Sections."""
     data = path.read_bytes()
     head, body = store_module.parse_version(data)
     original = head.get("original")
     original = original if isinstance(original, dict) else {}
+    source, source_data, source_body = _searched(path, data, body)
     values = [path.name]
     values += [_text(head.get(column)) for column in _VERSION_COLUMNS]
     values += [_text(original.get(column)) for column in _ORIGINAL_COLUMNS]
+    values += [source if source != path.name else None]
     con.execute(f"INSERT INTO versions VALUES({', '.join('?' * len(values))})", values)
+    return _index_sections(con, path.name, source, source_data, source_body)
+
+
+def _searched(path: Path, data: bytes, body: bytes) -> tuple[str, bytes, bytes]:
+    """The file the Version at `path` is searched in, relative to the Store, with its bytes and
+    body: its Reading when there is one, else the Version itself (`data`, `body`)."""
+    store = path.parent
+    reading = readings.reading_path(store, path)
+    if reading.is_file():
+        reading_data = reading.read_bytes()
+        try:
+            _, reading_body = parse(reading_data)
+        except FrontmatterError:
+            pass
+        else:
+            return reading.relative_to(store).as_posix(), reading_data, reading_body
+    return path.name, data, body
+
+
+def _index_sections(
+    con: sqlite3.Connection, file: str, source: str, data: bytes, body: bytes
+) -> int:
+    """Insert the Sections of `body`, the body of the file `source` read for the Version `file`,
+    with their FTS rows and their lines counted in `data`; how many Sections."""
     first_line = data[: len(data) - len(body)].count(b"\n") + 1
     count = 0
     for order, section in enumerate(
         sections.split(body.decode("utf-8", errors="replace"), first_line)
     ):
         cursor = con.execute(
-            "INSERT INTO sections(file, heading, heading_line, line, body, ord) "
-            "VALUES(?, ?, ?, ?, ?, ?)",
-            (path.name, section.heading, section.heading_line, section.line, section.body, order),
+            "INSERT INTO sections(file, source, heading, heading_line, line, body, ord) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?)",
+            (
+                file,
+                source,
+                section.heading,
+                section.heading_line,
+                section.line,
+                section.body,
+                order,
+            ),
         )
         # The FTS rows read ligatures as letters; `sections` keeps the text as stored, which
         # `snippet()` shows: a ligature is a letter to the tokenizer, so the tokens line up.
@@ -321,8 +381,17 @@ def _insert_rows(con: sqlite3.Connection, row_type: type[Row], rows: Sequence[Ro
 
 def _fingerprint(store: Path) -> list[tuple[str, str]]:
     """What the Index records at build time to tell later whether it is current: the count of
-    `.md` files and the size and mtime of each watched CSV (`missing` when absent)."""
+    `.md` files, the size and mtime of each watched CSV (`missing` when absent), and the count of
+    Readings with the mtime of their folder, which every Reading written or removed changes."""
     values = [("md_files", str(sum(1 for _ in store.glob("*.md"))))]
+    folder = store / readings.READINGS_DIR
+    if folder.is_dir():
+        values += [
+            (f"{_READINGS}:files", str(sum(1 for _ in folder.glob("*.md")))),
+            (f"{_READINGS}:mtime", str(folder.stat().st_mtime_ns)),
+        ]
+    else:
+        values += [(f"{_READINGS}:files", "missing"), (f"{_READINGS}:mtime", "missing")]
     for name in WATCHED_FILES:
         path = store / name
         if path.is_file():
@@ -338,6 +407,12 @@ def _fingerprint(store: Path) -> list[tuple[str, str]]:
 
 _SCHEMA_KEY = "schema"
 """The `meta` key holding the `SCHEMA_VERSION` the Index was built with."""
+
+_RULES_KEY = "reading_rules"
+"""The `meta` key holding the hash of the reading rules the Index's Readings were built with."""
+
+_READINGS = "readings"
+"""The prefix of the fingerprint's keys for `.cache/readings/`."""
 
 _DROP = """
 DROP VIEW IF EXISTS latest;
@@ -364,20 +439,29 @@ _IGNORED = "md_ignored"
 so a commit can tell that `versions` still accounts for every `.md` file."""
 
 
-def _write_meta(con: sqlite3.Connection, store: Path, ignored: int) -> None:
+def _write_meta(con: sqlite3.Connection, store: Path, ignored: int, rules: str) -> None:
     con.execute("DELETE FROM meta")
-    values = [*_fingerprint(store), (_IGNORED, str(ignored)), (_SCHEMA_KEY, SCHEMA_VERSION)]
+    values = [
+        *_fingerprint(store),
+        (_IGNORED, str(ignored)),
+        (_RULES_KEY, rules),
+        (_SCHEMA_KEY, SCHEMA_VERSION),
+    ]
     con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", values)
 
 
-def _is_current(store: Path, con: sqlite3.Connection) -> bool:
-    """Whether the Index's `meta` still describes the Store's files; no lock is taken."""
+def _is_current(store: Path, con: sqlite3.Connection, rules: str | None) -> bool:
+    """Whether the Index's `meta` still describes the Store's files and, when `rules` is given,
+    was built under the reading rules hashed `rules`; no lock is taken."""
     try:
         recorded = dict(con.execute("SELECT key, value FROM meta").fetchall())
     except sqlite3.Error:
         return False
     recorded.pop(_IGNORED, None)
     if recorded.pop(_SCHEMA_KEY, None) != SCHEMA_VERSION:
+        return False
+    built_under = recorded.pop(_RULES_KEY, None)
+    if rules is not None and built_under != rules:
         return False
     return bool(recorded) and recorded == dict(_fingerprint(store))
 
@@ -426,7 +510,7 @@ def notify(
                 FILE_OF[AliasRow]: _notify_rows(con, AliasRow, aliases),
             }
             if _agrees(con, store, touched):
-                _write_meta(con, store, _ignored_of(con))
+                _write_meta(con, store, _ignored_of(con), _meta_value(con, _RULES_KEY))
             con.execute("COMMIT")
         except BaseException:
             con.execute("ROLLBACK")
@@ -437,9 +521,68 @@ def notify(
         con.close()
 
 
+def notify_reading(store: Path, version: Path) -> None:
+    """Tell the Index a Reading of the Version at `version` was written or removed, under the
+    Store lock (`readings.ensure` holds it): the Version's Sections are read again from the file
+    it is now searched in and, when every other file is as `meta` recorded it, `meta` is brought
+    up to date in the same transaction. A missing Index, one built with another
+    `SCHEMA_VERSION` or one without the Version is left for the next reader to rebuild."""
+    if not _exists(store):
+        return
+    try:
+        con = _connect(store)
+    except sqlite3.Error:
+        return
+    try:
+        if _schema_of(con) != SCHEMA_VERSION:
+            return
+        con.execute("BEGIN IMMEDIATE")
+        try:
+            if con.execute("SELECT 1 FROM versions WHERE file = ?", (version.name,)).fetchone():
+                _reindex_sections(con, version)
+                recorded = dict(con.execute("SELECT key, value FROM meta").fetchall())
+                if all(
+                    recorded.get(key) == value
+                    for key, value in _fingerprint(store)
+                    if not key.startswith(_READINGS)
+                ):
+                    _write_meta(con, store, _ignored_of(con), _meta_value(con, _RULES_KEY))
+            con.execute("COMMIT")
+        except BaseException:
+            con.execute("ROLLBACK")
+            raise
+    except sqlite3.Error:
+        return
+    finally:
+        con.close()
+
+
+def _reindex_sections(con: sqlite3.Connection, version: Path) -> None:
+    """Replace the Version's Sections and its `reading` with what its searched file holds now."""
+    for row_id, heading, body in con.execute(
+        "SELECT id, heading, body FROM sections WHERE file = ?", (version.name,)
+    ).fetchall():
+        con.execute(
+            "INSERT INTO sections_fts(sections_fts, rowid, heading, body) "
+            "VALUES('delete', ?, ?, ?)",
+            (row_id, as_letters(heading), as_letters(body)),
+        )
+    con.execute("DELETE FROM sections WHERE file = ?", (version.name,))
+    data = version.read_bytes()
+    _, body = store_module.parse_version(data)
+    source, source_data, source_body = _searched(version, data, body)
+    _index_sections(con, version.name, source, source_data, source_body)
+    reading = source if source != version.name else None
+    con.execute("UPDATE versions SET reading = ? WHERE file = ?", (reading, version.name))
+
+
 def _ignored_of(con: sqlite3.Connection) -> int:
-    row = con.execute("SELECT value FROM meta WHERE key = ?", (_IGNORED,)).fetchone()
-    return int(row[0]) if row else 0
+    return int(_meta_value(con, _IGNORED) or 0)
+
+
+def _meta_value(con: sqlite3.Connection, key: str) -> str:
+    row = con.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    return str(row[0]) if row else ""
 
 
 def _notify_rows(con: sqlite3.Connection, row_type: type[Row], rows: Sequence[Row]) -> bool:
@@ -462,8 +605,8 @@ def _notify_rows(con: sqlite3.Connection, row_type: type[Row], rows: Sequence[Ro
 def _agrees(con: sqlite3.Connection, store: Path, touched: dict[str, bool]) -> bool:
     """Whether the Index, after this commit's inserts, describes the Store: every table the
     commit touched has as many rows as its file, `versions` and the `.md` files the rebuild
-    ignored as many as there are `.md` files, and every watched file the commit did not touch
-    is as `meta` recorded it."""
+    ignored as many as there are `.md` files, every watched file the commit did not touch
+    and the Readings are as `meta` recorded them."""
     recorded = dict(con.execute("SELECT key, value FROM meta").fetchall())
     if not recorded or recorded.get(_SCHEMA_KEY) != SCHEMA_VERSION:
         return False
@@ -481,7 +624,9 @@ def _agrees(con: sqlite3.Connection, store: Path, touched: dict[str, bool]) -> b
                 return False
         elif any(recorded.get(f"{name}:{k}") != current[f"{name}:{k}"] for k in ("size", "mtime")):
             return False
-    return True
+    return all(
+        recorded.get(key) == value for key, value in current.items() if key.startswith(_READINGS)
+    )
 
 
 # The Reader -------------------------------------------------------------------------------------
@@ -489,8 +634,9 @@ def _agrees(con: sqlite3.Connection, store: Path, touched: dict[str, bool]) -> b
 
 @dataclass(frozen=True)
 class Hit:
-    """`line` is the file's line of the first match in the Section (its first text line when no
-    line holds a query word as written); `heading_line` its heading's (`None` before any)."""
+    """`file` is the file searched, relative to the Store (the Version's Reading when it has
+    one); `line` is that file's line of the first match in the Section (its first text line when
+    no line holds a query word as written); `heading_line` its heading's (`None` before any)."""
 
     file: str
     line: int
@@ -531,13 +677,15 @@ class Summary:
     newest_fetched_at: str | None
     checks: dict[str, int]
     unknown_hosts: list[str]
+    readings: int
 
 
 @contextlib.contextmanager
-def current(store: Path) -> Iterator[Reader | None]:
+def current(store: Path, rules: Sequence[ReadingRule] | None = None) -> Iterator[Reader | None]:
     """A Reader over a current Index, or `None` when the Index is missing, stale (its `meta`
-    no longer describes the files) or unreadable, so the caller reads the files instead. Takes
-    no lock and never rebuilds: the one protocol every lookup follows."""
+    no longer describes the files or, with `rules`, it was built under other reading rules) or
+    unreadable, so the caller reads the files instead. Takes no lock and never rebuilds: the one
+    protocol every lookup follows."""
     if not _exists(store):
         yield None
         return
@@ -547,17 +695,18 @@ def current(store: Path) -> Iterator[Reader | None]:
         yield None
         return
     try:
-        yield Reader(store, con) if _is_current(store, con) else None
+        digest = None if rules is None else readings.rules_hash(rules)
+        yield Reader(store, con) if _is_current(store, con, digest) else None
     finally:
         con.close()
 
 
 @contextlib.contextmanager
-def ensured(store: Path, rules: Sequence[HostRule]) -> Iterator[Reader]:
+def ensured(store: Path, project: Project) -> Iterator[Reader]:
     """A Reader over an Index brought up to date first (`ensure`, its rebuild reported on
     stderr): for the commands that may rebuild. It answers from what `ensure` found or built,
     without a second currency check."""
-    report(ensure(store, rules))
+    report(ensure(store, project))
     con = _connect(store)
     try:
         yield Reader(store, con)
@@ -629,7 +778,7 @@ class Reader:
         filters, filter_args = _filters(scope)
         tag_filter, tag_args = _tag_filter(scope.tags)
         rows = con.execute(
-            f"SELECT s.file, s.line, s.heading_line, s.heading, s.body, {snippet}, l.url "
+            f"SELECT s.source, s.line, s.heading_line, s.heading, s.body, {snippet}, l.url "
             f"FROM {match_from} "
             f"JOIN latest l ON l.file = s.file WHERE {match_where}{filters}{tag_filter} "
             f"ORDER BY {order} LIMIT ?",
@@ -696,10 +845,12 @@ class Reader:
 
     def summary(self) -> Summary:
         """Versions, Sources, Sources per Tag, the oldest and newest `fetched_at`, Rechecks per
-        result, and the hosts no rule knew (a Version whose publisher is its url's host)."""
+        result, the hosts no rule knew (a Version whose publisher is its url's host), and the
+        Versions that have a Reading."""
         con = self.con
-        versions, sources, oldest, newest = con.execute(
-            "SELECT count(*), count(DISTINCT url), min(fetched_at), max(fetched_at) FROM versions"
+        versions, sources, oldest, newest, read = con.execute(
+            "SELECT count(*), count(DISTINCT url), min(fetched_at), max(fetched_at), "
+            "count(reading) FROM versions"
         ).fetchone()
         tags = dict(
             con.execute(
@@ -722,6 +873,7 @@ class Reader:
             newest_fetched_at=newest,
             checks=checks,
             unknown_hosts=sorted(hosts),
+            readings=read,
         )
 
 

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from lorekeep import package
 from lorekeep.edges import CommandRunner
 from lorekeep.project import PROJECT_FILE
+from lorekeep.readings import CACHE_DIR
 from lorekeep.store import INDEX_FILE, LOCK_FILE, WATCHED_FILES
 
 if TYPE_CHECKING:
@@ -25,14 +26,16 @@ GCLOUD = ("gcloud", "storage")
 # The files that grow, in the order they are copied: the bucket's versioning keeps their history.
 GROWING_FILES = (*WATCHED_FILES, package.PACKAGE_FILE, PROJECT_FILE)
 
-# What `rsync` leaves out (a regular expression over a name in the Store): the growing files, which
-# `cp` copies, the Index with its journals, the lock file and a temporary file still being written.
+# What `rsync` leaves out (a regular expression over a path in the Store): the growing files, which
+# `cp` copies, the Index with its journals, the lock file, a temporary file still being written,
+# and everything under `.cache/` (the Readings), which is rebuilt from the Versions.
 EXCLUDE = (
     "^("
     + "|".join(re.escape(name) for name in GROWING_FILES)
     + f"|{re.escape(INDEX_FILE)}(-wal|-shm)?"
     + f"|{re.escape(LOCK_FILE)}"
     + r"|.*\.tmp-[0-9]+"
+    + f"|{re.escape(CACHE_DIR)}/.*"
     + ")$"
 )
 

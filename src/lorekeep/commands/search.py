@@ -31,7 +31,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
         publisher=args.publisher,
         authority=args.authority,
     )
-    with index.ensured(ctx.store, ctx.project.hosts) as reader:
+    with index.ensured(ctx.store, ctx.project) as reader:
         hits, other = reader.search(args.query, scope, limit=args.limit, exact=args.exact)
         relaxed = False
         words = content_words(args.query)

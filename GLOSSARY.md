@@ -87,7 +87,8 @@ The searchable view of a Store, rebuilt from its files whenever needed.
 _Avoid_: database (the Store is the record; the Index only reflects it)
 
 **Section**:
-The part of a Version under one heading, the unit the Index searches and answers with.
+The part of a Version under one heading — of its Reading, where it has one — the unit the Index
+searches and answers with.
 _Avoid_: chunk, passage, fragment
 
 ### What happens to it

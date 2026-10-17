@@ -13,6 +13,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from lorekeep import index
 from lorekeep.commands.skill import skill_folder
 from tests.support import edges_over, get, lorekeep, make_store
 from tests.test_helpers import read_version
@@ -203,7 +204,9 @@ def test_an_index_built_by_v1_1_is_rebuilt_and_search_answers_as_before(tmp_path
     assert after.stdout == before.stdout
     assert json.loads(after.stdout)["results"]
     with sqlite3.connect(store / "sources.db") as con:
-        assert con.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone() == ("5",)
+        assert con.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone() == (
+            index.SCHEMA_VERSION,
+        )
 
 
 def test_the_store_reference_documents_asked_and_warnings() -> None:
