@@ -4,10 +4,14 @@
 
 **Blocked by:** 07, 14
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] over a Store of real `get`s aged by the helper — the Anthropic Twin (served `304`), the `ethical-ai` lesson served again unchanged, the `coordinator-and-subagents` lesson served as `.changed`, the `effective-prompts` lesson now answering `404` — plus one `owner:` Source and one Version written by the fixture helper with `via crawl4ai` in its `converter`: `recheck` appends four rows, creates one new Version and prints 1 changed / 2 unchanged / 1 gone / 2 skipped
-- [ ] `--citations` makes no request and works without `LOREKEEP_TAG`
-- [ ] scope flags limit which Sources are asked; the fake transport records exactly those requests; without `LOREKEEP_TAG` every web Source is asked
-- [ ] `--citations` lists only works whose cited Source changed after `as_of`; without `as_of` it measures against the oldest Version
-- [ ] `--dry-run` asks nothing and lists what would be asked
+- [x] over a Store of real `get`s aged by the helper — the Anthropic Twin (served `304`), the `ethical-ai` lesson served again unchanged, the `coordinator-and-subagents` lesson served as `.changed`, the `effective-prompts` lesson now answering `404` — plus one `owner:` Source and one Version written by the fixture helper with `via crawl4ai` in its `converter`: `recheck` appends four rows, creates one new Version and prints 1 changed / 2 unchanged / 1 gone / 2 skipped
+- [x] `--citations` makes no request and works without `LOREKEEP_TAG`
+- [x] scope flags limit which Sources are asked; the fake transport records exactly those requests; without `LOREKEEP_TAG` every web Source is asked
+- [x] `--citations` lists only works whose cited Source changed after `as_of`; without `as_of` it measures against the oldest Version
+- [x] `--dry-run` asks nothing and lists what would be asked
+
+## Comments
+
+2026-10-17 — Decisions made while building this ticket. (1) `recheck` asks every Source in scope whatever its age: it is the on-demand question of ADR 0007, so the freshness window belongs to `get` alone; it adds no Tag (it is not a Run reading). Scope is the Index's `latest` view filtered by `--tag` (repeated; else the Run's Tag; else everything), `--publisher` and `--prefix` (a plain string prefix of the stored `url`), via `index.latest_in_scope`; each Source goes through ticket 07's `recheck.perform`. (2) Output: one `<result> <url>` line per Source, then `Rechecked N Sources: a unchanged, b changed, c gone, d error, e skipped`; warnings on stderr. `--dry-run` prints `ask  <address the request would go to>` or `skip <url>` per Source and `Would ask N Sources; M skipped`, writes no row. (3) `--citations` prints `work_id, url, old sha8 → new sha8`, nothing else on stdout; a Citation of a `url` with no Version is a warning on stderr. The Version a work was written from is the one the lookup would have returned at `as_of` — the latest of the Versions' `fetched_at` and the `checks.csv` rows up to `as_of` (a row wins a tie in the same second) — or the oldest Version when `as_of` is absent or earlier than every Version; it is compared with the `latest` Version now by `sha256`, so a page that went A → B → A lists nothing. (4) Fixed in ticket 08's `latest` view: a tie on `checked_at` now goes to the later row (`rowid`), as the Store's scan does; before, `get --max-age 0` and the Index could disagree on which Version is current after two answers in one second. The schema now drops and recreates the view, so an existing `sources.db` picks the fix up at its next rebuild.

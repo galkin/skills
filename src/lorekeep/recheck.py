@@ -55,6 +55,12 @@ def skipped_reason(stored: VersionInfo) -> str | None:
     return None
 
 
+def asked_address(stored: VersionInfo) -> str:
+    """Where a Recheck sends its request: `original.url`, the address the bytes came from."""
+    original: dict[str, Any] = stored.frontmatter.get("original") or {}
+    return str(original.get("url") or stored.url)
+
+
 def perform(
     store: Path,
     stored: VersionInfo,
@@ -66,7 +72,7 @@ def perform(
     """Ask the publisher of `stored` whether it changed and record the answer."""
     head = stored.frontmatter
     original: dict[str, Any] = head.get("original") or {}
-    address = str(original.get("url") or stored.url)
+    address = asked_address(stored)
     headers = {
         name: str(head[key])
         for name, key in (("If-None-Match", "etag"), ("If-Modified-Since", "last_modified"))

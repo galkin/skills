@@ -14,6 +14,7 @@ from lorekeep.commands import add as add_command
 from lorekeep.commands import backup as backup_command
 from lorekeep.commands import get as get_command
 from lorekeep.commands import index as index_command
+from lorekeep.commands import recheck as recheck_command
 from lorekeep.commands import search as search_command
 from lorekeep.commands import status as status_command
 from lorekeep.commands import tag as tag_command
@@ -183,17 +184,12 @@ def resolve_tag(args: argparse.Namespace, env: Mapping[str, str]) -> str:
     return value
 
 
-def _not_yet(args: argparse.Namespace, ctx: Context) -> int:
-    print(f"lorekeep {args.command}: not implemented yet", file=sys.stderr)
-    return 1
-
-
 HANDLERS: dict[str, Callable[[argparse.Namespace, Context], int]] = {
     "get": get_command.run,
     "add": add_command.run,
     "search": search_command.run,
     "index": index_command.run,
-    "recheck": _not_yet,
+    "recheck": recheck_command.run,
     "backup": backup_command.run_backup,
     "restore": backup_command.run_restore,
     "tag": tag_command.run,

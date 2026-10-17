@@ -74,8 +74,10 @@ CREATE VIRTUAL TABLE IF NOT EXISTS sections_fts USING fts5(
   heading, body, content='sections', content_rowid='id', tokenize='porter unicode61'
 );
 -- The latest Version of each Source: the one its latest `checks.csv` row names, else the newest
--- `fetched_at`; the same answer as the Store's scan.
-CREATE VIEW IF NOT EXISTS latest AS
+-- `fetched_at`; the same answer as the Store's scan, whose tie on `checked_at` goes to the later
+-- row in the file (rows enter `checks` in file order, so `rowid` is that order).
+DROP VIEW IF EXISTS latest;
+CREATE VIEW latest AS
 SELECT v.* FROM versions v
 WHERE v.file = (
   SELECT w.file FROM versions w
@@ -83,7 +85,7 @@ WHERE v.file = (
   ORDER BY w.sha256 = (
     SELECT c.sha256 FROM checks c
     WHERE c.url = v.url AND c.sha256 != ''
-    ORDER BY c.checked_at DESC LIMIT 1
+    ORDER BY c.checked_at DESC, c.rowid DESC LIMIT 1
   ) DESC, w.fetched_at DESC, w.file
   LIMIT 1
 );
@@ -705,6 +707,88 @@ def tagged_urls(store: Path, tag: str) -> set[str]:
         return {url for (url,) in con.execute("SELECT url FROM tags WHERE tag = ?", (tag,))}
     finally:
         con.close()
+
+
+def latest_in_scope(store: Path, scope: Scope, prefix: str | None = None) -> list[VersionInfo]:
+    """The latest Version of every Source in `scope` whose `url` starts with `prefix`, by url."""
+    filters, args = _filters(scope)
+    tag_filter, tag_args = _tag_filter(scope.tags)
+    if prefix is not None:
+        filters += " AND substr(l.url, 1, ?) = ?"
+        args += [len(prefix), prefix]
+    con = connect(store)
+    try:
+        rows = con.execute(
+            f"SELECT l.file FROM latest l WHERE 1{filters}{tag_filter} ORDER BY l.url",
+            [*args, *tag_args],
+        ).fetchall()
+    finally:
+        con.close()
+    paths = [store / file for (file,) in rows]
+    return [store_module.VersionInfo(path, store_module.read_head(path)) for path in paths]
+
+
+@dataclass(frozen=True)
+class Revisit:
+    """A work whose cited Source has a newer Version than the one it was written from."""
+
+    work_id: str
+    url: str
+    old_sha256: str
+    new_sha256: str
+
+
+def revisits(store: Path) -> tuple[list[Revisit], list[str]]:
+    """Every Citation whose Source changed since the work was written, and one warning per
+    Citation of a `url` the Store has no Version of.
+
+    The work was written from the Version the lookup would have returned at `as_of` — the one
+    the latest `checks.csv` row up to then names, else the newest `fetched_at` up to then — or
+    from the oldest Version when `as_of` is absent or earlier than every Version. It is measured
+    against the latest Version now.
+    """
+    con = connect(store)
+    try:
+        citations = con.execute(
+            "SELECT work_id, url, as_of FROM citations ORDER BY work_id, url"
+        ).fetchall()
+        found: list[Revisit] = []
+        warnings: list[str] = []
+        for work_id, url, as_of in citations:
+            versions = con.execute(
+                "SELECT fetched_at, sha256 FROM versions WHERE url = ? ORDER BY fetched_at, file",
+                (url,),
+            ).fetchall()
+            if not versions:
+                warnings.append(f"lorekeep: warning: {work_id} cites {url}, which is not stored")
+                continue
+            current = con.execute("SELECT sha256 FROM latest WHERE url = ?", (url,)).fetchone()[0]
+            written_from = _version_at(con, url, versions, as_of)
+            if written_from != current:
+                found.append(Revisit(work_id, url, written_from, current))
+        return found, warnings
+    finally:
+        con.close()
+
+
+def _version_at(
+    con: sqlite3.Connection, url: str, versions: list[tuple[str, str]], as_of: str | None
+) -> str:
+    oldest = versions[0][1]
+    if as_of is None:
+        return oldest
+    # A check row in the same second as a fetch is the later answer: it names what is current.
+    events = [(fetched_at, 0, sha256) for fetched_at, sha256 in versions if fetched_at <= as_of]
+    stored = {sha256 for _, sha256 in versions}
+    events += [
+        (checked_at, 1, sha256)
+        for checked_at, sha256 in con.execute(
+            "SELECT checked_at, sha256 FROM checks WHERE url = ? AND checked_at <= ?",
+            (url, as_of),
+        )
+        if sha256 in stored
+    ]
+    return max(events)[2] if events else oldest
 
 
 RECHECK_RESULTS = ("unchanged", "changed", "gone", "error")
