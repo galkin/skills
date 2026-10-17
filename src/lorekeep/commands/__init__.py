@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
+
+from lorekeep.recheck import verified_at
+from lorekeep.store import read_head
 
 
 def scope_tags(
@@ -20,3 +25,20 @@ def scope_tags(
 def plural(count: int, word: str, plural_word: str | None = None) -> str:
     """`1 Version`, `2 Versions`, `0 aliases`: the count and the word it takes."""
     return f"{count} {word if count == 1 else plural_word or word + 's'}"
+
+
+def version_json(store: Path, path: Path, outcome: str) -> dict[str, Any]:
+    """The one JSON object `get --json` and `add --json` print: the Version as its file says,
+    when its publisher last confirmed it, and what the call did (`outcome`)."""
+    head = read_head(path)
+    return {
+        "path": str(path),
+        "url": head["url"],
+        "sha256": head["sha256"],
+        "fetched_at": head["fetched_at"],
+        "converter": head["converter"],
+        "publisher": head["publisher"],
+        "authority": head["authority"],
+        "verified_at": verified_at(store, head),
+        "outcome": outcome,
+    }

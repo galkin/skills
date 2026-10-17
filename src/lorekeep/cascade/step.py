@@ -59,6 +59,11 @@ class Converted:
 
 
 @dataclass(frozen=True)
+class Same:
+    """A reread's answer when the received bytes are the Version's own: nothing to convert."""
+
+
+@dataclass(frozen=True)
 class Fallthrough:
     """Why a step declined; the next step runs. `needs_browser` says the page may still be read
     by the browser: the plain client was refused (`403`/`429`) or the HTML yielded no text."""
@@ -69,3 +74,12 @@ class Fallthrough:
 
 class Step(Protocol):
     def attempt(self, request: Request) -> Fetched | Fallthrough: ...
+
+    def reread(
+        self, response: httpx.Response, rule: HostRule | None, *, unchanged: str | None = None
+    ) -> Fetched | Fallthrough | Same:
+        """What a `200` to this step's own address holds, for a Recheck of a Version this step
+        wrote: the response passes the step's media-type gate first, then bytes whose sha256 is
+        `unchanged` are `Same` without a conversion, then the step converts. A `Fallthrough`
+        names the address and the reason."""
+        ...

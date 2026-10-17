@@ -19,27 +19,27 @@ RESULTS: tuple[str, ...] = (*RECHECK_RESULTS, "skipped")
 
 
 def run(args: argparse.Namespace, ctx: Context) -> int:
-    index.report(index.ensure(ctx.store))
-    if args.citations:
-        return report_citations(ctx)
-    scope = index.Scope(tags=scope_tags(args.tag, ctx.tag), publisher=args.publisher)
-    versions = index.latest_in_scope(ctx.store, scope, args.prefix)
+    with index.ensured(ctx.store, ctx.project.hosts) as reader:
+        if args.citations:
+            return report_citations(reader)
+        scope = index.Scope(tags=scope_tags(args.tag, ctx.tag), publisher=args.publisher)
+        versions = reader.latest_in_scope(scope, args.prefix)
     counts = dict.fromkeys(RESULTS, 0)
+    plans = [(stored, recheck.plan(ctx.store, stored, window_days=0)) for stored in versions]
     if args.dry_run:
         asked = 0
-        for stored in versions:
-            skipped = recheck.skipped_reason(stored)
-            if skipped is not None:
+        for stored, planned in plans:
+            if isinstance(planned, recheck.Skipped):
                 counts["skipped"] += 1
-                print(f"skipped {stored.url}: {skipped}")
-            else:
+                print(f"skipped {stored.url}: {planned.reason}")
+            elif isinstance(planned, recheck.Ask):
                 asked += 1
-                print(f"would ask {recheck.asked_address(stored)}")
+                print(f"would ask {planned.address}")
         print(f"Would ask {plural(asked, 'Source')}; {counts['skipped']} skipped")
         return 0
     with make_client(ctx.edges.transport) as client:
-        for stored in versions:
-            if recheck.skipped_reason(stored) is not None:
+        for stored, planned in plans:
+            if not isinstance(planned, recheck.Ask):
                 counts["skipped"] += 1
                 print(f"skipped {stored.url}")
                 continue
@@ -53,9 +53,9 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     return 0
 
 
-def report_citations(ctx: Context) -> int:
+def report_citations(reader: index.Reader) -> int:
     """A pure report: no request, no Tag, nothing written."""
-    found, warnings = index.revisits(ctx.store)
+    found, warnings = reader.revisits()
     for warning in warnings:
         print(warning, file=sys.stderr)
     for revisit in found:

@@ -11,7 +11,7 @@ import httpx
 import yaml
 
 from lorekeep import twins
-from lorekeep.cascade.step import Fallthrough, Fetched, Request
+from lorekeep.cascade.step import Fallthrough, Fetched, Request, Same
 from lorekeep.http import media_type
 from lorekeep.project import HostRule
 
@@ -61,30 +61,38 @@ class TwinStep:
             return Fallthrough(f"no Twin: {address} failed ({type(error).__name__})")
         if response.status_code != 200:
             return Fallthrough(f"no Twin: {address} answered {response.status_code}")
-        return read_twin(response, rule)
+        found = self.reread(response, rule)
+        assert not isinstance(found, Same)  # nothing was `unchanged`
+        return found
 
-
-def read_twin(response: httpx.Response, rule: HostRule | None) -> Fetched | Fallthrough:
-    """What a `200` to a Twin address holds, once its media type passes the Twin's gate."""
-    address = str(response.url)
-    mediatype = media_type(response)
-    if not accepts(mediatype, rule):
-        return Fallthrough(f"no Twin: {address} answered {mediatype or 'no media type'}")
-    received = response.content
-    fields, body = split_frontmatter(received)
-    canonical = _text(fields.get("canonicalUrl"))
-    return Fetched(
-        markdown=_LEADING_BLANK_LINES.sub(b"", body),
-        converter=CONVERTER,
-        final_url=canonical or address,
-        original_url=decoded(address),
-        mediatype=mediatype,
-        original_sha256=hashlib.sha256(received).hexdigest(),
-        etag=response.headers.get("etag"),
-        last_modified=response.headers.get("last-modified"),
-        title=_text(fields.get("title")),
-        modified=first_date(fields),
-    )
+    def reread(
+        self, response: httpx.Response, rule: HostRule | None, *, unchanged: str | None = None
+    ) -> Fetched | Fallthrough | Same:
+        """What a `200` to a Twin address holds, once its media type passes the Twin's gate
+        under the host's current rule (`text/markdown` is taken even when the rule no longer
+        names a Twin)."""
+        address = str(response.url)
+        mediatype = media_type(response)
+        if not accepts(mediatype, rule):
+            return Fallthrough(f"no Twin: {address} answered {mediatype or 'no media type'}")
+        received = response.content
+        sha256 = hashlib.sha256(received).hexdigest()
+        if sha256 == unchanged:
+            return Same()
+        fields, body = split_frontmatter(received)
+        canonical = _text(fields.get("canonicalUrl"))
+        return Fetched(
+            markdown=_LEADING_BLANK_LINES.sub(b"", body),
+            converter=CONVERTER,
+            final_url=canonical or address,
+            original_url=decoded(address),
+            mediatype=mediatype,
+            original_sha256=sha256,
+            etag=response.headers.get("etag"),
+            last_modified=response.headers.get("last-modified"),
+            title=_text(fields.get("title")),
+            modified=first_date(fields),
+        )
 
 
 def split_frontmatter(data: bytes) -> tuple[dict[str, Any], bytes]:

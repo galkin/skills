@@ -8,15 +8,42 @@ and the next step runs.
 
 from __future__ import annotations
 
+from lorekeep.cascade import browser, twin
 from lorekeep.cascade.browser import BrowserStep
 from lorekeep.cascade.page import PageStep
-from lorekeep.cascade.step import Fallthrough, Fetched, Request, Step
+from lorekeep.cascade.step import Fallthrough, Fetched, Request, Same, Step
 from lorekeep.cascade.twin import TwinStep
 
-__all__ = ["BROWSER", "STEPS", "Fallthrough", "Fetched", "Request", "Step", "run_cascade"]
+__all__ = [
+    "BROWSER",
+    "STEPS",
+    "Fallthrough",
+    "Fetched",
+    "Request",
+    "Same",
+    "Step",
+    "run_cascade",
+    "step_of",
+]
 
 STEPS: tuple[Step, ...] = (TwinStep(), PageStep())
 BROWSER: Step = BrowserStep()
+
+
+def step_of(converter: str) -> Step | Fallthrough:
+    """The step that rereads a Version carrying `converter` (its first word names the step's
+    converter: `md-twin`, `trafilatura`, `markitdown`), or why none does: the browser's mark
+    (`via crawl4ai`) means bytes that differ on every visit, and a converter no step writes
+    (`owner`) has no step. The only reader of the `converter` string."""
+    if browser.via_browser(converter):
+        return Fallthrough(browser.NEVER_REREAD)
+    name = converter.split(" ", 1)[0]
+    if name == twin.CONVERTER:
+        return STEPS[0]
+    step = PageStep.of(name)
+    if step is None:
+        return Fallthrough(f"no step converts with {name or 'no converter'}")
+    return step
 
 
 def run_cascade(request: Request) -> Fetched | list[Fallthrough]:

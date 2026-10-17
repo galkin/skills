@@ -261,9 +261,9 @@ def latest(store: Path, url: str, rules: Sequence[HostRule]) -> VersionInfo | No
     wanted = aliases.get(wanted, wanted)
     from lorekeep import index
 
-    found = index.lookup(store, wanted)
-    if not isinstance(found, index.Unanswered):
-        return found
+    with index.current(store) as reader:
+        if reader is not None:
+            return reader.latest(wanted)
     versions = [info for info in scan(store) if info.url == wanted]
     if not versions:
         return None
@@ -275,6 +275,17 @@ def latest(store: Path, url: str, rules: Sequence[HostRule]) -> VersionInfo | No
         if named:
             return named[0]
     return max(versions, key=lambda info: info.fetched_at)
+
+
+def source_urls(store: Path, prefix: str) -> list[str]:
+    """Every Source's `url` that starts with `prefix`, sorted: from a current Index without a
+    lock, else from every `.md` frontmatter. Never rebuilds the Index."""
+    from lorekeep import index
+
+    with index.current(store) as reader:
+        if reader is not None:
+            return reader.urls(prefix)
+    return sorted({info.url for info in scan(store) if info.url.startswith(prefix)})
 
 
 def scan(store: Path) -> Iterator[VersionInfo]:

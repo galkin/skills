@@ -10,10 +10,9 @@ import argparse
 import sys
 from typing import TYPE_CHECKING
 
-from lorekeep import index
 from lorekeep.commands import plural
 from lorekeep.provenance import now
-from lorekeep.store import TagRow, commit, latest, read_rows
+from lorekeep.store import TagRow, commit, latest, read_rows, source_urls
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
@@ -24,7 +23,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
         print("lorekeep: error: tag add takes a url or --prefix, not both", file=sys.stderr)
         return 2
     if args.prefix is not None:
-        urls = index.source_urls(ctx.store, args.prefix)
+        urls = source_urls(ctx.store, args.prefix)
         if not urls:
             print(f"lorekeep: error: no Source's url starts with {args.prefix}", file=sys.stderr)
             return 1

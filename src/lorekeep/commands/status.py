@@ -20,8 +20,8 @@ def size_on_disk(store: Path) -> int:
 
 
 def run(args: argparse.Namespace, ctx: Context) -> int:
-    index.report(index.ensure(ctx.store))
-    found = index.summary(ctx.store)
+    with index.ensured(ctx.store, ctx.project.hosts) as reader:
+        found = reader.summary()
     size = size_on_disk(ctx.store)
     if args.json:
         print(

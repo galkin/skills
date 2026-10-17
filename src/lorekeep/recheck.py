@@ -1,37 +1,35 @@
 """A Recheck: one conditional request to a Version's `original.url`, compared as ADR 0007 says.
 
-`get` runs it on a Version older than the freshness window and `recheck` on every Source in
-scope. The plain client only: the browser is for a first fetch, never for a comparison.
-A `200` passes the media-type gate of the Version's own step first (a Twin takes Markdown, the
-HTML step HTML, the PDF step a PDF; anything else is `error`, nothing stored). A `304`, equal
-received bytes, or equal Markdown after conversion by the Version's step is
+`plan` says what becomes of a stored Version: `Fresh` inside the freshness window (returned, no
+request), `Skipped` when it can never be asked (an owner's Source has no publisher; a browser's
+bytes differ on every visit), else an `Ask` that `perform` sends. `get` plans with the Project's
+window and `recheck` with none, so every Source in scope is asked whatever its age. The plain
+client only: the browser is for a first fetch, never for a comparison.
+A `200` is reread by the step that wrote the Version (`cascade.step_of`): its media-type gate
+first (a Twin takes Markdown, the HTML step HTML, the PDF step a PDF; anything else is `error`,
+nothing stored). A `304`, equal received bytes, or equal Markdown after conversion by that step is
 `unchanged`; different bytes and different Markdown is `changed` and a new Version; `404`/`410` is
 `gone`; anything else is `error` with the status code or the exception's class name. Every answer
 is one `checks.csv` row through the commit point, and the Version latest after the check is named
-in that row.
+in that row. `compare` records a full fetch that `get` made of a Source it already held (an alias
+or canonical address not yet known) the same way. Nothing else writes a `checks.csv` row.
 """
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import astuple, dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from lorekeep import provenance
-from lorekeep.cascade.browser import via_browser
-from lorekeep.cascade.page import convert_response, media_types_of
-from lorekeep.cascade.step import Fallthrough
-from lorekeep.cascade.twin import CONVERTER as TWIN_CONVERTER
-from lorekeep.cascade.twin import accepts, read_twin
-from lorekeep.http import media_type
+from lorekeep import cascade, provenance
 from lorekeep.project import HostRule
 from lorekeep.store import (
     OWNER_SCHEME,
+    AliasRow,
     NewVersion,
     RecheckResult,
     RecheckRow,
@@ -54,20 +52,55 @@ class Recheck:
     warning: str | None = None
 
 
-def skipped_reason(stored: VersionInfo) -> str | None:
-    """Why a Version is never asked: an owner's Source has no publisher, and a browser's bytes
-    differ on every visit."""
+@dataclass(frozen=True)
+class Fresh:
+    """Inside the window: the stored Version is returned and nothing is asked."""
+
+    path: Path
+
+
+@dataclass(frozen=True)
+class Skipped:
+    """Never asked: an owner's Source has no publisher, a browser's bytes differ on every visit."""
+
+    path: Path
+    reason: str
+
+
+@dataclass(frozen=True)
+class Ask:
+    """Outside the window: one conditional request to `address`, the address the bytes came from
+    (`original.url`), with the Version's validators as headers."""
+
+    address: str
+    headers: dict[str, str]
+
+
+def plan(store: Path, stored: VersionInfo, *, window_days: int) -> Fresh | Skipped | Ask:
+    """What becomes of `stored`: its age — from the later of `fetched_at` and its last
+    `checks.csv` row of any result — under `window_days` is `Fresh`; else `Skipped` with the
+    reason, or the `Ask` that `perform` sends. A window of 0 asks whatever the age."""
+    if window_days > 0 and _is_fresh(stored, read_rows(store, RecheckRow), window_days):
+        return Fresh(stored.path)
     if stored.url.startswith(OWNER_SCHEME):
-        return f"{stored.url} is an owner's Source and has no publisher to ask"
-    if via_browser(str(stored.frontmatter.get("converter", ""))):
-        return f"{stored.url} was read through the browser and cannot be compared"
-    return None
+        return Skipped(
+            stored.path, f"{stored.url} is an owner's Source and has no publisher to ask"
+        )
+    step = cascade.step_of(str(stored.frontmatter.get("converter", "")))
+    if isinstance(step, cascade.Fallthrough):
+        return Skipped(stored.path, f"{stored.url} {step.reason}")
+    return _ask(stored)
 
 
-def asked_address(stored: VersionInfo) -> str:
-    """Where a Recheck sends its request: `original.url`, the address the bytes came from."""
-    original: dict[str, Any] = stored.frontmatter.get("original") or {}
-    return str(original.get("url") or stored.url)
+def _ask(stored: VersionInfo) -> Ask:
+    head = stored.frontmatter
+    original: dict[str, Any] = head.get("original") or {}
+    headers = {
+        name: str(head[key])
+        for name, key in (("If-None-Match", "etag"), ("If-Modified-Since", "last_modified"))
+        if head.get(key)
+    }
+    return Ask(str(original.get("url") or stored.url), headers)
 
 
 def perform(
@@ -78,15 +111,10 @@ def perform(
     *,
     tags: Sequence[TagRow] = (),
 ) -> Recheck:
-    """Ask the publisher of `stored` whether it changed and record the answer."""
+    """Send the `Ask` for `stored` to its publisher and record the answer."""
     head = stored.frontmatter
     original: dict[str, Any] = head.get("original") or {}
-    address = asked_address(stored)
-    headers = {
-        name: str(head[key])
-        for name, key in (("If-None-Match", "etag"), ("If-Modified-Since", "last_modified"))
-        if head.get(key)
-    }
+    address, headers = astuple(_ask(stored))
     try:
         response = client.get(address, headers=headers)
     except httpx.HTTPError as error:
@@ -101,33 +129,39 @@ def perform(
         return _record(store, stored, "error", str(status), tags, f"{address} answered {status}")
 
     found = trust(stored.url, rules)
-    rule = found.rule
-    mediatype = media_type(response)
-    converter = str(head.get("converter", ""))
-    twin = converter == TWIN_CONVERTER
-    gate = accepts(mediatype, rule) if twin else mediatype in media_types_of(converter)
-    if not gate:
-        what = "no Twin" if twin else f"not what {converter.split(' ', 1)[0]} reads"
-        reason = f"{what}: {address} answered {mediatype or 'no media type'}"
-        return _record(store, stored, "error", "200", tags, reason)
-    if hashlib.sha256(response.content).hexdigest() == str(original.get("sha256")):
+    step = cascade.step_of(str(head.get("converter", "")))
+    assert not isinstance(step, cascade.Fallthrough), "a skipped Version is never asked"
+    fetched = step.reread(response, found.rule, unchanged=str(original.get("sha256")))
+    if isinstance(fetched, cascade.Same):
         return _record(store, stored, "unchanged", "200", tags)
-    fetched = read_twin(response, rule) if twin else convert_response(response, mediatype)
-    if isinstance(fetched, Fallthrough):
-        return _record(store, stored, "error", "200", tags, f"{address}: {fetched.reason}")
-    sha256 = hashlib.sha256(fetched.markdown).hexdigest()
-    if sha256 == stored.sha256:
-        return _record(store, stored, "unchanged", "200", tags)
+    if isinstance(fetched, cascade.Fallthrough):
+        return _record(store, stored, "error", "200", tags, fetched.reason)
     version = NewVersion(
         frontmatter=provenance.build(fetched, stored.url, found.publisher, found.authority),
         body=fetched.markdown,
         original=fetched.original,
         original_ext=fetched.original_ext,
     )
-    row = RecheckRow(stored.url, provenance.now(), "changed", "200", sha256)
-    path = commit(store, version, tags=tags, checks=[row])
+    return compare(store, stored, version, tags=tags)
+
+
+def compare(
+    store: Path,
+    stored: VersionInfo,
+    version: NewVersion,
+    *,
+    tags: Sequence[TagRow] = (),
+    aliases: Sequence[AliasRow] = (),
+) -> Recheck:
+    """A Version just fetched of a Source whose latest Version is `stored`, recorded as a Recheck
+    with status `200`: `unchanged` when its Markdown hash is the stored one (the file is already
+    there), else `changed` and the new Version beside the old. The one commit of this answer."""
+    sha256 = str(version.frontmatter["sha256"])
+    result: RecheckResult = "unchanged" if sha256 == stored.sha256 else "changed"
+    row = RecheckRow(stored.url, provenance.now(), result, "200", sha256)
+    path = commit(store, version, tags=tags, checks=[row], aliases=aliases)
     assert path is not None
-    return Recheck("changed", "200", path)
+    return Recheck(result, "200", path)
 
 
 def _record(
@@ -159,7 +193,7 @@ def verified_at(store: Path, head: Mapping[str, Any]) -> str:
     return max(confirmed, default=fetched_at)
 
 
-def is_fresh(stored: VersionInfo, checks: Sequence[RecheckRow], window_days: int) -> bool:
+def _is_fresh(stored: VersionInfo, checks: Sequence[RecheckRow], window_days: int) -> bool:
     """Whether the Version's age, counted from the later of its `fetched_at` and its last
     `checks.csv` row of any result, is under the window."""
     last = max([stored.fetched_at, *(row.checked_at for row in checks if row.url == stored.url)])

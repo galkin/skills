@@ -11,9 +11,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from lorekeep.commands import version_json
 from lorekeep.provenance import TIME_FORMAT, now, parse_time
-from lorekeep.recheck import verified_at
-from lorekeep.store import OWNER_SCHEME, NewVersion, TagRow, commit, read_head, version_name
+from lorekeep.store import OWNER_SCHEME, NewVersion, TagRow, commit, version_name
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
@@ -66,22 +66,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     assert path is not None
     if args.json:
         # The file is what the Store has: an earlier `add` of the same text keeps its fields.
-        stored = read_head(path)
-        print(
-            json.dumps(
-                {
-                    "path": str(path),
-                    "url": stored["url"],
-                    "sha256": stored["sha256"],
-                    "fetched_at": stored["fetched_at"],
-                    "converter": stored["converter"],
-                    "publisher": stored["publisher"],
-                    "authority": stored["authority"],
-                    "verified_at": verified_at(ctx.store, stored),
-                    "outcome": "unchanged" if already else "stored",
-                }
-            )
-        )
+        print(json.dumps(version_json(ctx.store, path, "unchanged" if already else "stored")))
     else:
         print(path)
     return 0

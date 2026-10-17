@@ -9,17 +9,23 @@ from __future__ import annotations
 
 import hashlib
 
+import httpx
+
 from lorekeep.cascade.html import convert_rendered
-from lorekeep.cascade.step import Fallthrough, Fetched, Request
+from lorekeep.cascade.step import Fallthrough, Fetched, Request, Same
 from lorekeep.cascade.twin import decoded, page_url
 from lorekeep.edges import FetcherNotInstalled, PageFetchError
+from lorekeep.project import HostRule
 
 BROWSER_MARK = "via crawl4ai"
 
 
+NEVER_REREAD = "was read through the browser and cannot be compared"
+"""Why a browser's Version is never rechecked: rendered bytes differ on every visit."""
+
+
 def via_browser(converter: str) -> bool:
-    """Whether a Version's `converter` says the browser rendered it: its bytes differ on every
-    visit, so it is never rechecked."""
+    """Whether a Version's `converter` says the browser rendered it."""
     return BROWSER_MARK in converter
 
 
@@ -48,3 +54,8 @@ class BrowserStep:
             original=original,
             original_ext="html",
         )
+
+    def reread(
+        self, response: httpx.Response, rule: HostRule | None, *, unchanged: str | None = None
+    ) -> Fetched | Fallthrough | Same:
+        return Fallthrough(f"{response.url} {NEVER_REREAD}")

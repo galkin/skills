@@ -18,13 +18,13 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     if not args.query.strip():
         print("lorekeep: error: the search query is empty", file=sys.stderr)
         return 2
-    index.report(index.ensure(ctx.store))
     scope = index.Scope(
         tags=scope_tags(args.tag, ctx.tag, everything=args.all),
         publisher=args.publisher,
         authority=args.authority,
     )
-    hits, other = index.search(ctx.store, args.query, scope, limit=args.limit, exact=args.exact)
+    with index.ensured(ctx.store, ctx.project.hosts) as reader:
+        hits, other = reader.search(args.query, scope, limit=args.limit, exact=args.exact)
     if args.json:
         results = [
             {

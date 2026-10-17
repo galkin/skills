@@ -2,15 +2,16 @@
 
 It holds every Version's Provenance, the rows of `tags.csv`, `checks.csv` and `aliases.csv`, and
 the Versions' Sections with an FTS5 table over them. It is rebuilt in place, in one transaction,
-under the Store lock; a lookup reads it without the lock and only when it is current, which the
-`meta` table recorded at build time says. Every commit notifies it, so it stays current between
-rebuilds.
+under the Store lock (`rebuild`, `ensure`); every commit notifies it (`notify`), so it stays
+current between rebuilds. It answers through one `Reader`: `current` opens one over a current
+Index without any lock and never rebuilds (`None` when the Index is missing, stale or
+unreadable, and the caller reads the files); `ensured` brings the Index up to date first.
 """
 
 from __future__ import annotations
 
+import contextlib
 import csv
-import re
 import sqlite3
 import sys
 from collections.abc import Iterator, Sequence
@@ -18,9 +19,9 @@ from dataclasses import astuple, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from lorekeep import frontmatter
+from lorekeep import frontmatter, sections
 from lorekeep import store as store_module
-from lorekeep.project import load_project
+from lorekeep.project import HostRule
 from lorekeep.provenance import TIME_FORMAT
 from lorekeep.store import (
     CITATIONS_FILE,
@@ -35,9 +36,7 @@ from lorekeep.store import (
 )
 from lorekeep.urls import normalise, unknown_host
 
-SECTION_BYTES = 4096
-
-VERSION_COLUMNS = (
+_VERSION_COLUMNS = (
     "url",
     "fetched_at",
     "sha256",
@@ -50,14 +49,14 @@ VERSION_COLUMNS = (
     "modified",
     "origin",
 )
-ORIGINAL_COLUMNS = ("url", "mediatype", "sha256", "stored")
+_ORIGINAL_COLUMNS = ("url", "mediatype", "sha256", "stored")
 
-SCHEMA = f"""
+_SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS versions(
   file TEXT PRIMARY KEY,
-  {", ".join(f"{column} TEXT" for column in VERSION_COLUMNS)},
-  {", ".join(f"original_{column} TEXT" for column in ORIGINAL_COLUMNS)}
+  {", ".join(f"{column} TEXT" for column in _VERSION_COLUMNS)},
+  {", ".join(f"original_{column} TEXT" for column in _ORIGINAL_COLUMNS)}
 );
 CREATE INDEX IF NOT EXISTS versions_url ON versions(url);
 CREATE TABLE IF NOT EXISTS tags(url TEXT, tag TEXT, added_at TEXT);
@@ -97,9 +96,9 @@ WHERE v.file = (
 """
 
 
-def connect(store: Path) -> sqlite3.Connection:
+def _connect(store: Path) -> sqlite3.Connection:
     """The one connection to the Store's Index: WAL mode, a busy timeout, explicit transactions.
-    It creates the file when there is none, so a reader checks `exists` first."""
+    It creates the file when there is none, so a reader checks `_exists` first."""
     con = sqlite3.connect(store / INDEX_FILE, timeout=30.0, isolation_level=None)
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA busy_timeout=30000")
@@ -107,7 +106,7 @@ def connect(store: Path) -> sqlite3.Connection:
     return con
 
 
-def exists(store: Path) -> bool:
+def _exists(store: Path) -> bool:
     return (store / INDEX_FILE).is_file()
 
 
@@ -125,13 +124,14 @@ class Counts:
     warnings: tuple[str, ...] = ()
 
 
-def rebuild(store: Path) -> Counts:
-    """Empty and refill every table from the Store's files, in place, under the Store lock."""
+def rebuild(store: Path, rules: Sequence[HostRule]) -> Counts:
+    """Empty and refill every table from the Store's files, in place, under the Store lock;
+    `rules` normalise the addresses `citations.csv` names."""
     with store_module.lock(store):
-        return _rebuild_locked(store)
+        return _rebuild_locked(store, rules)
 
 
-def ensure(store: Path) -> Counts | None:
+def ensure(store: Path, rules: Sequence[HostRule]) -> Counts | None:
     """Bring the Index up to date before a reader queries it: compare `meta` with the files
     without any lock; only when the file is missing or stale take the Store lock, compare again
     and rebuild in place. Returns the rebuild's counts, or `None` when the Index was current, so
@@ -141,7 +141,7 @@ def ensure(store: Path) -> Counts | None:
     with store_module.lock(store):
         if _looks_current(store):
             return None
-        return _rebuild_locked(store)
+        return _rebuild_locked(store, rules)
 
 
 def report(counts: Counts | None, *, note: bool = True) -> None:
@@ -161,22 +161,14 @@ def report(counts: Counts | None, *, note: bool = True) -> None:
 
 
 def _looks_current(store: Path) -> bool:
-    if not exists(store):
-        return False
-    try:
-        con = connect(store)
-    except sqlite3.Error:
-        return False
-    try:
-        return is_current(store, con)
-    finally:
-        con.close()
+    with current(store) as reader:
+        return reader is not None
 
 
-def _rebuild_locked(store: Path) -> Counts:
-    con = connect(store)
+def _rebuild_locked(store: Path, rules: Sequence[HostRule]) -> Counts:
+    con = _connect(store)
     try:
-        con.executescript(SCHEMA)
+        con.executescript(_SCHEMA)
         con.execute("BEGIN IMMEDIATE")
         try:
             tables = ("versions", "tags", "checks", "aliases", "citations", "sections", "meta")
@@ -190,9 +182,9 @@ def _rebuild_locked(store: Path) -> Counts:
             tags = _insert_rows(con, TagRow, store_module.read_rows(store, TagRow))
             checks = _insert_rows(con, RecheckRow, store_module.read_rows(store, RecheckRow))
             aliases = _insert_rows(con, AliasRow, store_module.read_rows(store, AliasRow))
-            cited, warnings = read_citations(store)
+            cited, warnings = _read_citations(store, rules)
             con.executemany("INSERT INTO citations VALUES(?, ?, ?)", cited)
-            con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", fingerprint(store))
+            con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", _fingerprint(store))
             con.execute("COMMIT")
         except BaseException:
             con.execute("ROLLBACK")
@@ -202,7 +194,9 @@ def _rebuild_locked(store: Path) -> Counts:
     return Counts(versions, sections, tags, checks, aliases, len(cited), tuple(warnings))
 
 
-def read_citations(store: Path) -> tuple[list[tuple[str, str, str | None]], list[str]]:
+def _read_citations(
+    store: Path, rules: Sequence[HostRule]
+) -> tuple[list[tuple[str, str, str | None]], list[str]]:
     """The rows of `citations.csv` (`work_id, url[, as_of]`), written by the consuming Project:
     `url` normalised, Twin-reduced and taken through `aliases.csv` like a request, so a work may
     cite the address it was given; `as_of` an ISO 8601 date or timestamp
@@ -212,7 +206,6 @@ def read_citations(store: Path) -> tuple[list[tuple[str, str, str | None]], list
     path = store / CITATIONS_FILE
     if not path.is_file():
         return [], []
-    rules = load_project(store).hosts
     aliases = {row.alias: row.url for row in store_module.read_rows(store, AliasRow)}
     rows: list[tuple[str, str, str | None]] = []
     warnings: list[str] = []
@@ -267,13 +260,13 @@ def _index_version(con: sqlite3.Connection, path: Path) -> int:
     original = head.get("original")
     original = original if isinstance(original, dict) else {}
     values = [path.name]
-    values += [_text(head.get(column)) for column in VERSION_COLUMNS]
-    values += [_text(original.get(column)) for column in ORIGINAL_COLUMNS]
+    values += [_text(head.get(column)) for column in _VERSION_COLUMNS]
+    values += [_text(original.get(column)) for column in _ORIGINAL_COLUMNS]
     con.execute(f"INSERT INTO versions VALUES({', '.join('?' * len(values))})", values)
     first_line = data[: len(data) - len(body)].count(b"\n") + 1
     count = 0
     for order, section in enumerate(
-        split_sections(body.decode("utf-8", errors="replace"), first_line)
+        sections.split(body.decode("utf-8", errors="replace"), first_line)
     ):
         cursor = con.execute(
             "INSERT INTO sections(file, heading, line, body, ord) VALUES(?, ?, ?, ?, ?)",
@@ -299,7 +292,7 @@ def _insert_rows(con: sqlite3.Connection, row_type: type[Row], rows: Sequence[Ro
     return len(rows)
 
 
-def fingerprint(store: Path) -> list[tuple[str, str]]:
+def _fingerprint(store: Path) -> list[tuple[str, str]]:
     """What the Index records at build time to tell later whether it is current: the count of
     `.md` files and the size and mtime of each watched CSV (`missing` when absent)."""
     values = [("md_files", str(sum(1 for _ in store.glob("*.md"))))]
@@ -316,164 +309,16 @@ def fingerprint(store: Path) -> list[tuple[str, str]]:
     return values
 
 
-def is_current(store: Path, con: sqlite3.Connection) -> bool:
+def _is_current(store: Path, con: sqlite3.Connection) -> bool:
     """Whether the Index's `meta` still describes the Store's files; no lock is taken."""
     try:
         recorded = dict(con.execute("SELECT key, value FROM meta").fetchall())
     except sqlite3.Error:
         return False
-    return bool(recorded) and recorded == dict(fingerprint(store))
+    return bool(recorded) and recorded == dict(_fingerprint(store))
 
 
-# Sections ----------------------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Section:
-    heading: str
-    line: int
-    body: str
-
-
-_HEADING = re.compile(r"^ {0,3}(#{1,6})[ \t]+(.*?)[ \t#]*$")
-_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
-
-
-def split_sections(text: str, first_line: int = 1) -> Iterator[Section]:
-    """The text under each Markdown heading, with its heading path (`A > B`) and the line its
-    heading sits on (`first_line` is the body's first line in the file). A Section over
-    `SECTION_BYTES` is cut again at paragraph boundaries; a code fence is never cut."""
-    path: list[tuple[int, str]] = []
-    heading, start, lines = "", first_line, []
-    fence: str | None = None
-    for number, line in enumerate(text.splitlines(), start=first_line):
-        opener = _FENCE.match(line)
-        if fence is not None:
-            if opener and opener.group(1)[0] == fence[0] and len(opener.group(1)) >= len(fence):
-                fence = None
-        elif opener:
-            fence = opener.group(1)
-        else:
-            match = _HEADING.match(line)
-            if match:
-                yield from _slices(heading, start, lines)
-                level = len(match.group(1))
-                path = [(lvl, name) for lvl, name in path if lvl < level]
-                path.append((level, match.group(2).strip()))
-                heading = " > ".join(name for _, name in path)
-                start, lines = number, []
-                continue
-        if not lines and heading == "" and not line.strip():
-            start = number + 1
-            continue
-        lines.append((number, line))
-    yield from _slices(heading, start, lines)
-
-
-def _slices(heading: str, start: int, lines: list[tuple[int, str]]) -> Iterator[Section]:
-    """Cut one heading's text into Sections of at most `SECTION_BYTES` at paragraph boundaries.
-
-    A paragraph (or a whole code fence) larger than the limit is cut at line boundaries when it
-    is prose and kept whole when it is a fence."""
-    blocks = _blocks(lines)
-    if not any(text.strip() for _, text in lines):
-        return
-    current: list[tuple[int, str]] = []
-    size = 0
-    line = start
-    for block in blocks:
-        block_size = sum(len(text.encode()) + 1 for _, text in block)
-        if current and size + block_size > SECTION_BYTES:
-            yield Section(heading, line, _join(current))
-            current, size, line = [], 0, block[0][0]
-        if block_size > SECTION_BYTES and not _FENCE.match(block[0][1]):
-            for number, text in block:
-                text_size = len(text.encode()) + 1
-                if current and size + text_size > SECTION_BYTES:
-                    yield Section(heading, line, _join(current))
-                    current, size, line = [], 0, number
-                current.append((number, text))
-                size += text_size
-            continue
-        current += block
-        size += block_size
-    if any(text.strip() for _, text in current):
-        yield Section(heading, line, _join(current))
-
-
-def _blocks(lines: list[tuple[int, str]]) -> list[list[tuple[int, str]]]:
-    """Paragraphs and code fences, each with the blank lines before the next one.
-
-    A block never starts with a blank line: blank lines belong to the block before them (or
-    to none, at the start), so a fence is recognised by its first line and a slice's `line`
-    points at text."""
-    blocks: list[list[tuple[int, str]]] = []
-    current: list[tuple[int, str]] = []
-    fence: str | None = None
-    for number, text in lines:
-        opener = _FENCE.match(text)
-        if fence is not None:
-            current.append((number, text))
-            if opener and opener.group(1)[0] == fence[0] and len(opener.group(1)) >= len(fence):
-                fence = None
-            continue
-        if not text.strip():
-            if current:
-                current.append((number, text))
-                blocks.append(current)
-                current = []
-            elif blocks:
-                blocks[-1].append((number, text))
-            continue
-        if opener:
-            if current:
-                blocks.append(current)
-                current = []
-            fence = opener.group(1)
-        current.append((number, text))
-    if current:
-        blocks.append(current)
-    return blocks
-
-
-def _join(lines: list[tuple[int, str]]) -> str:
-    return "\n".join(text for _, text in lines).strip("\n")
-
-
-# Lookup and notification -------------------------------------------------------------------------
-
-
-class Unanswered:
-    """What `lookup` returns when the Index cannot answer: missing, stale or unreadable."""
-
-
-UNANSWERED = Unanswered()
-
-
-def lookup(store: Path, url: str) -> VersionInfo | Unanswered | None:
-    """The latest Version of `url` from a current Index, `None` when a current Index has none,
-    and `UNANSWERED` when the Index cannot say, so the caller scans. Takes no lock and never
-    rebuilds."""
-    if not exists(store):
-        return UNANSWERED
-    try:
-        con = connect(store)
-    except sqlite3.Error:
-        return UNANSWERED
-    try:
-        if not is_current(store, con):
-            return UNANSWERED
-        row = con.execute("SELECT file FROM latest WHERE url = ?", (url,)).fetchone()
-    except sqlite3.Error:
-        return UNANSWERED
-    finally:
-        con.close()
-    if row is None:
-        return None
-    path = store / row[0]
-    if not path.is_file():
-        return UNANSWERED
-    return VersionInfo(path, store_module.read_head(path))
+# Notification -----------------------------------------------------------------------------------
 
 
 def notify(
@@ -492,10 +337,10 @@ def notify(
     transaction, so the commit never looks like staleness. Otherwise `meta` is left as it was and
     the Index stays stale for the next reader to rebuild.
     """
-    if not exists(store):
+    if not _exists(store):
         return
     try:
-        con = connect(store)
+        con = _connect(store)
     except sqlite3.Error:
         return
     try:
@@ -515,7 +360,7 @@ def notify(
             }
             if _agrees(con, store, touched):
                 con.execute("DELETE FROM meta")
-                con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", fingerprint(store))
+                con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", _fingerprint(store))
             con.execute("COMMIT")
         except BaseException:
             con.execute("ROLLBACK")
@@ -550,7 +395,7 @@ def _agrees(con: sqlite3.Connection, store: Path, touched: dict[str, bool]) -> b
     recorded = dict(con.execute("SELECT key, value FROM meta").fetchall())
     if not recorded:
         return False
-    current = dict(fingerprint(store))
+    current = dict(_fingerprint(store))
     md_files = con.execute("SELECT count(*) FROM versions").fetchone()[0]
     if current["md_files"] != str(md_files):
         return False
@@ -567,7 +412,7 @@ def _agrees(con: sqlite3.Connection, store: Path, touched: dict[str, bool]) -> b
     return True
 
 
-# Search ------------------------------------------------------------------------------------------
+# The Reader -------------------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -589,18 +434,108 @@ class Scope:
     authority: str | None = None
 
 
-def fts_query(query: str) -> str:
-    """Every whitespace-separated word as a quoted phrase, so user input is never FTS5 syntax."""
-    return " ".join('"' + word.replace('"', '""') + '"' for word in query.split())
+@dataclass(frozen=True)
+class Revisit:
+    """A work whose cited Source has a newer Version than the one it was written from."""
+
+    work_id: str
+    url: str
+    old_sha256: str
+    new_sha256: str
 
 
-def search(
-    store: Path, query: str, scope: Scope, *, limit: int, exact: bool
-) -> tuple[list[Hit], int | None]:
-    """The best `limit` Sections of the latest Versions in `scope`, and the count of distinct
-    Sources the same query matches under other Tags (`None` when the scope is every Tag)."""
-    con = connect(store)
+@dataclass(frozen=True)
+class Summary:
+    """What `status` reports from the Index."""
+
+    versions: int
+    sources: int
+    tags: dict[str, int]
+    oldest_fetched_at: str | None
+    newest_fetched_at: str | None
+    checks: dict[str, int]
+    unknown_hosts: list[str]
+
+
+@contextlib.contextmanager
+def current(store: Path) -> Iterator[Reader | None]:
+    """A Reader over a current Index, or `None` when the Index is missing, stale (its `meta`
+    no longer describes the files) or unreadable, so the caller reads the files instead. Takes
+    no lock and never rebuilds: the one protocol every lookup follows."""
+    if not _exists(store):
+        yield None
+        return
     try:
+        con = _connect(store)
+    except sqlite3.Error:
+        yield None
+        return
+    try:
+        yield Reader(store, con) if _is_current(store, con) else None
+    finally:
+        con.close()
+
+
+@contextlib.contextmanager
+def ensured(store: Path, rules: Sequence[HostRule]) -> Iterator[Reader]:
+    """A Reader over an Index brought up to date first (`ensure`, its rebuild reported on
+    stderr): for the commands that may rebuild. It answers from what `ensure` found or built,
+    without a second currency check."""
+    report(ensure(store, rules))
+    con = _connect(store)
+    try:
+        yield Reader(store, con)
+    finally:
+        con.close()
+
+
+@dataclass(frozen=True)
+class Reader:
+    """Every question the Index answers, over the one connection `current` or `ensured`
+    opened. Nothing else constructs one."""
+
+    store: Path
+    con: sqlite3.Connection
+
+    def latest(self, url: str) -> VersionInfo | None:
+        """The latest Version of `url` (the one its latest `checks.csv` row names, else the
+        newest `fetched_at`), or `None` when the Store has none."""
+        row = self.con.execute("SELECT file FROM latest WHERE url = ?", (url,)).fetchone()
+        if row is None:
+            return None
+        path = self.store / row[0]
+        return VersionInfo(path, store_module.read_head(path))
+
+    def urls(self, prefix: str) -> list[str]:
+        """Every Source's `url` that starts with `prefix`, sorted."""
+        rows = self.con.execute(
+            "SELECT DISTINCT url FROM versions WHERE substr(url, 1, ?) = ? ORDER BY url",
+            (len(prefix), prefix),
+        )
+        return [url for (url,) in rows]
+
+    def latest_in_scope(self, scope: Scope, prefix: str | None = None) -> list[VersionInfo]:
+        """The latest Version of every Source in `scope` whose `url` starts with `prefix`, by
+        url."""
+        filters, args = _filters(scope)
+        tag_filter, tag_args = _tag_filter(scope.tags)
+        if prefix is not None:
+            filters += " AND substr(l.url, 1, ?) = ?"
+            args += [len(prefix), prefix]
+        rows = self.con.execute(
+            f"SELECT l.file FROM latest l WHERE 1{filters}{tag_filter} ORDER BY l.url",
+            [*args, *tag_args],
+        ).fetchall()
+        paths = [self.store / file for (file,) in rows]
+        return [VersionInfo(path, store_module.read_head(path)) for path in paths]
+
+    def search(
+        self, query: str, scope: Scope, *, limit: int, exact: bool
+    ) -> tuple[list[Hit], int | None]:
+        """The best `limit` Sections of the latest Versions in `scope`, and the count of
+        distinct Sources the same query matches under other Tags (`None` when the scope is
+        every Tag)."""
+        con = self.con
         if exact:
             match_from = "sections s"
             match_where = "instr(s.body, ?) > 0"
@@ -612,7 +547,7 @@ def search(
             match_where = "sections_fts MATCH ?"
             order = "bm25(sections_fts, 2.0, 1.0), s.file, s.ord"
             snippet = "snippet(sections_fts, 1, '[', ']', '…', 16)"
-            match_args = [fts_query(query)]
+            match_args = [_fts_query(query)]
         filters, filter_args = _filters(scope)
         tag_filter, tag_args = _tag_filter(scope.tags)
         rows = con.execute(
@@ -641,8 +576,70 @@ def search(
                 [*match_args, *filter_args, *outside_args],
             ).fetchone()[0]
         return hits, other
-    finally:
-        con.close()
+
+    def revisits(self) -> tuple[list[Revisit], list[str]]:
+        """Every Citation whose Source changed since the work was written, and one warning per
+        Citation of a `url` the Store has no Version of.
+
+        The work was written from the Version the lookup would have returned at `as_of` — the
+        one the latest `checks.csv` row up to then names, else the newest `fetched_at` up to
+        then — or from the oldest Version when `as_of` is absent or earlier than every Version.
+        It is measured against the latest Version now.
+        """
+        con = self.con
+        citations = con.execute(
+            "SELECT work_id, url, as_of FROM citations ORDER BY work_id, url"
+        ).fetchall()
+        found: list[Revisit] = []
+        warnings: list[str] = []
+        for work_id, url, as_of in citations:
+            versions = con.execute(
+                "SELECT fetched_at, sha256 FROM versions WHERE url = ? ORDER BY fetched_at, file",
+                (url,),
+            ).fetchall()
+            if not versions:
+                warnings.append(f"lorekeep: warning: {work_id} cites {url}, which is not stored")
+                continue
+            current = con.execute("SELECT sha256 FROM latest WHERE url = ?", (url,)).fetchone()[0]
+            written_from = _version_at(con, url, versions, as_of)
+            if written_from != current:
+                found.append(Revisit(work_id, url, written_from, current))
+        return found, warnings
+
+    def summary(self) -> Summary:
+        """Versions, Sources, Sources per Tag, the oldest and newest `fetched_at`, Rechecks per
+        result, and the hosts no rule knew (a Version whose publisher is its url's host)."""
+        con = self.con
+        versions, sources, oldest, newest = con.execute(
+            "SELECT count(*), count(DISTINCT url), min(fetched_at), max(fetched_at) FROM versions"
+        ).fetchone()
+        tags = dict(
+            con.execute(
+                "SELECT tag, count(DISTINCT url) FROM tags GROUP BY tag ORDER BY tag"
+            ).fetchall()
+        )
+        checks: dict[str, int] = dict.fromkeys(store_module.RECHECK_RESULTS, 0)
+        for result, count in con.execute("SELECT result, count(*) FROM checks GROUP BY result"):
+            checks[result] = count
+        hosts = {
+            host
+            for url, publisher in con.execute("SELECT DISTINCT url, publisher FROM versions")
+            if (host := unknown_host(url, publisher))
+        }
+        return Summary(
+            versions=versions,
+            sources=sources,
+            tags=tags,
+            oldest_fetched_at=oldest,
+            newest_fetched_at=newest,
+            checks=checks,
+            unknown_hosts=sorted(hosts),
+        )
+
+
+def _fts_query(query: str) -> str:
+    """Every whitespace-separated word as a quoted phrase, so user input is never FTS5 syntax."""
+    return " ".join('"' + word.replace('"', '""') + '"' for word in query.split())
 
 
 def _filters(scope: Scope) -> tuple[str, list[object]]:
@@ -681,96 +678,6 @@ def _snippet(body: str, needle: str, around: int = 60) -> str:
     return ("…" if start else "") + _one_line(text) + ("…" if end < len(body) else "")
 
 
-# Tags and status ---------------------------------------------------------------------------------
-
-
-def source_urls(store: Path, prefix: str) -> list[str]:
-    """Every Source's `url` that starts with `prefix`, sorted: from a current Index without a
-    lock, else from the Store's files. Never rebuilds, so `tag add` takes the lock once, in its
-    commit."""
-    if exists(store):
-        try:
-            con = connect(store)
-        except sqlite3.Error:
-            con = None
-        if con is not None:
-            try:
-                if is_current(store, con):
-                    rows = con.execute(
-                        "SELECT DISTINCT url FROM versions WHERE substr(url, 1, ?) = ? "
-                        "ORDER BY url",
-                        (len(prefix), prefix),
-                    )
-                    return [url for (url,) in rows]
-            except sqlite3.Error:
-                pass
-            finally:
-                con.close()
-    return sorted({info.url for info in store_module.scan(store) if info.url.startswith(prefix)})
-
-
-def latest_in_scope(store: Path, scope: Scope, prefix: str | None = None) -> list[VersionInfo]:
-    """The latest Version of every Source in `scope` whose `url` starts with `prefix`, by url."""
-    filters, args = _filters(scope)
-    tag_filter, tag_args = _tag_filter(scope.tags)
-    if prefix is not None:
-        filters += " AND substr(l.url, 1, ?) = ?"
-        args += [len(prefix), prefix]
-    con = connect(store)
-    try:
-        rows = con.execute(
-            f"SELECT l.file FROM latest l WHERE 1{filters}{tag_filter} ORDER BY l.url",
-            [*args, *tag_args],
-        ).fetchall()
-    finally:
-        con.close()
-    paths = [store / file for (file,) in rows]
-    return [VersionInfo(path, store_module.read_head(path)) for path in paths]
-
-
-@dataclass(frozen=True)
-class Revisit:
-    """A work whose cited Source has a newer Version than the one it was written from."""
-
-    work_id: str
-    url: str
-    old_sha256: str
-    new_sha256: str
-
-
-def revisits(store: Path) -> tuple[list[Revisit], list[str]]:
-    """Every Citation whose Source changed since the work was written, and one warning per
-    Citation of a `url` the Store has no Version of.
-
-    The work was written from the Version the lookup would have returned at `as_of` — the one
-    the latest `checks.csv` row up to then names, else the newest `fetched_at` up to then — or
-    from the oldest Version when `as_of` is absent or earlier than every Version. It is measured
-    against the latest Version now.
-    """
-    con = connect(store)
-    try:
-        citations = con.execute(
-            "SELECT work_id, url, as_of FROM citations ORDER BY work_id, url"
-        ).fetchall()
-        found: list[Revisit] = []
-        warnings: list[str] = []
-        for work_id, url, as_of in citations:
-            versions = con.execute(
-                "SELECT fetched_at, sha256 FROM versions WHERE url = ? ORDER BY fetched_at, file",
-                (url,),
-            ).fetchall()
-            if not versions:
-                warnings.append(f"lorekeep: warning: {work_id} cites {url}, which is not stored")
-                continue
-            current = con.execute("SELECT sha256 FROM latest WHERE url = ?", (url,)).fetchone()[0]
-            written_from = _version_at(con, url, versions, as_of)
-            if written_from != current:
-                found.append(Revisit(work_id, url, written_from, current))
-        return found, warnings
-    finally:
-        con.close()
-
-
 def _version_at(
     con: sqlite3.Connection, url: str, versions: list[tuple[str, str]], as_of: str | None
 ) -> str:
@@ -789,50 +696,3 @@ def _version_at(
         if sha256 in stored
     ]
     return max(events)[2] if events else oldest
-
-
-@dataclass(frozen=True)
-class Summary:
-    """What `status` reports from the Index."""
-
-    versions: int
-    sources: int
-    tags: dict[str, int]
-    oldest_fetched_at: str | None
-    newest_fetched_at: str | None
-    checks: dict[str, int]
-    unknown_hosts: list[str]
-
-
-def summary(store: Path) -> Summary:
-    """Versions, Sources, Sources per Tag, the oldest and newest `fetched_at`, Rechecks per
-    result, and the hosts no rule knew (a Version whose publisher is its url's host)."""
-    con = connect(store)
-    try:
-        versions, sources, oldest, newest = con.execute(
-            "SELECT count(*), count(DISTINCT url), min(fetched_at), max(fetched_at) FROM versions"
-        ).fetchone()
-        tags = dict(
-            con.execute(
-                "SELECT tag, count(DISTINCT url) FROM tags GROUP BY tag ORDER BY tag"
-            ).fetchall()
-        )
-        checks: dict[str, int] = dict.fromkeys(store_module.RECHECK_RESULTS, 0)
-        for result, count in con.execute("SELECT result, count(*) FROM checks GROUP BY result"):
-            checks[result] = count
-        hosts = {
-            host
-            for url, publisher in con.execute("SELECT DISTINCT url, publisher FROM versions")
-            if (host := unknown_host(url, publisher))
-        }
-        return Summary(
-            versions=versions,
-            sources=sources,
-            tags=tags,
-            oldest_fetched_at=oldest,
-            newest_fetched_at=newest,
-            checks=checks,
-            unknown_hosts=sorted(hosts),
-        )
-    finally:
-        con.close()
