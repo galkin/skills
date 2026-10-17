@@ -38,14 +38,13 @@ commands (`recheck`, `tag add`, `backup`, `restore`, `index`, `skill`, host rule
 
 1. Need a page: `lorekeep get --json <url>`, then read the file at `path`.
 2. Append every `get --json` line to your own log; the Tag says only that the guide read a
-   Source, so your log is the record of what you read and what failed. For an exit `1`, append
-   the address and the error line as one JSON object; for an address with a `#fragment`, which no
-   field keeps, append the address as asked before its `get` line. Judge each `get` by its own
-   exit code, not your loop's. Keep the log where your brief says, else in your final message:
+   Source, so your log is the record of what you read and what failed; `asked` in each line is
+   the address as you gave it, `#fragment` included. For an exit `1`, append the address and the
+   error line as one JSON object. Judge each `get` by its own exit code, not your loop's. Keep the
+   log where your brief says, else in your final message:
 
    ```text
-   {"asked": "https://helm.sh/docs/helm/helm_rollback/#synopsis"}
-   {"path": "/…/store/helm.sh--docs-helm-helm_rollback--baae9b0a.md", …, "outcome": "stored"}
+   {"path": "/…/store/helm.sh--docs-helm-helm_rollback--baae9b0a.md", …, "asked": "https://helm.sh/docs/helm/helm_rollback/#synopsis", …, "outcome": "stored"}
    {"url": "https://example.test/slow", "error": "lorekeep: error: nothing stored for https://example.test/slow: the host rule names no Twin; https://example.test/slow failed (ReadTimeout)"}
    ```
 
@@ -62,8 +61,8 @@ one page get one Version.
 - The returned `url` may differ from the address you asked (trailing slash, fragment, redirect,
   Twin reduction); it is the one to cite.
 - `requested_url` in the JSON is the address you asked, normalised; compare it with `url`.
-- Fragments (`#section`) are dropped from both: log the address as asked (above) and append the
-  fragment to `url` when you cite a section.
+- Fragments (`#section`) are dropped from both and kept in `asked`: append the fragment to `url`
+  when you cite a section.
 - `.md` and `?accept=text/markdown` addresses are Twins only under a host rule; elsewhere they are
   fetched as pages of their own, so ask for the page's address.
 - A canonical link the page declares never becomes `url`; it is recorded as `canonical`, with a
@@ -73,8 +72,9 @@ one page get one Version.
 - A law or standard is `primary` on its official journal (EUR-Lex, the Federal Register, nist.gov
   for NIST) and `official` in an institution's reproduction (the AI Act Service Desk); cite the
   journal, and report a Version whose `authority` says otherwise.
-- A `third-party` verdict prints no warning unless the host is in no rule at all: check
-  `authority` in every JSON line. The usual cause is the `github.com/` catch-all; a page the guide
+- A `third-party` verdict from no rule or a whole-host rule prints a note on every `get`
+  (`lorekeep: note: <url> is third-party under the github.com/ rule`, or `under no rule`). The
+  usual cause is the `github.com/` catch-all; a page the guide
   treats as primary there (a vendor's repository; report it when unsure) is reported to the owner,
   who may add a host rule; until then it is context. `lorekeep status --rules` shows the rules.
 
@@ -85,12 +85,14 @@ one page get one Version.
 | `<host> is in no host table; stored as third-party` | report the host to the owner; the page is context            |
 | `declares another page as canonical`                | nothing; cite `url`                                          |
 | `N code blocks / M tables of the page are missing`  | report; compare with the Original; distrust nearby headings  |
+| `the Markdown holds N% of the page's main text`     | report; compare with the Original                            |
+| `is third-party under the <prefix> rule`            | report it if the guide treats the page as primary            |
 | `returning the stored Version`                      | use it; the publisher could not be asked or dropped the page |
 | `the Index was missing or stale and was rebuilt`    | nothing                                                      |
 
-A page's warnings print only on the `get` that stored its Version; a later `get` (`fresh`,
-`unchanged`) prints none, even for a partial Version another worker stored. Exit `0` can still be
-a menu or a page that lost a list: open a Version under 2 KB, or of a page that builds itself in
+A Version's warnings print on every `get` that returns it (`fresh` and `unchanged` too); one
+stored by an older lorekeep has none recorded. Exit `0` can still be a menu or a page that lost a
+list: open a Version under 2 KB, or of a page that builds itself in
 the browser (`build.nvidia.com`), compare it with its Original, and report what is missing.
 
 On exit `1` nothing was stored:
@@ -133,10 +135,11 @@ knows, asked with a fragment:
 ```text
 $ lorekeep get --json https://helm.sh/docs/helm/helm_rollback/#synopsis
 lorekeep: warning: helm.sh is in no host table; stored as third-party — tell the owner, who may add a [[hosts]] rule
+lorekeep: note: https://helm.sh/docs/helm/helm_rollback is third-party under no rule
 ```
 
 ```json
-{"path": "/…/store/helm.sh--docs-helm-helm_rollback--baae9b0a.md", "url": "https://helm.sh/docs/helm/helm_rollback", "requested_url": "https://helm.sh/docs/helm/helm_rollback", "sha256": "baae9b0a65857f5fcd96600fca791315f7e83a745368d32d1885fec8891e1312", "fetched_at": "2026-10-17T17:35:54Z", "converter": "trafilatura 2.3.1", "publisher": "helm.sh", "authority": "third-party", "verified_at": "2026-10-17T17:35:54Z", "outcome": "stored"}
+{"path": "/…/store/helm.sh--docs-helm-helm_rollback--baae9b0a.md", "url": "https://helm.sh/docs/helm/helm_rollback", "asked": "https://helm.sh/docs/helm/helm_rollback/#synopsis", "requested_url": "https://helm.sh/docs/helm/helm_rollback", "sha256": "baae9b0a65857f5fcd96600fca791315f7e83a745368d32d1885fec8891e1312", "fetched_at": "2026-10-17T17:35:54Z", "converter": "trafilatura 2.3.1", "publisher": "helm.sh", "authority": "third-party", "verified_at": "2026-10-17T17:35:54Z", "outcome": "stored"}
 ```
 
 `outcome` is `stored` (first fetch), `fresh` (returned without a request), `unchanged`, `changed`
@@ -162,7 +165,7 @@ Version with `url` `owner:<slug of the title>`, searchable like any page. Never 
 `--json` output (`outcome` is `unchanged` when the same text was added before):
 
 ```json
-{"path": "/…/store/owner--guardrail-latency-research--83067bf1.md", "url": "owner:guardrail-latency-research", "requested_url": "owner:guardrail-latency-research", "sha256": "83067bf10e219211e8062cf9d11a8f07d3f39ad768ed27d994a54ba46c3e7265", "fetched_at": "2026-10-17T17:16:52Z", "converter": "owner", "publisher": "claude", "authority": "generated", "verified_at": "2026-10-17T17:16:52Z", "outcome": "stored"}
+{"path": "/…/store/owner--guardrail-latency-research--83067bf1.md", "url": "owner:guardrail-latency-research", "asked": "research/guardrail-latency.md", "requested_url": "owner:guardrail-latency-research", "sha256": "83067bf10e219211e8062cf9d11a8f07d3f39ad768ed27d994a54ba46c3e7265", "fetched_at": "2026-10-17T17:16:52Z", "converter": "owner", "publisher": "claude", "authority": "generated", "verified_at": "2026-10-17T17:16:52Z", "outcome": "stored"}
 ```
 
 ## `lorekeep search`

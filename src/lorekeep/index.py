@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import csv
+import json
 import sqlite3
 import sys
 from collections.abc import Iterator, Sequence
@@ -50,12 +51,14 @@ _VERSION_COLUMNS = (
     "modified",
     "canonical",
     "origin",
+    "warnings",
 )
 _ORIGINAL_COLUMNS = ("url", "mediatype", "sha256", "stored")
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 """Bumped whenever a table's columns change, so an Index built by an older lorekeep reads as stale
 and is rebuilt with the new tables (2: `versions.canonical`; 3: `sections.heading_line` beside
-`sections.line`, which is now the Section's first text line)."""
+`sections.line`, which is now the Section's first text line; 4: `versions.warnings`, the
+Version's `warnings` as a JSON list)."""
 
 _SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -298,6 +301,9 @@ def _index_version(con: sqlite3.Connection, path: Path) -> int:
 
 
 def _text(value: object) -> str | None:
+    """A frontmatter value as its column holds it: a list (`warnings`) as JSON text."""
+    if isinstance(value, list):
+        return json.dumps(value, ensure_ascii=False)
     return None if value is None else str(value)
 
 

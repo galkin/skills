@@ -94,6 +94,8 @@ synthesised: `v3.helm.sh` answered `200` itself on that day, not a redirect.
 | `trtllm-kvcache.html`                  | Sphinx (`nvidia.github.io`): `a.headerlink` in every heading                               |
 | `nim-tool-calling.html`                | Sphinx (`docs.nvidia.com`): 4 highlighted code blocks, `\_` escapes, a table inside a list item Trafilatura drops |
 | `build-nemotron-modelcard.html`        | a client-rendered page: a menu as static HTML, its Next.js payload in a `<script>`          |
+| `model-optimizer-quantization.html`    | Sphinx (`nvidia.github.io`): a toctree list in a `toctree-wrapper` `<div>` after the paragraph that introduces it (v1.1 dropped it) |
+| `guides-catalog.html`                  | synthesised: three paragraphs, then sixteen headed lists of links Trafilatura drops, all in `<main>` (Markdown at 14% of the main text) |
 
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and
@@ -104,11 +106,12 @@ further synthesised folders in the same format; keep this table current.
 `js-only.html`, `.noisy`, `.changed`, `.alias`, `google-overview.html`, `timeout`, `relative-links.html`, the PDF and its three `exam-guide.*` variants are synthesised. A ticket may add further synthesised folders in the
 same format; keep this table current.
 
-The nine pages from `guardrails-jailbreak-protection.html` down are Originals of the first
-migration (2026-10-17), cut to the part that shows the defect: scripts, styles, SVG, images,
-`style`/`data-*` attributes (but `data-component-part`) and the site's navigation removed, long
-pages cut after the sections a test reads; the model card keeps the first 8,000 characters of its
-payload `<script>`, which is what makes it thin. `langchain-sql-agent.html` was recorded live the
+The pages from `guardrails-jailbreak-protection.html` down, `guides-catalog.html` aside, are
+Originals of the first migration (2026-10-17), cut to the part that shows the defect: scripts,
+styles, SVG, images, `style`/`data-*` attributes (but `data-component-part`) and the site's
+navigation removed, long pages cut after the sections a test reads
+(`model-optimizer-quantization.html` keeps its whole `<main>` and six items of the global table of
+contents); the model card keeps the first 8,000 characters of its payload `<script>`, which is what makes it thin. `langchain-sql-agent.html` was recorded live the
 same day, because its Original was never stored, and cut to the step whose tab buttons hold the
 comments. Their headers are the minimum a test needs.
 

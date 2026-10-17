@@ -80,6 +80,7 @@ def test_get_json_prints_one_object_with_the_path(tmp_path: Path) -> None:
     assert printed == {
         "path": str(version),
         "url": ANTHROPIC_PAGE,
+        "asked": ANTHROPIC_PAGE,
         "requested_url": ANTHROPIC_PAGE,
         "sha256": head["sha256"],
         "fetched_at": head["fetched_at"],
@@ -312,7 +313,8 @@ def test_an_unknown_host_warns_on_stderr_once(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stderr
     assert result.stderr.splitlines() == [
         "lorekeep: warning: example.test is in no host table; stored as third-party — "
-        "tell the owner, who may add a [[hosts]] rule"
+        "tell the owner, who may add a [[hosts]] rule",
+        f"lorekeep: note: {page} is third-party under no rule",
     ]
 
 

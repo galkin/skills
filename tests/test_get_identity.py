@@ -176,7 +176,7 @@ def test_get_json_carries_the_normalised_address_asked(tmp_path: Path) -> None:
 
     first = json.loads(stored.stdout)
     assert (first["url"], first["requested_url"]) == (OWASP_PAGE, OWASP_PAGE)
-    assert list(first)[:3] == ["path", "url", "requested_url"]
+    assert list(first)[:4] == ["path", "url", "asked", "requested_url"]
     assert json.loads(fresh.stdout)["requested_url"] == OWASP_PAGE
 
 

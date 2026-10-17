@@ -53,7 +53,8 @@ class Fetched:
 class Converted:
     """What a converter of the page step made of the received bytes; `canonical` is the address
     the document names as its own (`<link rel="canonical">`), absolute, when it names one;
-    `warnings` say what the conversion knowingly lost, one line each, without `lorekeep:`."""
+    `warnings` say what the conversion knowingly lost, one line each, without `lorekeep:` or the
+    address (`get` prints them as `lorekeep: warning: <url>: <warning>`)."""
 
     markdown: bytes
     converter: str

@@ -66,7 +66,8 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     assert path is not None
     if args.json:
         # The file is what the Store has: an earlier `add` of the same text keeps its fields.
-        print(json.dumps(version_json(ctx.store, path, "unchanged" if already else "stored")))
+        outcome = "unchanged" if already else "stored"
+        print(json.dumps(version_json(ctx.store, path, outcome, asked=args.file)))
     else:
         print(path)
     return 0

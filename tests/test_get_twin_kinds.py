@@ -168,7 +168,9 @@ def test_a_github_blob_is_stored_as_the_raw_file_fenced_by_its_extension(
     result = get(store, edges, BLOB_YAML, tag="nvidia")
 
     assert result.exit_code == 0, result.stderr
-    assert result.stderr == ""
+    assert (
+        result.stderr == f"lorekeep: note: {BLOB_YAML} is third-party under the github.com/ rule\n"
+    )
     assert [str(request.url) for request in transport.requests] == [RAW_YAML]
     head, body = the_version(store)
     assert head["url"] == BLOB_YAML

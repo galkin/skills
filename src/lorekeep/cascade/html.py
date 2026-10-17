@@ -48,7 +48,14 @@ THIN_WORDS = 40
 THIN_RATIO = 5
 """A page is thin when its Markdown has fewer than 600 characters or 40 words of text and the
 Original's text content (scripts included: a client-rendered page carries its content there) is
-at least five times longer."""
+at least five times longer. Whatever its size, a Markdown whose text is under a fifth of the text
+a reader sees in the page's main element is stored with a warning."""
+UNSEEN = (
+    ".//script | .//style | .//noscript | .//template | .//nav | .//aside | .//header"
+    " | .//footer | .//*[@role='navigation']"
+)
+"""What a reader of the main element does not read as its text: code that is not shown, and the
+site's own navigation, which some themes put inside `<main>` (Docker, Grafana)."""
 
 _FENCE = re.compile(r"^\s{0,3}(```|~~~)")
 _HEADING = re.compile(r"^#{1,6}\s")
@@ -197,21 +204,38 @@ def extract(document: lxml.html.HtmlElement, url: str) -> Converted | Fallthroug
             retried_missing = Missing.of(expected, kept_on_retry)
             if retried_missing.loss < missing.loss and kept_on_retry.covers(kept):
                 markdown, missing = retried, retried_missing
-    warnings: tuple[str, ...] = ()
+    warnings: list[str] = []
     if missing.code or missing.tables:
-        warnings = (
-            f"{url}: {missing.code} code blocks / {missing.tables} tables of the page are "
-            "missing from the Markdown",
+        warnings.append(
+            f"{missing.code} code blocks / {missing.tables} tables of the page are "
+            "missing from the Markdown"
         )
     markdown = finish(markdown, title)
+    main = main_text(document)
+    kept_text = len(markdown_shape(markdown).text)
+    if main is not None and THIN_RATIO * kept_text < main:
+        warnings.append(f"the Markdown holds {100 * kept_text // main}% of the page's main text")
     return Converted(
         markdown=markdown.encode("utf-8"),
         converter=f"{NAME} {metadata.version(NAME)}",
         original_ext="html",
         title=title,
         canonical=canonical,
-        warnings=warnings,
+        warnings=tuple(warnings),
     )
+
+
+def main_text(document: lxml.html.HtmlElement) -> int | None:
+    """How many characters of text a reader sees in the page's `<main>`, `role=main` or
+    `<article>` (the first found, without its scripts and navigation); `None` when it has none."""
+    for path in MAIN_SUBTREE:
+        found = document.xpath(path)
+        if found:
+            main = copy.deepcopy(found[0])
+            for element in main.xpath(UNSEEN):
+                element.drop_tree()
+            return len(squeeze(main.text_content()))
+    return None
 
 
 def trafilatura_markdown(
@@ -359,15 +383,27 @@ def tree_shape(document: lxml.html.HtmlElement) -> Shape:
 def prose_lists(
     root: lxml.html.HtmlElement,
 ) -> Iterator[tuple[lxml.html.HtmlElement, tuple[str, ...]]]:
-    """Each list a paragraph introduces ("The following are typical use cases:"), outside
-    navigation, with the text of its items: the lists Trafilatura must not take for a menu."""
+    """Each list a paragraph introduces ("The following are typical use cases:"), alone or in a
+    `<div>` that holds nothing else (Sphinx's `toctree-wrapper`), outside navigation, with the
+    text of its items: the lists Trafilatura must not take for a menu."""
     for found in root.xpath("//body//*[self::ul or self::ol]"):
-        before = found.getprevious()
+        before = wrapper(found).getprevious()
         if before is None or before.tag != "p" or found.xpath(NAVIGATION):
             continue
         items = tuple(squeeze(item.text_content()) for item in found.findall("li"))
         if len(items) >= 2 and all(items):
             yield found, items
+
+
+def wrapper(element: lxml.html.HtmlElement) -> lxml.html.HtmlElement:
+    """The outermost `<div>` around `element` whose text is its own, else `element`."""
+    own = squeeze(element.text_content())
+    top = element
+    for ancestor in element.iterancestors():
+        if ancestor.tag != "div" or squeeze(ancestor.text_content()) != own:
+            break
+        top = ancestor
+    return top
 
 
 def markdown_shape(markdown: str) -> Shape:

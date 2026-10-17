@@ -2,20 +2,20 @@
 
 Read with `yaml.BaseLoader`, which yields strings only: `safe_load` would turn a publisher's
 `2026-08-13T00:00:00.0000000Z` into a `datetime`. Written with every string value quoted, so an
-ETag's own quotes survive.
+ETag's own quotes survive; a list of strings is written on one line, `["…", "…"]`.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import yaml
 
 FENCE = b"---\n"
 
-type Fields = Mapping[str, str | bool | int | Mapping[str, str | bool | int] | None]
+type Fields = Mapping[str, str | bool | int | Mapping[str, str | bool | int] | Sequence[str] | None]
 
 
 class FrontmatterError(ValueError):
@@ -23,7 +23,8 @@ class FrontmatterError(ValueError):
 
 
 def parse(data: bytes) -> tuple[dict[str, Any], bytes]:
-    """Split a Version file into its frontmatter (strings, and one level of mappings) and body."""
+    """Split a Version file into its frontmatter (strings, lists of strings and one level of
+    mappings) and body."""
     if not data.startswith(FENCE):
         raise FrontmatterError("no frontmatter")
     head, fence, body = data[len(FENCE) :].partition(b"\n" + FENCE)
@@ -39,7 +40,8 @@ def parse(data: bytes) -> tuple[dict[str, Any], bytes]:
 
 
 def render(fields: Fields) -> bytes:
-    """The frontmatter block for `fields`, in their order; `None` values are left out."""
+    """The frontmatter block for `fields`, in their order; `None` values and empty lists are
+    left out."""
     lines = ["---"]
     for key, value in fields.items():
         if value is None:
@@ -47,6 +49,9 @@ def render(fields: Fields) -> bytes:
         if isinstance(value, Mapping):
             lines.append(f"{key}:")
             lines += [f"  {k}: {_scalar(v)}" for k, v in value.items() if v is not None]
+        elif isinstance(value, Sequence) and not isinstance(value, str):
+            if value:
+                lines.append(f"{key}: [{', '.join(_scalar(item) for item in value)}]")
         else:
             lines.append(f"{key}: {_scalar(value)}")
     lines.append("---")
