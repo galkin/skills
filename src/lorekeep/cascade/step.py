@@ -44,6 +44,16 @@ class Fetched:
 
 
 @dataclass(frozen=True)
+class Converted:
+    """What a converter of the page step made of the received bytes."""
+
+    markdown: bytes
+    converter: str
+    original_ext: str
+    title: str | None = None
+
+
+@dataclass(frozen=True)
 class Fallthrough:
     """Why a step declined; the next step runs."""
 

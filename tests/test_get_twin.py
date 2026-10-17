@@ -190,8 +190,8 @@ def test_a_twin_address_that_answers_html_is_not_stored(tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "no Twin" in result.stderr
-    assert [str(request.url) for request in transport.requests] == [f"{page}.md"]
-    assert not transport.misses
+    assert [str(request.url) for request in transport.requests] == [f"{page}.md", page]
+    assert transport.misses == [page]
     assert sorted(path.name for path in store.iterdir()) == ["lorekeep.toml"]
 
 
@@ -284,7 +284,7 @@ def test_every_request_names_lorekeep_as_its_user_agent(tmp_path: Path) -> None:
     get(store, edges, MS_ASKED)
     get(store, edges, "https://cloud.google.com/vertex-ai/docs/generative-ai/learn/overview")
 
-    assert len(transport.requests) == 4
+    assert len(transport.requests) == 5
     assert all(
         request.headers["user-agent"].startswith("lorekeep/") for request in transport.requests
     )
