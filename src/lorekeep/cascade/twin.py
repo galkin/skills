@@ -59,9 +59,10 @@ def page_url(url: str, rule: HostRule | None) -> str:
     return url
 
 
-def accepts(mediatype: str, rule: HostRule) -> bool:
+def accepts(mediatype: str, rule: HostRule | None) -> bool:
     """A Twin is `text/markdown`, or plain text from a raw file host."""
-    return mediatype == "text/markdown" or (rule.twin == "raw" and mediatype == "text/plain")
+    raw = rule is not None and rule.twin == "raw"
+    return mediatype == "text/markdown" or (raw and mediatype == "text/plain")
 
 
 class TwinStep:
@@ -74,26 +75,32 @@ class TwinStep:
             response = request.client.get(address)
         except httpx.HTTPError as error:
             return Fallthrough(f"no Twin: {address} failed ({type(error).__name__})")
-        mediatype = media_type(response)
         if response.status_code != 200:
             return Fallthrough(f"no Twin: {address} answered {response.status_code}")
-        if not accepts(mediatype, rule):
-            return Fallthrough(f"no Twin: {address} answered {mediatype or 'no media type'}")
-        received = response.content
-        fields, body = split_frontmatter(received)
-        canonical = _text(fields.get("canonicalUrl"))
-        return Fetched(
-            markdown=_LEADING_BLANK_LINES.sub(b"", body),
-            converter=CONVERTER,
-            final_url=canonical or str(response.url),
-            original_url=decoded(str(response.url)),
-            mediatype=mediatype,
-            original_sha256=hashlib.sha256(received).hexdigest(),
-            etag=response.headers.get("etag"),
-            last_modified=response.headers.get("last-modified"),
-            title=_text(fields.get("title")),
-            modified=first_date(fields),
-        )
+        return read_twin(response, rule)
+
+
+def read_twin(response: httpx.Response, rule: HostRule | None) -> Fetched | Fallthrough:
+    """What a `200` to a Twin address holds, once its media type passes the Twin's gate."""
+    address = str(response.url)
+    mediatype = media_type(response)
+    if not accepts(mediatype, rule):
+        return Fallthrough(f"no Twin: {address} answered {mediatype or 'no media type'}")
+    received = response.content
+    fields, body = split_frontmatter(received)
+    canonical = _text(fields.get("canonicalUrl"))
+    return Fetched(
+        markdown=_LEADING_BLANK_LINES.sub(b"", body),
+        converter=CONVERTER,
+        final_url=canonical or address,
+        original_url=decoded(address),
+        mediatype=mediatype,
+        original_sha256=hashlib.sha256(received).hexdigest(),
+        etag=response.headers.get("etag"),
+        last_modified=response.headers.get("last-modified"),
+        title=_text(fields.get("title")),
+        modified=first_date(fields),
+    )
 
 
 def split_frontmatter(data: bytes) -> tuple[dict[str, Any], bytes]:

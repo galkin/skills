@@ -249,7 +249,8 @@ def latest(store: Path, url: str, rules: Sequence[HostRule]) -> VersionInfo | No
         return None
     checks = [row for row in read_rows(store, CheckRow) if row.url == wanted and row.sha256]
     if checks:
-        current = max(checks, key=lambda row: row.checked_at).sha256
+        # The last row wins a tie on `checked_at`: two Rechecks in one second append in order.
+        current = max(enumerate(checks), key=lambda item: (item[1].checked_at, item[0]))[1].sha256
         named = [info for info in versions if info.sha256 == current]
         if named:
             return named[0]

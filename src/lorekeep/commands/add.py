@@ -11,16 +11,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from lorekeep.provenance import TIME_FORMAT, now
 from lorekeep.store import NewVersion, TagRow, commit
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
-
-TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-
-
-def now() -> str:
-    return datetime.now(UTC).strftime(TIME_FORMAT)
 
 
 def slug(title: str) -> str:

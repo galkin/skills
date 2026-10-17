@@ -4,20 +4,21 @@ the Store has none."""
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from lorekeep import cascade
-from lorekeep.commands.add import now
+from lorekeep import cascade, recheck
 from lorekeep.http import make_client
+from lorekeep.provenance import build as provenance
+from lorekeep.provenance import now
 from lorekeep.store import (
     AliasRow,
     CheckRow,
     NewVersion,
     TagRow,
+    VersionInfo,
     commit,
     latest,
     read_head,
@@ -39,8 +40,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
 
     stored = latest(ctx.store, args.url, rules)
     if stored is not None:
-        commit(ctx.store, tags=[TagRow(url=stored.url, tag=ctx.tag, added_at=now())])
-        return report(args, ctx, stored.path, "fresh")
+        return return_stored(args, ctx, stored)
 
     with make_client(ctx.edges.transport) as client:
         outcome = cascade.run_cascade(
@@ -77,27 +77,26 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     return report(args, ctx, path, "unchanged" if already else "stored")
 
 
-def provenance(fetched: cascade.Fetched, url: str, publisher: str, authority: str) -> dict:
-    """The Version's frontmatter, in the order a reader expects; absent values are left out."""
-    return {
-        "url": url,
-        "fetched_at": now(),
-        "sha256": hashlib.sha256(fetched.markdown).hexdigest(),
-        "publisher": publisher,
-        "authority": authority,
-        "converter": fetched.converter,
-        "etag": fetched.etag,
-        "last_modified": fetched.last_modified,
-        "title": fetched.title,
-        "modified": fetched.modified,
-        "original": {
-            "url": fetched.original_url,
-            "mediatype": fetched.mediatype,
-            "sha256": fetched.original_sha256,
-            "stored": fetched.original is not None,
-        },
-        "origin": "web",
-    }
+def return_stored(args: argparse.Namespace, ctx: Context, stored: VersionInfo) -> int:
+    """A stored Version: returned as is inside the freshness window, rechecked outside it."""
+    assert ctx.tag is not None
+    tag = TagRow(url=stored.url, tag=ctx.tag, added_at=now())
+    window = 0 if args.fresh else ctx.project.freshness_days
+    if args.max_age is not None:
+        window = args.max_age
+    if recheck.is_fresh(stored, read_rows(ctx.store, CheckRow), window):
+        commit(ctx.store, tags=[tag])
+        return report(args, ctx, stored.path, "fresh")
+    skipped = recheck.skipped_reason(stored)
+    if skipped is not None:
+        print(f"lorekeep: warning: {skipped}; returning the stored Version", file=sys.stderr)
+        commit(ctx.store, tags=[tag])
+        return report(args, ctx, stored.path, "skipped")
+    with make_client(ctx.edges.transport) as client:
+        asked = recheck.perform(ctx.store, stored, client, ctx.project.hosts, tags=[tag])
+    if asked.warning:
+        print(f"lorekeep: warning: {asked.warning}", file=sys.stderr)
+    return report(args, ctx, asked.path, asked.result)
 
 
 def report(args: argparse.Namespace, ctx: Context, path: Path, outcome: str) -> int:

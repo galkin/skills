@@ -56,29 +56,34 @@ class PageStep:
                 else None
             )
             if target is None or target == final_url:
-                return self._convert(response, mediatype)
+                return convert_response(response, mediatype, self.converters)
             address = target
         return Fallthrough(f"{address}: more than {MAX_REFRESHES} meta refreshes")
 
-    def _convert(self, response: httpx.Response, mediatype: str) -> Fetched | Fallthrough:
-        convert = self.converters.get(mediatype)
-        if convert is None:
-            return Fallthrough(f"unsupported media type {mediatype or '(none)'}")
-        received = response.content
-        final_url = str(response.url)
-        converted = convert(received, final_url, response.charset_encoding)
-        if isinstance(converted, Fallthrough):
-            return converted
-        return Fetched(
-            markdown=converted.markdown,
-            converter=converted.converter,
-            final_url=converted.canonical or final_url,
-            original_url=decoded(final_url),
-            mediatype=mediatype,
-            original_sha256=hashlib.sha256(received).hexdigest(),
-            original=received,
-            original_ext=converted.original_ext,
-            etag=response.headers.get("etag"),
-            last_modified=response.headers.get("last-modified"),
-            title=converted.title,
-        )
+
+def convert_response(
+    response: httpx.Response, mediatype: str, converters: Mapping[str, Converter] = CONVERTERS
+) -> Fetched | Fallthrough:
+    """A `200` page converted by the converter its media type names; a media type no converter
+    takes is unsupported."""
+    convert = converters.get(mediatype)
+    if convert is None:
+        return Fallthrough(f"unsupported media type {mediatype or '(none)'}")
+    received = response.content
+    final_url = str(response.url)
+    converted = convert(received, final_url, response.charset_encoding)
+    if isinstance(converted, Fallthrough):
+        return converted
+    return Fetched(
+        markdown=converted.markdown,
+        converter=converted.converter,
+        final_url=converted.canonical or final_url,
+        original_url=decoded(final_url),
+        mediatype=mediatype,
+        original_sha256=hashlib.sha256(received).hexdigest(),
+        original=received,
+        original_ext=converted.original_ext,
+        etag=response.headers.get("etag"),
+        last_modified=response.headers.get("last-modified"),
+        title=converted.title,
+    )
