@@ -17,6 +17,7 @@ from dataclasses import astuple, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 from lorekeep import frontmatter
 from lorekeep import store as store_module
@@ -679,3 +680,78 @@ def _snippet(body: str, needle: str, around: int = 60) -> str:
     start, end = max(0, at - around), min(len(body), at + len(needle) + around)
     text = body[start:at] + "[" + needle + "]" + body[at + len(needle) : end]
     return ("…" if start else "") + _one_line(text) + ("…" if end < len(body) else "")
+
+
+# Tags and status ---------------------------------------------------------------------------------
+
+
+def source_urls(store: Path, prefix: str) -> list[str]:
+    """Every Source's `url` that starts with `prefix`, sorted."""
+    con = connect(store)
+    try:
+        rows = con.execute(
+            "SELECT DISTINCT url FROM versions WHERE substr(url, 1, ?) = ? ORDER BY url",
+            (len(prefix), prefix),
+        )
+        return [url for (url,) in rows]
+    finally:
+        con.close()
+
+
+def tagged_urls(store: Path, tag: str) -> set[str]:
+    """Every `url` that already carries `tag`."""
+    con = connect(store)
+    try:
+        return {url for (url,) in con.execute("SELECT url FROM tags WHERE tag = ?", (tag,))}
+    finally:
+        con.close()
+
+
+RECHECK_RESULTS = ("unchanged", "changed", "gone", "error")
+
+
+@dataclass(frozen=True)
+class Summary:
+    """What `status` reports from the Index."""
+
+    versions: int
+    sources: int
+    tags: dict[str, int]
+    oldest_fetched_at: str | None
+    newest_fetched_at: str | None
+    checks: dict[str, int]
+    unknown_hosts: list[str]
+
+
+def summary(store: Path) -> Summary:
+    """Versions, Sources, Sources per Tag, the oldest and newest `fetched_at`, Rechecks per
+    result, and the hosts no rule knew (a Version whose publisher is its url's host)."""
+    con = connect(store)
+    try:
+        versions, sources, oldest, newest = con.execute(
+            "SELECT count(*), count(DISTINCT url), min(fetched_at), max(fetched_at) FROM versions"
+        ).fetchone()
+        tags = dict(
+            con.execute(
+                "SELECT tag, count(DISTINCT url) FROM tags GROUP BY tag ORDER BY tag"
+            ).fetchall()
+        )
+        checks: dict[str, int] = dict.fromkeys(RECHECK_RESULTS, 0)
+        for result, count in con.execute("SELECT result, count(*) FROM checks GROUP BY result"):
+            checks[result] = count
+        hosts = {
+            host
+            for url, publisher in con.execute("SELECT DISTINCT url, publisher FROM versions")
+            if (host := (urlsplit(url).hostname or "").lower()) and publisher == host
+        }
+        return Summary(
+            versions=versions,
+            sources=sources,
+            tags=tags,
+            oldest_fetched_at=oldest,
+            newest_fetched_at=newest,
+            checks=checks,
+            unknown_hosts=sorted(hosts),
+        )
+    finally:
+        con.close()
