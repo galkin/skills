@@ -9,7 +9,6 @@ import contextlib
 import hashlib
 import io
 import json
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -22,6 +21,7 @@ import httpx
 from lorekeep import frontmatter
 from lorekeep.cli import run
 from lorekeep.edges import CommandResult, Edges, FetcherNotInstalled, PageFetchError, RenderedPage
+from lorekeep.store import version_name
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -195,8 +195,7 @@ def write_version(store: Path, fixture: Path | str, *, fetched_at: str, **fields
         },
     }
     head.update(fields)
-    path_part = re.sub(r"[^A-Za-z0-9._]+", "-", parts.path).strip("-")[:100]
-    path = store / f"{host}--{path_part}--{digest[:8]}.md"
+    path = store / version_name(url, digest)
     path.write_bytes(frontmatter.render(head) + body)
     return path
 
