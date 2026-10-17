@@ -73,10 +73,9 @@ one page get one Version.
   for NIST) and `official` in an institution's reproduction (the AI Act Service Desk); cite the
   journal, and report a Version whose `authority` says otherwise.
 - A `third-party` verdict from no rule or a whole-host rule prints a note on every `get`
-  (`lorekeep: note: <url> is third-party under the github.com/ rule`, or `under no rule`). The
-  usual cause is the `github.com/` catch-all; a page the guide
-  treats as primary there (a vendor's repository; report it when unsure) is reported to the owner,
-  who may add a host rule; until then it is context. `lorekeep status --rules` shows the rules.
+  (`lorekeep: note: <url> is third-party under the github.com/ rule`, or `under no rule`); a page
+  the guide treats as primary there (a vendor's repository; report when unsure) is reported to the
+  owner, who may add a host rule; until then it is context. `status --rules` shows the rules.
 
 ## stderr lines and what to do
 
@@ -92,8 +91,7 @@ one page get one Version.
 
 A Version's warnings print on every `get` that returns it (`fresh` and `unchanged` too); one
 stored by an older lorekeep has none recorded. Exit `0` can still be a menu or a page that lost a
-list: open a Version under 2 KB, or of a page that builds itself in
-the browser (`build.nvidia.com`), compare it with its Original, and report what is missing.
+list: open a Version under 2 KB, compare it with its Original, and report what is missing.
 
 On exit `1` nothing was stored:
 
@@ -107,7 +105,6 @@ On exit `1` nothing was stored:
 
 ```text
 lorekeep: error: nothing stored for https://example.test/slow: the host rule names no Twin; https://example.test/slow failed (ReadTimeout)
-lorekeep: error: nothing stored for https://build.nvidia.com/nvidia/nvidia-nemotron-nano-9b-v2/modelcard: the host rule names no Twin; thin content: https://build.nvidia.com/nvidia/nvidia-nemotron-nano-9b-v2/modelcard converted to 290 characters of a page of 8309; this page needs a browser and Crawl4AI is not installed: install the extra lorekeep[browser] (uv sync --extra browser)
 ```
 
 ## `lorekeep get`
