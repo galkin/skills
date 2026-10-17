@@ -80,3 +80,34 @@ fifth criterion, the live run, is left to the orchestrator and unticked.
   accept` (and how it edits the file), `removes` with its unit in the keys and the example, and
   "Proposing reading rules", the brief and the cycle in 22 lines. `SKILL.md`: only the stderr
   row, which had become false (249 lines). `GLOSSARY.md` › Reading rule: what it records.
+
+**2026-10-17 — live run (orchestrator), ticket 03 merged as `82d9547`.** On the first Store
+(376 Versions, 0 Readings before). `rules sample` on the ticket's four prefixes gave for
+`docs.nvidia.com/` eight Sphinx conversions and one Fern Twin, since it samples by length and the
+host mixes engines; the orchestrator sampled seven sub-prefixes by hand instead (`nemo/guardrails/`,
+`dynamo/`, `nemo/gym/`, `rag/latest/`, `nemo/agent-toolkit/`, `eur-lex.europa.eu/`,
+`learn.microsoft.com/`, four Versions each) — friction filed as ticket 05. A Haiku subagent
+(Orca dispatch `ctx_6f2c83f04769`, brief as owner.md › Proposing reading rules, told to read heads,
+tails and grep the laws) returned six candidates in one TOML file. `rules check` (0.9 s):
+
+| candidate | result |
+| --- | --- |
+| `docs.nvidia.com/nemo/guardrails/` `drop_leading = "/_mcp/server"` | pass, 31 Versions, 12 lines each |
+| `docs.nvidia.com/dynamo/` `drop_leading = "/_mcp/server"` | fail: changes no Version (Dynamo's banner has no MCP line) |
+| `docs.nvidia.com/nemo/gym/` `drop_leading = "/_mcp/server"` | pass, 4 Versions, 15 lines each |
+| `learn.microsoft.com/` `strip_title_suffix = " - Azure Architecture Center \\| Microsoft Learn"` | pass, 4 titles |
+| `eur-lex.europa.eu/` `heading_before = "^Article \\d+"`, level 2 | pass, 213 headings — one too many: `Article 18 of Regulation (EU) 2019/1020 shall apply…` in a paragraph |
+| `eur-lex.europa.eu/` `heading_before = "^CHAPTER"`, level 1 | pass, 24 headings — but a second `heading_before` on the same prefix replaces the first, so only one could be accepted |
+
+What the orchestrator did with the report, as the cycle says: one host-wide Fern rule in place of
+the three per-group ones, with the pattern ticket 01 found (`llms\.txt|For clean Markdown|/_mcp/server`,
+which also reaches Dynamo and NeMo Curator); the article pattern anchored (`^Article \d+$`); the
+chapter rule dropped (one rule per operation and prefix — the limitation is in ticket 05). Second
+`rules check`: 3 pass; the Fern rule over 174 Versions, 813 lines, max 26 per Version.
+`rules accept`: `Accepted 3 rules, 0 failed`, `Built 61 Readings, 0 current` in 1.3 s (55 Fern,
+4 Learn, 2 EUR-Lex); `lorekeep.toml` gained three `[[readings]]` tables (`removes = "26 lines"` on
+the Fern rule, none on the other two), every other line as it was. After it: `search "llms.txt"`
+finds no Section, `search "risk management system high-risk"` answers with `… > Article 9` in the
+breadcrumb and a line in the Reading, `status` prints `Readings: 61 of 376 Versions, 3 rules`.
+The engine rules (Fern banner, EUR-Lex articles, Microsoft Learn suffix) go into
+`src/lorekeep/readings.toml` with a test each — dispatched as the last step of this ticket.
