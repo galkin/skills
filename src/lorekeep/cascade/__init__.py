@@ -50,7 +50,8 @@ def run_cascade(request: Request) -> Fetched | list[Fallthrough]:
     """The first step's `Fetched`, or every step's reason when none yielded Markdown.
 
     A host rule with `browser = true` goes to the browser without any plain request; otherwise
-    the browser runs only when the last plain step says the page needs it.
+    the browser runs only when the last plain step says the page needs it. A `final` reason
+    ends the cascade as the last of the reasons.
     """
     reasons: list[Fallthrough] = []
     if not (request.rule is not None and request.rule.browser):
@@ -59,6 +60,8 @@ def run_cascade(request: Request) -> Fetched | list[Fallthrough]:
             if isinstance(outcome, Fetched):
                 return outcome
             reasons.append(outcome)
+            if outcome.final:
+                return reasons
         if not reasons[-1].needs_browser:
             return reasons
     outcome = BROWSER.attempt(request)

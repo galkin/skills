@@ -51,9 +51,26 @@ are lower-case. `match_headers` is optional.
 | `exam-guide.html-as-pdf`               | HTML served as `text/html` under a URL ending in `.pdf` (never handed to MarkItDown)       |
 | `exam-guide.zip`                       | a body served as `application/zip`, a media type no step takes                             |
 | `exam-guide.not-a-pdf`                 | HTML bytes served as `application/pdf` (refused, not guessed at)                           |
+| `guardrails-jailbreak-protection.html` | Fern (NeMo Guardrails): 3 `<pre class="code-block-root">` of one `<div>` per line, 4 tables in scroll-area wrappers |
+| `guardrails-self-check.html`           | Fern (NeMo Guardrails): 16 code blocks                                                     |
+| `langchain-middleware-built-in.html`   | Mintlify: 10 code blocks (one in a callout Trafilatura drops), 29 parameter names drawn as `<button>`s |
+| `langchain-sql-agent.html`             | Mintlify: `<!-- -->` comments in the content, which crashed Trafilatura 2.3.1              |
+| `kubernetes-deployment.html`           | Hugo/Docsy: headings, the page title and a list of links Trafilatura dropped               |
+| `opentelemetry-signals.html`           | Hugo/Docsy: a list of link-only items (the signal names) Trafilatura dropped               |
+| `trtllm-kvcache.html`                  | Sphinx (`nvidia.github.io`): `a.headerlink` in every heading                               |
+| `nim-tool-calling.html`                | Sphinx (`docs.nvidia.com`): 4 highlighted code blocks, `\_` escapes, a table inside a list item Trafilatura drops |
+| `build-nemotron-modelcard.html`        | a client-rendered page: a menu as static HTML, its Next.js payload in a `<script>`          |
 
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and
 NVIDIA responses carry the headers as received. The `403`, `304`, `google-md-answers-html`,
 `js-only.html`, `.noisy`, `.changed`, `.alias`, `google-overview.html`, `timeout`, `relative-links.html`, the PDF and its three `exam-guide.*` variants are synthesised. A ticket may add further synthesised folders in the
 same format; keep this table current.
+
+The nine pages from `guardrails-jailbreak-protection.html` down are Originals of the first
+migration (2026-10-17), cut to the part that shows the defect: scripts, styles, SVG, images,
+`style`/`data-*` attributes (but `data-component-part`) and the site's navigation removed, long
+pages cut after the sections a test reads; the model card keeps the first 8,000 characters of its
+payload `<script>`, which is what makes it thin. `langchain-sql-agent.html` was recorded live the
+same day, because its Original was never stored, and cut to the step whose tab buttons hold the
+comments. Their headers are the minimum a test needs.

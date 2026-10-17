@@ -53,6 +53,8 @@ class BrowserStep:
             original_sha256=hashlib.sha256(original).hexdigest(),
             original=original,
             original_ext="html",
+            title=converted.title,
+            warnings=converted.warnings,
         )
 
     def reread(

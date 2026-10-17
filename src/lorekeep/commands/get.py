@@ -37,9 +37,14 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
             cascade.Request(url=args.url, rule=asked.rule, client=client, fetcher=ctx.edges.fetcher)
         )
     if not isinstance(outcome, cascade.Fetched):
+        if outcome[-1].final:
+            print(f"lorekeep: error: {outcome[-1].reason}", file=sys.stderr)
+            return 1
         reasons = "; ".join(fallthrough.reason for fallthrough in outcome)
         print(f"lorekeep: error: nothing stored for {args.url}: {reasons}", file=sys.stderr)
         return 1
+    for warning in outcome.warnings:
+        print(f"lorekeep: warning: {warning}", file=sys.stderr)
 
     url = normalise(outcome.final_url, rules)
     found = trust(url, rules)
