@@ -54,6 +54,7 @@ are lower-case. `match_headers` is optional.
 | `langchain-sql-agent.twin`             | Mintlify Twin of LangChain's `sql-agent` page (`text/markdown`): code, no tables           |
 | `langchain-tools.twin`                 | Mintlify Twin of LangChain's `tools` page: code and pipe tables                            |
 | `guardrails-jailbreak-protection.twin` | Fern Twin of a NeMo Guardrails page on `docs.nvidia.com`: code and pipe tables             |
+| `guardrails-rail-types.twin`           | Fern Twin of NeMo Guardrails' `rail-types` page, as the first Store holds it (v1.2 ticket 01): one paragraph answers "which rail type validates tool call arguments" |
 | `dynamo-fast-model-loading.twin`       | Fern Twin of a Dynamo page (`text/markdown`)                                               |
 | `dynamo-fast-model-loading.plain`      | the same bytes served as `text/plain` (a Fern Twin that does not say Markdown)             |
 | `guardrails-no-twin.html`              | a page under a Fern rule whose `.md` has no fixture (`404`), so the page is converted      |

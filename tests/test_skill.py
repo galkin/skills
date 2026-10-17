@@ -202,12 +202,16 @@ def test_the_search_examples_are_what_search_prints(tmp_path: Path) -> None:
     get(store, edges, SELF_CHECK, tag="nvidia")
     examples = examples_of(run_cli(["skill"]).stdout, "search")
 
-    printed = [
-        as_printed(lorekeep(store, edges, *argv, tag="nvidia").stdout) for argv, _ in examples
-    ]
+    results = [lorekeep(store, edges, *argv, tag="nvidia") for argv, _ in examples]
 
     assert len(examples) >= 3
-    assert printed == [stdout for _, stdout in examples]
+    # A `lorekeep: note:` line of an example is stderr; the rest is stdout.
+    for result, (_, shown) in zip(results, examples, strict=True):
+        notes = [line for line in shown.splitlines() if line.startswith("lorekeep: note: ")]
+        assert set(notes) <= set(result.stderr.splitlines())
+        assert as_printed(result.stdout).splitlines() == [
+            line for line in shown.splitlines() if line not in notes
+        ]
 
 
 def with_extra_flag(command: str, flag: str) -> Callable[[], argparse.ArgumentParser]:
