@@ -44,8 +44,9 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     print(f"Host rules ({len(ctx.project.hosts)}):")
     for rule in ctx.project.hosts:
         words = [rule.prefix, rule.publisher, rule.authority]
-        words += [f"twin={rule.twin}"] if rule.twin else []
-        words += [f"page_suffix={rule.page_suffix}"] if rule.page_suffix else []
+        mark = " (inherited)" if rule.inherited else ""
+        words += [f"twin={rule.twin}{mark}"] if rule.twin else []
+        words += [f"page_suffix={rule.page_suffix}{mark}"] if rule.page_suffix else []
         words += ["browser"] if rule.browser else []
         words += [f"cut={','.join(rule.cut)}"] if rule.cut else []
         words += ["(lorekeep.toml)"] if rule.source == "lorekeep.toml" else []

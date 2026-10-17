@@ -71,7 +71,7 @@ freshness_days = 30                         # how old a Version may be before `g
 prefix = "docs.example.com/api/"            # required: matched on host/path, longest prefix wins
 publisher = "example"                       # required: who authored the pages
 authority = "primary"                       # required: primary | official | third-party | generated
-twin = "md-suffix"                          # md-suffix | accept-header | raw | github-raw; absent: no Twin
+twin = "md-suffix"                          # md-suffix | accept-header | raw | github-raw; absent: inherited
 page_suffix = ".html"                       # what md-suffix replaces; absent: .md is appended
 browser = true                              # go straight to the browser on a first fetch
 cut = ["nav", ".cookie-banner"]             # CSS selectors removed from a rendered page
@@ -99,10 +99,11 @@ The package ships the hosts probed so far in
 [`src/lorekeep/hosts.toml`](src/lorekeep/hosts.toml), in the same shape. A rule in
 `lorekeep.toml` with the same `prefix` replaces the default one; any other rule is added beside
 them. `lorekeep status --rules` prints the merged table, marking the Project's rules `(lorekeep.toml)`.
-Nothing is inherited: a Project rule with the same or a longer prefix than a default rule wins over
-it whole, so a rule that sets `publisher` and `authority` for `github.com/<org>/` must repeat
-`twin = "github-raw"` ([`references/owner.md`](src/lorekeep/skill/references/owner.md) has the
-example).
+A rule that names neither `twin` nor `page_suffix` inherits both from the longest shorter prefix
+of the merged table that names a `twin` (so `github.com/<org>/` with only `publisher` and
+`authority` keeps `github-raw`; a rule replacing a default inherits from a shorter one, not from
+the rule it replaces), marked `(inherited)` by `status --rules`; `browser` and `cut` are never
+inherited.
 
 | Prefix                             | Publisher   | Authority   | Twin                                          |
 | ---------------------------------- | ----------- | ----------- | --------------------------------------------- |

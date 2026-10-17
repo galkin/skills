@@ -122,21 +122,11 @@ matches `host/path` by prefix and the longest matching prefix wins. Its keys:
   before the cut. It changes nothing for a static page or a Twin.
 
 A Project rule with the same prefix as a default rule replaces it, and a Project rule with a longer
-prefix wins over it; either way nothing is inherited, so a rule that omits `twin` and
-`page_suffix` has no Twin. A rule that sets `publisher` and `authority` for a GitHub organisation
-must repeat `twin = "github-raw"`, or its `blob/` pages are converted as HTML pages:
-
-```toml
-[[hosts]]
-prefix = "github.com/NVIDIA-AI-Blueprints/"
-publisher = "nvidia"
-authority = "primary"
-twin = "github-raw"
-```
-
-The same holds for `docs.langchain.com/` (`twin = "md-suffix"`) and every other default rule
-`status --rules` shows with a `twin=`. A rule changed after pages were stored does not reach them
-on Recheck (see `recheck` above).
+prefix wins over it. A rule that names neither `twin` nor `page_suffix` inherits both from the
+longest shorter prefix that names a `twin` — `github.com/<org>/` with only `publisher` and
+`authority` keeps `github-raw`, while `docs.langchain.com/` replaced without `twin` has no Twin —
+and `status --rules` marks them `(inherited)`; `browser` and `cut` are never inherited. A rule
+changed after pages were stored does not reach them on Recheck (see `recheck` above).
 
 A law or standard is `primary` where its issuer publishes the text, its official journal:
 EUR-Lex for EU law, the Federal Register, nist.gov for NIST. An institution's reproduction of it
