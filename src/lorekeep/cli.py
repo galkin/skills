@@ -18,6 +18,7 @@ from lorekeep.commands import get as get_command
 from lorekeep.commands import index as index_command
 from lorekeep.commands import read as read_command
 from lorekeep.commands import recheck as recheck_command
+from lorekeep.commands import rules as rules_command
 from lorekeep.commands import search as search_command
 from lorekeep.commands import skill as skill_command
 from lorekeep.commands import status as status_command
@@ -133,6 +134,40 @@ def build_parser() -> argparse.ArgumentParser:
     read.add_argument("--force", action="store_true", help="rebuild every Reading in scope")
     _store_flag(read)
 
+    rules = command("rules", "measure and accept reading rules a proposer suggests")
+    rules_commands = rules.add_subparsers(
+        dest="rules_command", metavar="<rules command>", required=True
+    )
+    rules_sample = rules_commands.add_parser(
+        "sample",
+        help="print the paths of Versions under a prefix, for a proposer",
+        description="print the paths of Versions under a prefix, for a proposer",
+    )
+    rules_sample.add_argument("prefix", help="host/path, as a rule's prefix")
+    rules_sample.add_argument(
+        "--sample",
+        type=int,
+        default=rules_command.DEFAULT_SAMPLE,
+        metavar="N",
+        help="how many: the shortest, the longest, the rest between (default: 5)",
+    )
+    _store_flag(rules_sample)
+    rules_check = rules_commands.add_parser(
+        "check",
+        help="measure candidate rules on the Store's Versions; write nothing",
+        description="measure candidate rules on the Store's Versions; write nothing",
+    )
+    rules_check.add_argument("file", help="a TOML file of [[readings]] candidates")
+    _store_flag(rules_check)
+    rules_accept = rules_commands.add_parser(
+        "accept",
+        help="write the passing candidates into lorekeep.toml and build their Readings",
+        description="write the passing candidates into lorekeep.toml and build their Readings",
+    )
+    rules_accept.add_argument("file", help="a TOML file of [[readings]] candidates")
+    rules_accept.add_argument("--all", action="store_true", help="also accept the failing ones")
+    _store_flag(rules_accept)
+
     recheck = command("recheck", "ask publishers whether their Sources changed")
     _scope_tags(recheck)
     recheck.add_argument("--publisher", help="only Sources of this publisher")
@@ -212,6 +247,7 @@ HANDLERS: dict[str, Callable[[argparse.Namespace, Context], int]] = {
     "index": index_command.run,
     "read": read_command.run,
     "recheck": recheck_command.run,
+    "rules": rules_command.run,
     "backup": backup_command.run_backup,
     "restore": backup_command.run_restore,
     "tag": tag_command.run,

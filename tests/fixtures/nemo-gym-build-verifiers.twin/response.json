@@ -1,0 +1,9 @@
+{
+  "url": "https://docs.nvidia.com/nemo/gym/build-verifiers.md",
+  "status": 200,
+  "headers": {
+    "content-type": "text/markdown; charset=utf-8",
+    "etag": "W/\"9e4198c7f4566b0afc95c3903edf6d90\""
+  },
+  "body": "body.md"
+}

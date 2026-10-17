@@ -140,8 +140,9 @@ title: "Guardrail Types"
 - `sha256` — the hash of the Reading's body (the Version's `sha256` hashes the Version's).
 - `rules` — the hash of the rules applied; a Reading whose rules changed is stale and rebuilt.
 - `title` — the Version's `title`, with its suffix cut by a `strip_title_suffix` rule.
-- `warnings` — `rule <name> removed N% (accepted at M%)` for each rule the over-removal guard
-  held back from this Version: the Reading was built without it. Absent when there is none.
+- `warnings` — `rule <name> removed N lines (accepted at M lines)` (`N%` and `M%` for a
+  `drop_lines` rule) for each rule the over-removal guard held back from this Version: the
+  Reading was built without it. Absent when there is none.
 
 ## Rechecks
 
