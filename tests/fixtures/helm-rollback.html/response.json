@@ -1,0 +1,9 @@
+{
+  "url": "https://helm.sh/docs/helm/helm_rollback/",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html; charset=UTF-8",
+    "etag": "\"a13a1cea257ee2457abc98fe2fe3ec18-ssl\""
+  },
+  "body": "body.html"
+}

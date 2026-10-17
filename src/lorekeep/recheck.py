@@ -12,7 +12,7 @@ nothing stored). A `304`, equal received bytes, or equal Markdown after conversi
 `gone`; anything else is `error` with the status code or the exception's class name. Every answer
 is one `checks.csv` row through the commit point, and the Version latest after the check is named
 in that row. `compare` records a full fetch that `get` made of a Source it already held (an alias
-or canonical address not yet known) the same way. Nothing else writes a `checks.csv` row.
+not yet known: a redirect to it) the same way. Nothing else writes a `checks.csv` row.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from lorekeep.store import (
     commit,
     read_rows,
 )
-from lorekeep.urls import trust
+from lorekeep.urls import other_canonical, trust
 
 
 @dataclass(frozen=True)
@@ -137,7 +137,13 @@ def perform(
     if isinstance(fetched, cascade.Fallthrough):
         return _record(store, stored, "error", "200", tags, fetched.reason)
     version = NewVersion(
-        frontmatter=provenance.build(fetched, stored.url, found.publisher, found.authority),
+        frontmatter=provenance.build(
+            fetched,
+            stored.url,
+            found.publisher,
+            found.authority,
+            canonical=other_canonical(fetched.canonical, stored.url, rules),
+        ),
         body=fetched.markdown,
         original=fetched.original,
         original_ext=fetched.original_ext,

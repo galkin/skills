@@ -101,8 +101,10 @@ def test_an_unknown_host_is_third_party_with_a_warning_naming_it(tmp_path: Path)
 
     assert (unknown.publisher, unknown.authority) == ("docs.example.test", "third-party")
     assert unknown.warning is not None
-    assert "docs.example.test" in unknown.warning
-    assert "lorekeep.toml" in unknown.warning
+    assert unknown.warning == (
+        "lorekeep: warning: docs.example.test is in no host table; stored as third-party — "
+        "tell the owner, who may add a [[hosts]] rule"
+    )
 
 
 @pytest.mark.parametrize(

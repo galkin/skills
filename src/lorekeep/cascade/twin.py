@@ -111,7 +111,7 @@ class TwinStep:
             markdown = _LEADING_BLANK_LINES.sub(b"", body)
             title = _text(fields.get("title")) or first_heading(markdown)
             converter = CONVERTER
-            final_url = _text(fields.get("canonicalUrl")) or address
+            final_url = address
         return Fetched(
             markdown=markdown,
             converter=converter,
@@ -123,6 +123,7 @@ class TwinStep:
             last_modified=response.headers.get("last-modified"),
             title=title,
             modified=first_date(fields),
+            canonical=_text(fields.get("canonicalUrl")),
         )
 
 

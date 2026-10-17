@@ -61,6 +61,12 @@ are lower-case. `match_headers` is optional.
 | `github-readme.raw`                    | a raw `README.md` behind a GitHub `blob/` page (`text/plain`)                              |
 | `rag-openapi-schema.json`              | NVIDIA RAG's OpenAPI schema (`application/json`), cut to one path                          |
 | `verbatim-notes.text`, `verbatim-values.yaml`, `verbatim-models.csv`, `verbatim-feed.xml` | plain text, YAML, CSV and XML served under their media types |
+| `owasp-excessive-agency.html`          | OWASP's 2025 Excessive Agency page, whose canonical link names the 2023 LLM06 page          |
+| `owasp-sensitive-information-disclosure.301` | that canonical address: a `301` back to the Excessive Agency page                    |
+| `nvidia-retriever-concepts.html`       | a NeMo Retriever `latest` page whose canonical link names `26.8.1`                         |
+| `helm-rollback.v3`                     | `v3.helm.sh` serving the page itself (`200`), its canonical link naming `helm.sh`          |
+| `helm-rollback.v3-redirect`            | the same address as a `301` to `helm.sh` (a cross-host redirect)                           |
+| `helm-rollback.html`                   | the page on `helm.sh`                                                                      |
 
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and
@@ -70,3 +76,9 @@ were recorded whole from the live hosts on 2026-10-17 (v1.1 ticket 01) with thei
 `.plain` variant, `guardrails-no-twin.html` and the four `verbatim-*` files are synthesised. The `403`, `304`, `google-md-answers-html`,
 `js-only.html`, `.noisy`, `.changed`, `.alias`, `google-overview.html`, `timeout`, `relative-links.html`, the PDF and its three `exam-guide.*` variants are synthesised. A ticket may add further synthesised folders in the
 same format; keep this table current.
+
+The OWASP and NVIDIA pages are cut from the Originals of the first migration's Store (captured
+2026-10-17) to the `<head>` with its canonical link and the first paragraphs; their headers are
+the ones the Store's frontmatter records. The OWASP `301` and both helm `200`s were recorded from
+the live hosts with `curl` on 2026-10-17, bodies cut short. `helm-rollback.v3-redirect` is
+synthesised: `v3.helm.sh` answered `200` itself on that day, not a redirect.

@@ -80,6 +80,7 @@ def test_get_json_prints_one_object_with_the_path(tmp_path: Path) -> None:
     assert printed == {
         "path": str(version),
         "url": ANTHROPIC_PAGE,
+        "requested_url": ANTHROPIC_PAGE,
         "sha256": head["sha256"],
         "fetched_at": head["fetched_at"],
         "converter": "md-twin",
@@ -105,6 +106,7 @@ def test_the_microsoft_chain_is_stored_once_under_its_canonical_url(tmp_path: Pa
     [version] = store.glob("*.md")
     head, body = read_version(version)
     assert head["url"] == MS_CANONICAL
+    assert "canonical" not in head  # the Twin's `canonicalUrl` is `url` after normalisation
     assert version.name.startswith("learn.microsoft.com--en-us-azure-foundry-what-is-foundry--")
     assert [(row["alias"], row["url"]) for row in rows(store, "aliases.csv")] == [
         (MS_ASKED, MS_CANONICAL)
@@ -272,6 +274,7 @@ def test_an_alias_first_used_when_the_page_changed_makes_the_new_version_current
     assert new != old and new.parent == store
     assert printed["outcome"] == "changed"
     assert printed["url"] == MS_CANONICAL
+    assert printed["requested_url"] == MS_ASKED
     new_head, _ = read_version(new)
     assert [(row["result"], row["status"], row["sha256"]) for row in rows(store, "checks.csv")][
         -1
@@ -299,15 +302,29 @@ def test_get_without_a_tag_exits_before_any_request(tmp_path: Path) -> None:
     assert list(store.iterdir()) == []
 
 
-def test_an_unknown_host_warns_on_stderr(tmp_path: Path) -> None:
+def test_an_unknown_host_warns_on_stderr_once(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    edges, _ = edges_over("relative-links.html")
+    page = "https://example.test/guide/sub/page.html"
+
+    result = get(store, edges, page)
+
+    assert result.exit_code == 0, result.stderr
+    assert result.stderr.splitlines() == [
+        "lorekeep: warning: example.test is in no host table; stored as third-party — "
+        "tell the owner, who may add a [[hosts]] rule"
+    ]
+
+
+def test_an_unknown_host_that_answers_nothing_prints_only_the_error(tmp_path: Path) -> None:
     store = make_store(tmp_path)
     edges, _ = edges_over()
 
     result = get(store, edges, "https://unknown.example/docs/page")
 
-    assert "unknown.example" in result.stderr
-    assert "neither host table" in result.stderr
-    assert result.stderr.startswith("lorekeep: warning: ")
+    assert result.exit_code == 1
+    [line] = result.stderr.splitlines()
+    assert line.startswith("lorekeep: error: nothing stored for https://unknown.example/docs/page")
 
 
 def test_every_request_names_lorekeep_as_its_user_agent(tmp_path: Path) -> None:

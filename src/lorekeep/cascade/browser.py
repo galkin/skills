@@ -47,12 +47,13 @@ class BrowserStep:
         return Fetched(
             markdown=converted.markdown,
             converter=f"{converted.converter} {BROWSER_MARK} {version}",
-            final_url=converted.canonical or rendered.final_url,
+            final_url=rendered.final_url,
             original_url=decoded(rendered.final_url),
             mediatype="text/html",
             original_sha256=hashlib.sha256(original).hexdigest(),
             original=original,
             original_ext="html",
+            canonical=converted.canonical,
         )
 
     def reread(

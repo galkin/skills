@@ -84,6 +84,7 @@ Text output: the Version's absolute path on the last line of stdout, nothing els
 ```json
 {"path": "/…/store/platform.claude.com--docs-en-build-with-claude-prompt-caching--f264876f.md",
  "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
+ "requested_url": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
  "sha256": "f264876f…", "fetched_at": "2026-10-17T14:40:37Z", "converter": "md-twin",
  "publisher": "anthropic", "authority": "primary", "verified_at": "2026-10-17T14:40:37Z",
  "outcome": "stored"}

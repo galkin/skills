@@ -1,0 +1,10 @@
+{
+  "url": "https://docs.nvidia.com/nemo/retriever/latest/extraction/concepts/",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html",
+    "etag": "\"e540d43019277312d5657bc361dbfccb\"",
+    "last-modified": "Wed, 23 Sep 2026 18:53:51 GMT"
+  },
+  "body": "body.html"
+}

@@ -1,0 +1,9 @@
+{
+  "url": "https://genai.owasp.org/llmrisk/llm062025-excessive-agency/",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html; charset=UTF-8",
+    "last-modified": "Sat, 17 Oct 2026 15:24:19 GMT"
+  },
+  "body": "body.html"
+}

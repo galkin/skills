@@ -113,7 +113,7 @@ def convert_response(response: httpx.Response, mediatype: str) -> Fetched | Fall
     return Fetched(
         markdown=converted.markdown,
         converter=converted.converter,
-        final_url=converted.canonical or final_url,
+        final_url=final_url,
         original_url=decoded(final_url),
         mediatype=mediatype,
         original_sha256=hashlib.sha256(received).hexdigest(),
@@ -122,4 +122,5 @@ def convert_response(response: httpx.Response, mediatype: str) -> Fetched | Fall
         etag=response.headers.get("etag"),
         last_modified=response.headers.get("last-modified"),
         title=converted.title,
+        canonical=converted.canonical,
     )

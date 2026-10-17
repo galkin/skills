@@ -42,6 +42,16 @@ def normalise(url: str, rules: Sequence[HostRule]) -> str:
     return urlunsplit((scheme, netloc, path, query_text, ""))
 
 
+def other_canonical(canonical: str | None, url: str, rules: Sequence[HostRule]) -> str | None:
+    """The page's declared canonical address, normalised, when it names another address than
+    `url` (itself normalised); `None` when there is none or it is `url`. It is recorded, never
+    used as `url`: publishers declare the wrong page (ADR 0003)."""
+    if not canonical:
+        return None
+    found = normalise(canonical, rules)
+    return found if found != url else None
+
+
 def rule_for(host_path: str, rules: Sequence[HostRule]) -> HostRule | None:
     """The rule with the longest `prefix` that `host/path` starts with, or `None`."""
     matching = [rule for rule in rules if host_path.startswith(rule.prefix)]
@@ -67,14 +77,14 @@ class Trust:
 
 def trust(url: str, rules: Sequence[HostRule]) -> Trust:
     """`publisher` and `authority` for `url` by longest prefix; an unknown host is `third-party`
-    under its own name, with a warning for stderr so the owner extends the table."""
+    under its own name, with a warning for stderr that a Run passes on to the owner."""
     parts = urlsplit(url)
     host = (parts.hostname or "").lower()
     rule = rule_for(f"{host}{parts.path}", rules)
     if rule is not None:
         return Trust(rule.publisher, rule.authority, rule, None)
     warning = (
-        f"lorekeep: warning: {host} is in neither host table; recorded as third-party — "
-        f"add a [[hosts]] rule to lorekeep.toml before citing it"
+        f"lorekeep: warning: {host} is in no host table; stored as third-party — "
+        f"tell the owner, who may add a [[hosts]] rule"
     )
     return Trust(host, "third-party", None, warning)
