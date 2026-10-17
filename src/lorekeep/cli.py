@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from lorekeep.commands import add as add_command
+from lorekeep.commands import get as get_command
 from lorekeep.edges import Edges
 from lorekeep.project import AUTHORITIES, Project, ProjectError, load_project
 
@@ -201,7 +202,7 @@ def _not_yet(args: argparse.Namespace, ctx: Context) -> int:
 
 
 HANDLERS: dict[str, Callable[[argparse.Namespace, Context], int]] = {
-    "get": _not_yet,
+    "get": get_command.run,
     "add": add_command.run,
     "search": _not_yet,
     "index": _not_yet,

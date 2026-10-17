@@ -4,14 +4,18 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `get` of the Anthropic Twin fixture creates exactly one `.md` file and prints its path last (text) or as `path` in one object (`--json`); frontmatter holds every required field, `etag` from the fixture, `original.stored: false`, and no `.orig.*` file exists
-- [ ] the Microsoft Learn chain (two `301`s, then a Twin with its own frontmatter) is stored once under the `canonicalUrl` without the `?accept=` suffix, an `aliases.csv` row from the normalised `ai-foundry` address to it, the final address with `?accept=text/markdown` decoded in `original.url`, the body starting at the Twin's first heading with no leading blank line, `title` from the Twin's frontmatter and `modified: 2026-08-13` parsed from its `ms.date`
-- [ ] the AWS Twin fixture is stored under `…/prompt-caching.html` (the `page_suffix` restored) with `original.url` ending in `.md`
-- [ ] `get` of the Anthropic page by its Twin address (`….md`) and by its page address store and find one Version
-- [ ] the `google-md-answers-html` fixture, with a test `lorekeep.toml` rule giving `cloud.google.com` a `md-suffix` Twin, is not stored and `get` reports no Twin
-- [ ] second `get` of the same URL, and a `get` of the Microsoft page by its original `ai-foundry` address: zero transport calls, same path, one new `tags.csv` row only when the Tag is new
-- [ ] the Microsoft page fetched first by its canonical address and then asked for by `ai-foundry`: the second call fetches once, finds the same file, appends the alias row, and a third call by `ai-foundry` makes no request
-- [ ] `get` without a Tag exits non-zero before any request; an unknown host warns on stderr
-- [ ] every recorded request carries a `User-Agent` that starts with `lorekeep/`
+- [x] `get` of the Anthropic Twin fixture creates exactly one `.md` file and prints its path last (text) or as `path` in one object (`--json`); frontmatter holds every required field, `etag` from the fixture, `original.stored: false`, and no `.orig.*` file exists
+- [x] the Microsoft Learn chain (two `301`s, then a Twin with its own frontmatter) is stored once under the `canonicalUrl` without the `?accept=` suffix, an `aliases.csv` row from the normalised `ai-foundry` address to it, the final address with `?accept=text/markdown` decoded in `original.url`, the body starting at the Twin's first heading with no leading blank line, `title` from the Twin's frontmatter and `modified: 2026-08-13` parsed from its `ms.date`
+- [x] the AWS Twin fixture is stored under `…/prompt-caching.html` (the `page_suffix` restored) with `original.url` ending in `.md`
+- [x] `get` of the Anthropic page by its Twin address (`….md`) and by its page address store and find one Version
+- [x] the `google-md-answers-html` fixture, with a test `lorekeep.toml` rule giving `cloud.google.com` a `md-suffix` Twin, is not stored and `get` reports no Twin
+- [x] second `get` of the same URL, and a `get` of the Microsoft page by its original `ai-foundry` address: zero transport calls, same path, one new `tags.csv` row only when the Tag is new
+- [x] the Microsoft page fetched first by its canonical address and then asked for by `ai-foundry`: the second call fetches once, finds the same file, appends the alias row, and a third call by `ai-foundry` makes no request
+- [x] `get` without a Tag exits non-zero before any request; an unknown host warns on stderr
+- [x] every recorded request carries a `User-Agent` that starts with `lorekeep/`
+
+## Comments
+
+2026-10-17 — Decisions made while building this ticket. (1) Layout: `lorekeep.http` builds the one client (`make_client(transport)`: redirects followed, `User-Agent: lorekeep/<version>`) and reads a response's media type; `lorekeep.cascade` holds `STEPS` and `run_cascade`, with `Request`, `Fetched`, `Fallthrough` and the `Step` protocol in `cascade/step.py` and the Twin step in `cascade/twin.py`. Tickets 04–06 append their steps to `STEPS`; `run_cascade` returns the first `Fetched` or every step's `Fallthrough`, and `get` exits 1 with `nothing stored for <url>: <reasons>` (here: `no Twin: <address> answered text/html`). `commands/get.py` builds the frontmatter from `Fetched` and commits Version, Tag row and alias row in one call. (2) Twin addresses: `md-suffix` drops a trailing slash, replaces `page_suffix` or appends `.md`; an address already ending in `.md`, or already carrying `accept=text/markdown`, is sent as given. A leading `---` block that is not a YAML mapping stays in the body. `modified` is the first of the four keys whose value starts with a `YYYY-MM-DD` date. `origin: web` is written explicitly. (3) "The second call fetches once" (old address used after the canonical page is stored) is read as one pass of the cascade: the Twin address built from the old one, its two `301`s and the Twin, asserted request by request. (4) Outcomes in `--json`: a lookup hit is `fresh` (ticket 07 adds the window); a fetch whose Markdown is already stored (that same call) is `unchanged` and writes no `checks.csv` row, since a Recheck row is ticket 07's; a new file is `stored`. (5) The unknown-host warning is printed on every `get` of such a host, lookup hits included.
