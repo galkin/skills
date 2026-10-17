@@ -8,6 +8,6 @@
 
 - [ ] the pool test passes 20 runs in a row
 - [ ] no `.tmp-*` file remains; every Version file parses
-- [ ] CSV files have exactly one header and every row has the right number of columns
+- [ ] CSV files have exactly one header and every row has the right number of columns; `tags.csv` has no duplicate `(url, tag)` pair although every worker tags every URL it gets
 - [ ] `index` rebuilt from the files reports the same counts as the incrementally updated Index
 - [ ] with the Index deleted before the pool starts, exactly one rebuild is logged

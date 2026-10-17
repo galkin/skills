@@ -7,4 +7,4 @@
 **Status:** ready-for-agent
 
 - [ ] the `exam-guide.pdf` fixture (served under a URL without `.pdf`) produces a Version with `converter: markitdown <version>`, a body containing "Prompt caching reduces cost and latency", and an `.orig.pdf` Original with `original.mediatype: application/pdf`
-- [ ] a `text/html` response is never handed to MarkItDown; a media type that is neither HTML, Markdown nor PDF is reported as unsupported, exits non-zero, stores nothing
+- [ ] a `text/html` response is never handed to MarkItDown; a media type this step does not take is left to the other steps, and when no step takes it `get` reports it as unsupported, exits non-zero, stores nothing

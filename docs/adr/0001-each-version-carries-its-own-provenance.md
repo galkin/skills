@@ -5,9 +5,9 @@ a reader would open), `fetched_at`, `sha256` of the Markdown body, `publisher`, 
 `converter` with its version (`trafilatura 2.3.1`), and `etag` / `last_modified` when the server
 sent them; optionally `title`, `modified` (the publisher's own date),
 `original {url, mediatype, sha256, stored}` (`stored` is a boolean; the Original's name follows
-from the Version's; `original.url` is the address the bytes came from), `requested` (the
-address asked for, when a redirect or a canonical link changed it) and `origin` (`web` or
-`owner`).
+from the Version's; `original.url` is the address the bytes came from) and `origin` (`web` or
+`owner`). The other addresses a page was asked for — before a redirect or a canonical link — are
+rows of `aliases.csv` beside it, because a second address can arrive after the file exists.
 The Store's `datapackage.json` (Frictionless Data Package) is generated from those files and never
 edited by hand.
 
@@ -37,7 +37,7 @@ it was rechecked (ADR 0007) live in append-only files beside it, because a Versi
 
 - **RO-Crate (+ BagIt).** Rejected: its strength is lineage from inputs to outputs, which the
   consuming project already states in its own references and the Index derives; BagIt's fixity is
-  covered by `hash` and `bytes` on each resource.
+  covered by a `sha256` and `bytes` column per Version in the package's `sources` table.
 - **A separate `id` field.** Rejected: a normalised `url` already names the Source, and `url` +
   `sha256` names a Version.
 - **Licence per file or per package.** Rejected by the owner: recording licences is not this tool's

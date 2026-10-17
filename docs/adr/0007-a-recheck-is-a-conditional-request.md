@@ -1,7 +1,7 @@
 # A Recheck is a conditional request, run on demand
 
-`recheck` asks each Source's publisher whether it changed, through the same cascade `get` uses (so
-a page only a browser can see is asked through the browser): a request with `If-None-Match` /
+`recheck` asks each Source's publisher whether it changed, with the plain client only — the browser
+is for a first fetch, never for a comparison, because rendered bytes differ on every visit: a request with `If-None-Match` /
 `If-Modified-Since` from the latest Version, or, when the server offers neither, a full fetch
 compared as ADR 0001 says — received bytes first, then the Markdown. A `304` or an equal comparison
 appends an `unchanged` row to `checks.csv`; a real change stores a new Version and appends

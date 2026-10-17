@@ -9,4 +9,4 @@
 - [ ] `lorekeep skill` prints `SKILL.md`; the flag-comparison test passes and fails when a flag is added to the parser alone
 - [ ] `--install` creates `.agents/skills/lorekeep/` in a temporary repo and prints the lock reminder; a second install exits non-zero and changes nothing; `--force` replaces the folder
 - [ ] the README covers install with `uv` and the `browser` extra, `LOREKEEP_STORE` and `LOREKEEP_TAG`, `lorekeep.toml` and the default host table, the first Store's values, how to restore one deleted Version, and the reverse `rsync` plus `index` that brings a whole Store back onto an empty disk
-- [ ] the smoke script fetches one Twin, one static page and one browser page live and prints their converters
+- [ ] the smoke script fetches one Twin, one static page and one browser page live and prints their converters, and runs `restore --generation` against the real bucket for one object
