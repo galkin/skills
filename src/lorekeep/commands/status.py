@@ -8,13 +8,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from lorekeep import index
+from lorekeep.commands import plural
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
-
-
-def _plural(count: int, word: str) -> str:
-    return f"{count} {word}{'' if count == 1 else 's'}"
 
 
 def size_on_disk(store: Path) -> int:
@@ -44,7 +41,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
         )
         return 0
     print(f"Store: {ctx.store}")
-    print(f"{_plural(found.versions, 'Version')} of {_plural(found.sources, 'Source')}")
+    print(f"{plural(found.versions, 'Version')} of {plural(found.sources, 'Source')}")
     tags = ", ".join(f"{tag} {count}" for tag, count in found.tags.items())
     print(f"Tags: {tags or 'none'}")
     print(f"Oldest fetched_at: {found.oldest_fetched_at or 'none'}")

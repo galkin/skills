@@ -14,6 +14,14 @@ from lorekeep.cascade.step import Fallthrough, Fetched, Request
 from lorekeep.cascade.twin import decoded, page_url
 from lorekeep.edges import FetcherNotInstalled, PageFetchError
 
+BROWSER_MARK = "via crawl4ai"
+
+
+def via_browser(converter: str) -> bool:
+    """Whether a Version's `converter` says the browser rendered it: its bytes differ on every
+    visit, so it is never rechecked."""
+    return BROWSER_MARK in converter
+
 
 class BrowserStep:
     def attempt(self, request: Request) -> Fetched | Fallthrough:
@@ -32,7 +40,7 @@ class BrowserStep:
         original = rendered.html.encode("utf-8")
         return Fetched(
             markdown=converted.markdown,
-            converter=f"{converted.converter} via crawl4ai {version}",
+            converter=f"{converted.converter} {BROWSER_MARK} {version}",
             final_url=converted.canonical or rendered.final_url,
             original_url=decoded(rendered.final_url),
             mediatype="text/html",

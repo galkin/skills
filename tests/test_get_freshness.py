@@ -15,6 +15,7 @@ import pytest
 import trafilatura
 
 from lorekeep.edges import Edges
+from lorekeep.store import RecheckRow, commit
 from tests.support import (
     FIXTURES,
     FakeFetcher,
@@ -110,7 +111,42 @@ def test_max_age_below_the_age_sends_one_conditional_request(tmp_path: Path) -> 
     assert result.stderr == ""
 
 
-def test_a_recent_check_row_of_any_result_keeps_an_old_version_fresh(tmp_path: Path) -> None:
+def days_ago(days: float) -> str:
+    return (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_verified_at_is_an_unchanged_recheck_of_this_version_after_it_was_fetched_else_fetched_at(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    version = stored_anthropic_twin(store, days=2)
+    head, _ = read_version(version)
+    other = "ab" * 32
+    commit(
+        store,
+        checks=[
+            RecheckRow(ANTHROPIC_PAGE, days_ago(5), "unchanged", "304", head["sha256"]),
+            RecheckRow(ANTHROPIC_PAGE, days_ago(1), "unchanged", "304", other),
+            RecheckRow(ANTHROPIC_PAGE, days_ago(1), "changed", "200", head["sha256"]),
+        ],
+    )
+
+    before = get(store, edges_over_nothing()[0], ANTHROPIC_PAGE, "--json")
+
+    assert before.exit_code == 0, before.stderr
+    assert json.loads(before.stdout)["outcome"] == "fresh"
+    assert json.loads(before.stdout)["verified_at"] == head["fetched_at"]
+
+    confirmed = days_ago(0.5)
+    commit(
+        store, checks=[RecheckRow(ANTHROPIC_PAGE, confirmed, "unchanged", "304", head["sha256"])]
+    )
+    after = get(store, edges_over_nothing()[0], ANTHROPIC_PAGE, "--json")
+
+    assert json.loads(after.stdout)["verified_at"] == confirmed
+
+
+def test_a_recent_recheck_row_of_any_result_keeps_an_old_version_fresh(tmp_path: Path) -> None:
     store = make_store(tmp_path)
     version = stored_anthropic_twin(store, days=40)
     edges, transport = edges_over("anthropic-prompt-caching.twin", "anthropic-prompt-caching.304")
@@ -318,6 +354,39 @@ def test_a_twin_address_now_answering_html_is_an_error_and_nothing_is_stored(
     assert [(row["result"], row["status"]) for row in checks_rows(store)] == [("error", "200")]
 
 
+def test_an_html_version_whose_address_now_answers_a_pdf_is_an_error_and_nothing_is_stored(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    page = "https://example.test/exam/guide"
+    html = (FIXTURES / "termidy-ethical-ai.html" / "body.html").read_bytes()
+    version = write_version(
+        store,
+        FIXTURES / "termidy-ethical-ai.html",
+        fetched_at="2026-01-01T00:00:00Z",
+        url=page,
+        converter="trafilatura 2.0.0",
+        original={
+            "url": page,
+            "mediatype": "text/html",
+            "sha256": hashlib.sha256(html).hexdigest(),
+            "stored": True,
+        },
+    )
+    edges, transport = edges_over("exam-guide.pdf")
+
+    result = get(store, edges, page, "--json")
+
+    assert result.exit_code == 0, result.stderr
+    assert [str(request.url) for request in transport.requests] == [page]
+    assert "application/pdf" in result.stderr
+    assert json.loads(result.stdout)["path"] == str(version)
+    assert json.loads(result.stdout)["outcome"] == "error"
+    assert [path.name for path in store.glob("*.md")] == [version.name]
+    assert not list(store.glob("*.orig.*"))
+    assert [(row["result"], row["status"]) for row in checks_rows(store)] == [("error", "200")]
+
+
 def test_a_page_served_a_then_changed_then_a_again_has_two_files_and_a_current(
     tmp_path: Path,
 ) -> None:
@@ -424,8 +493,8 @@ def test_fresh_asks_now_like_max_age_zero(tmp_path: Path) -> None:
         '"a1-twin"',
     ]
     rows = checks_rows(store)
-    # Two Rechecks within one second write one identical row: a row is present by every column.
-    assert rows and all(row["result"] == "unchanged" for row in rows)
+    # Two Rechecks, two rows, even within one second with the same answer.
+    assert [row["result"] for row in rows] == ["unchanged", "unchanged"]
 
 
 def recheck_in_child(store: str, worker: int) -> Result:
@@ -446,5 +515,4 @@ def test_concurrent_rechecks_keep_one_header_in_checks_csv(tmp_path: Path) -> No
     assert lines[0] == "url,checked_at,result,status,sha256"
     assert lines.count(lines[0]) == 1
     rows = checks_rows(store)
-    assert rows and all(row["result"] == "unchanged" for row in rows)
-    assert len({tuple(row.values()) for row in rows}) == len(rows)
+    assert [row["result"] for row in rows] == ["unchanged"] * 6

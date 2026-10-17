@@ -1,14 +1,12 @@
 """The cascade `get` runs: an ordered list of steps, the first that yields Markdown wins.
 
-Ticket 03 has the Twin step; the page step fetches the page once and converts it by its media
-type (04: static HTML, 05: PDF); the browser (06) comes last and only when it is called for. A
-step either returns what it `Fetched` or a `Fallthrough` saying why it declined, and the next
-step runs.
+The Twin step asks for the publisher's Markdown; the page step fetches the page once and
+converts it by its media type (static HTML, PDF); the browser comes last and only when it is
+called for. A step either returns what it `Fetched` or a `Fallthrough` saying why it declined,
+and the next step runs.
 """
 
 from __future__ import annotations
-
-from collections.abc import Sequence
 
 from lorekeep.cascade.browser import BrowserStep
 from lorekeep.cascade.page import PageStep
@@ -21,9 +19,7 @@ STEPS: tuple[Step, ...] = (TwinStep(), PageStep())
 BROWSER: Step = BrowserStep()
 
 
-def run_cascade(
-    request: Request, steps: Sequence[Step], browser: Step | None = BROWSER
-) -> Fetched | list[Fallthrough]:
+def run_cascade(request: Request) -> Fetched | list[Fallthrough]:
     """The first step's `Fetched`, or every step's reason when none yielded Markdown.
 
     A host rule with `browser = true` goes to the browser without any plain request; otherwise
@@ -31,16 +27,14 @@ def run_cascade(
     """
     reasons: list[Fallthrough] = []
     if not (request.rule is not None and request.rule.browser):
-        for step in steps:
+        for step in STEPS:
             outcome = step.attempt(request)
             if isinstance(outcome, Fetched):
                 return outcome
             reasons.append(outcome)
-        if not reasons or not reasons[-1].needs_browser:
+        if not reasons[-1].needs_browser:
             return reasons
-    if browser is None:
-        return reasons
-    outcome = browser.attempt(request)
+    outcome = BROWSER.attempt(request)
     if isinstance(outcome, Fetched):
         return outcome
     reasons.append(outcome)

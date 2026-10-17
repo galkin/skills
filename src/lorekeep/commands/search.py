@@ -8,18 +8,10 @@ import sys
 from typing import TYPE_CHECKING
 
 from lorekeep import index
+from lorekeep.commands import scope_tags
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
-
-
-def scope_tags(args: argparse.Namespace, ctx: Context) -> list[str] | None:
-    """`--all` → every Tag; `--tag` repeated; else the Run's Tag; with none, every Tag."""
-    if args.all:
-        return None
-    if args.tag:
-        return list(args.tag)
-    return [ctx.tag] if ctx.tag else None
 
 
 def run(args: argparse.Namespace, ctx: Context) -> int:
@@ -28,7 +20,9 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
         return 2
     index.report(index.ensure(ctx.store))
     scope = index.Scope(
-        tags=scope_tags(args, ctx), publisher=args.publisher, authority=args.authority
+        tags=scope_tags(args.tag, ctx.tag, everything=args.all),
+        publisher=args.publisher,
+        authority=args.authority,
     )
     hits, other = index.search(ctx.store, args.query, scope, limit=args.limit, exact=args.exact)
     if args.json:

@@ -1,5 +1,6 @@
 import argparse
 import re
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 
@@ -164,6 +165,38 @@ def test_install_with_force_replaces_the_installed_folder(tmp_path: Path) -> Non
     assert (installed(tmp_path) / "SKILL.md").read_text() == run_cli(["skill"]).stdout
     assert not (installed(tmp_path) / "local.md").exists()
     assert (installed(tmp_path) / "references" / "store.md").is_file()
+
+
+def test_an_install_that_fails_half_way_leaves_no_staging_folder_and_the_old_copy_intact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert run_cli(["skill", "--install", str(tmp_path)]).exit_code == 0
+    before = (installed(tmp_path) / "SKILL.md").read_bytes()
+    copytree = shutil.copytree
+    depth = 0
+
+    def copy_then_fail(*args: object, **kwargs: object) -> object:
+        """The staging folder is written in full (copytree recurses through this name), then
+        the copy fails the way a full disk would."""
+        nonlocal depth
+        depth += 1
+        try:
+            result = copytree(*args, **kwargs)  # type: ignore[arg-type]
+        finally:
+            depth -= 1
+        if depth == 0:
+            raise OSError("No space left on device")
+        return result
+
+    monkeypatch.setattr(shutil, "copytree", copy_then_fail)
+
+    result = run_cli(["skill", "--install", str(tmp_path), "--force"])
+
+    assert result.exit_code == 1
+    assert result.stderr.startswith("lorekeep: error: ")
+    assert "No space left on device" in result.stderr
+    assert sorted(path.name for path in installed(tmp_path).parent.iterdir()) == ["lorekeep"]
+    assert (installed(tmp_path) / "SKILL.md").read_bytes() == before
 
 
 def test_install_into_a_repo_that_does_not_exist_is_an_error_and_creates_nothing(

@@ -16,6 +16,9 @@ from cssselect import SelectorError
 
 from lorekeep.cascade.step import Converted, Fallthrough
 
+NAME = "trafilatura"
+"""The first word of the `converter` this step writes: `trafilatura <version>`."""
+
 _REFRESH = re.compile(
     r"^\s*\d*(?:\.\d+)?\s*[;,]?\s*(?:url\s*=\s*)?(['\"]?)(?P<url>.*?)\1\s*$", re.IGNORECASE
 )
@@ -70,7 +73,7 @@ def extract(document: lxml.html.HtmlElement, url: str) -> Converted | Fallthroug
         return Fallthrough(f"no content: {url} yielded no text", needs_browser=True)
     return Converted(
         markdown=(markdown.strip() + "\n").encode("utf-8"),
-        converter=f"trafilatura {metadata.version('trafilatura')}",
+        converter=f"{NAME} {metadata.version(NAME)}",
         original_ext="html",
         canonical=canonical,
     )

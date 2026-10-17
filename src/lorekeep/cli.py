@@ -129,7 +129,11 @@ def build_parser() -> argparse.ArgumentParser:
     _store_flag(recheck)
 
     backup = command("backup", "copy the Store to the Project's bucket")
-    backup.add_argument("--dry-run", action="store_true", help="show what would be copied")
+    backup.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="rsync dry run; the data package is still regenerated; cp is listed, not run",
+    )
     _store_flag(backup)
 
     restore = command("restore", "fetch one object back from the bucket")

@@ -11,6 +11,9 @@ from importlib import metadata
 
 from lorekeep.cascade.step import Converted, Fallthrough
 
+NAME = "markitdown"
+"""The first word of the `converter` this step writes: `markitdown <version>`."""
+
 _MAGIC = b"%PDF-"
 
 
@@ -36,7 +39,7 @@ def convert_pdf(received: bytes, url: str, charset: str | None) -> Converted | F
         return Fallthrough("no content: the PDF yields no text")
     return Converted(
         markdown=(markdown + "\n").encode("utf-8"),
-        converter=f"markitdown {metadata.version('markitdown')}",
+        converter=f"{NAME} {metadata.version(NAME)}",
         original_ext="pdf",
         title=(result.title or "").strip() or None,
     )

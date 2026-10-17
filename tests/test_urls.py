@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from lorekeep.project import load_project
+from lorekeep.cascade.twin import page_url, twin_url
+from lorekeep.project import HostRule, load_project
 from lorekeep.store import version_name
 from lorekeep.urls import normalise, trust
 
@@ -102,3 +103,41 @@ def test_an_unknown_host_is_third_party_with_a_warning_naming_it(tmp_path: Path)
     assert unknown.warning is not None
     assert "docs.example.test" in unknown.warning
     assert "lorekeep.toml" in unknown.warning
+
+
+@pytest.mark.parametrize(
+    ("rule", "page", "twin", "back"),
+    [
+        (
+            HostRule("a.test/", "a", "primary", twin="md-suffix", page_suffix=".html"),
+            "https://a.test/guide/page.html?view=x",
+            "https://a.test/guide/page.md?view=x",
+            "https://a.test/guide/page.html?view=x",
+        ),
+        (
+            HostRule("b.test/", "b", "primary", twin="md-suffix"),
+            "https://b.test/guide/page/",
+            "https://b.test/guide/page.md",
+            "https://b.test/guide/page",
+        ),
+        (
+            HostRule("c.test/", "c", "primary", twin="accept-header"),
+            "https://c.test/guide?tabs=python",
+            "https://c.test/guide?tabs=python&accept=text/markdown",
+            "https://c.test/guide?tabs=python",
+        ),
+        (
+            HostRule("d.test/", "d", "primary", twin="raw"),
+            "https://d.test/repo/main/README.md",
+            "https://d.test/repo/main/README.md",
+            "https://d.test/repo/main/README.md",
+        ),
+    ],
+)
+def test_the_twin_address_is_built_from_the_page_and_reduced_back_under_each_kind(
+    rule: HostRule, page: str, twin: str, back: str
+) -> None:
+    assert twin_url(page, rule) == twin
+    assert twin_url(twin, rule) == twin
+    assert page_url(twin, rule) == back
+    assert normalise(twin, [rule]) == normalise(page, [rule])

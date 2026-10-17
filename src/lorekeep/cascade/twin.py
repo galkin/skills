@@ -10,6 +10,7 @@ from urllib.parse import unquote, urlsplit, urlunsplit
 import httpx
 import yaml
 
+from lorekeep import twins
 from lorekeep.cascade.step import Fallthrough, Fetched, Request
 from lorekeep.http import media_type
 from lorekeep.project import HostRule
@@ -22,23 +23,12 @@ _DATE = re.compile(r"\A\s*(\d{4}-\d{2}-\d{2})")
 
 
 def twin_url(url: str, rule: HostRule) -> str:
-    """The Twin's address built from the address as given; a Twin address is returned as is."""
+    """The Twin's address built from the address as given (no fragment goes on the wire); a Twin
+    address is returned as is."""
     parts = urlsplit(url)
-    if rule.twin == "md-suffix":
-        path = parts.path
-        if not path.endswith(".md"):
-            path = path.rstrip("/")
-            if rule.page_suffix and path.endswith(rule.page_suffix):
-                path = path.removesuffix(rule.page_suffix)
-            path += ".md"
-        return urlunsplit((parts.scheme, parts.netloc, path, parts.query, ""))
-    if rule.twin == "accept-header":
-        pairs = [unquote(piece) for piece in parts.query.split("&") if piece]
-        if "accept=text/markdown" in pairs:
-            return urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, ""))
-        query = f"{parts.query}&accept=text/markdown" if parts.query else "accept=text/markdown"
-        return urlunsplit((parts.scheme, parts.netloc, parts.path, query, ""))
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, ""))
+    pieces = [piece for piece in parts.query.split("&") if piece]
+    path, pieces = twins.to_twin(parts.path, pieces, rule)
+    return urlunsplit((parts.scheme, parts.netloc, path, "&".join(pieces), ""))
 
 
 def page_url(url: str, rule: HostRule | None) -> str:
@@ -47,22 +37,16 @@ def page_url(url: str, rule: HostRule | None) -> str:
     if rule is None:
         return url
     parts = urlsplit(url)
-    if rule.twin == "md-suffix" and parts.path.endswith(".md"):
-        path = parts.path.removesuffix(".md") + (rule.page_suffix or "")
-        return urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
-    if rule.twin == "accept-header":
-        pieces = [piece for piece in parts.query.split("&") if piece]
-        kept = [piece for piece in pieces if unquote(piece) != "accept=text/markdown"]
-        if len(kept) != len(pieces):
-            query = "&".join(kept)
-            return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
-    return url
+    pieces = [piece for piece in parts.query.split("&") if piece]
+    path, kept = twins.to_page(parts.path, pieces, rule)
+    if (path, kept) == (parts.path, pieces):
+        return url
+    return urlunsplit((parts.scheme, parts.netloc, path, "&".join(kept), parts.fragment))
 
 
 def accepts(mediatype: str, rule: HostRule | None) -> bool:
-    """A Twin is `text/markdown`, or plain text from a raw file host."""
-    raw = rule is not None and rule.twin == "raw"
-    return mediatype == "text/markdown" or (raw and mediatype == "text/plain")
+    """Whether a Twin may answer `mediatype`: Markdown, or plain text from a raw file host."""
+    return mediatype in twins.media_types(rule)
 
 
 class TwinStep:

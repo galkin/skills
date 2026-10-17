@@ -15,7 +15,7 @@ import pytest
 
 from lorekeep import store as store_module
 from lorekeep.project import load_project
-from lorekeep.store import AliasRow, CheckRow, TagRow, VersionInfo, commit, latest
+from lorekeep.store import AliasRow, RecheckRow, TagRow, VersionInfo, commit, latest
 from tests.support import FIXTURES, Result, run_cli, write_version
 
 ANTHROPIC = "https://platform.claude.com/docs/en/build-with-claude/prompt-caching"
@@ -65,7 +65,7 @@ def three_twins(store: Path) -> None:
             TagRow(AWS, "aws", at),
             TagRow(FOUNDRY, "microsoft", at),
         ],
-        checks=[CheckRow(AWS, "2026-10-04T00:00:00Z", "unchanged", "304", "")],
+        checks=[RecheckRow(AWS, "2026-10-04T00:00:00Z", "unchanged", "304", "")],
         aliases=[AliasRow(FOUNDRY + "-old", FOUNDRY, at)],
     )
 
@@ -146,6 +146,31 @@ def test_a_page_without_headings_is_cut_into_sections_of_about_4_kb_and_never_in
         assert body.count("```") in (0, 2)
     fenced = [body for *_, body in found if "```" in body]
     assert len(fenced) == 1 and "call_0 " in fenced[0] and "call_79 " in fenced[0]
+
+
+def test_a_fence_over_4_kb_after_two_blank_lines_is_kept_whole_and_its_line_is_the_fence(
+    tmp_path: Path,
+) -> None:
+    store = tmp_path / "store"
+    store.mkdir()
+    paragraph = "Prompt caching stores a prefix of the prompt so later calls reuse it. " * 4
+    fence = "```python\n" + "\n\n".join(f"call_{n} = client.messages.create()" for n in range(150))
+    fence += "\n```"
+    assert len(fence.encode()) > 4096
+    text = "# Calls\n\n" + paragraph + "\n\n\n" + fence + "\n\n\n" + paragraph + "\n"
+    path = add_text(tmp_path, store, "blank lines before a fence", text)
+
+    assert run_cli(["index", "--store", str(store)]).exit_code == 0
+
+    file_lines = path.read_text(encoding="utf-8").splitlines()
+    found = sections(store)
+    fenced = [(line, body) for _, _, line, body in found if "```" in body]
+    assert len(fenced) == 1, [body[:40] for *_, body in found]
+    line, body = fenced[0]
+    assert body.count("```") == 2 and "call_0 " in body and "call_149 " in body
+    assert file_lines[line - 1] == body.splitlines()[0]
+    for _, _, line, body in found:
+        assert file_lines[line - 1].strip(), (line, body[:40])
 
 
 def test_every_section_line_points_at_its_heading_and_carries_its_heading_path(

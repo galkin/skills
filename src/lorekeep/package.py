@@ -17,9 +17,6 @@ from lorekeep import store as store_module
 from lorekeep.project import AUTHORITIES
 
 PACKAGE_FILE = "datapackage.json"
-CITATIONS_FILE = "citations.csv"
-
-CHECK_RESULTS = ("unchanged", "changed", "gone", "error")
 
 # Every column the Store's CSVs are known to carry, typed; a column not listed here is a string.
 # `status` holds `304` and `ReadTimeout` alike, and `as_of` a date or a timestamp, so both are
@@ -28,11 +25,11 @@ _COLUMN_TYPES: dict[str, dict[str, dict[str, Any]]] = {
     store_module.TAGS_FILE: {"added_at": {"type": "datetime"}},
     store_module.CHECKS_FILE: {
         "checked_at": {"type": "datetime"},
-        "result": {"type": "string", "constraints": {"enum": list(CHECK_RESULTS)}},
+        "result": {"type": "string", "constraints": {"enum": list(store_module.RECHECK_RESULTS)}},
         "status": {"type": "string"},
     },
     store_module.ALIASES_FILE: {"added_at": {"type": "datetime"}},
-    CITATIONS_FILE: {"as_of": {"type": "string"}},
+    store_module.CITATIONS_FILE: {"as_of": {"type": "string"}},
 }
 
 _SOURCES_SCHEMA: dict[str, Any] = {

@@ -47,6 +47,9 @@ Two environment variables, both also given as flags of each subcommand:
   `recheck` use it as their default scope and cover the whole Store without one, which is what you
   want from your own shell.
 
+`--store` and `--tag` on a subcommand are a per-call override for a shell; a Run sets
+`LOREKEEP_STORE` and `LOREKEEP_TAG` once in its environment and never passes them (ADR 0008).
+
 ```sh
 export LOREKEEP_STORE=~/orca/sources/agentic-system.design
 LOREKEEP_TAG=anthropic lorekeep get https://platform.claude.com/docs/en/build-with-claude/prompt-caching

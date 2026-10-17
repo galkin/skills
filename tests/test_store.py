@@ -9,9 +9,9 @@ import pytest
 
 from lorekeep.store import (
     AliasRow,
-    CheckRow,
     LockError,
     NewVersion,
+    RecheckRow,
     TagRow,
     commit,
     lock,
@@ -27,9 +27,11 @@ def rows(path: Path) -> list[list[str]]:
         return list(csv.reader(handle))
 
 
-def test_a_commit_of_rows_alone_appends_them_and_writes_no_version(tmp_path: Path) -> None:
+def test_a_commit_of_rows_alone_appends_them_and_writes_no_version_and_every_recheck_is_kept(
+    tmp_path: Path,
+) -> None:
     tag = TagRow(URL, "anthropic", "2026-10-01T00:00:00Z")
-    check = CheckRow(URL, "2026-10-02T00:00:00Z", "unchanged", "304", "ab" * 32)
+    check = RecheckRow(URL, "2026-10-02T00:00:00Z", "unchanged", "304", "ab" * 32)
     alias = AliasRow("https://docs.example.test/old", URL, "2026-10-03T00:00:00Z")
 
     assert commit(tmp_path, tags=[tag]) is None
@@ -48,8 +50,10 @@ def test_a_commit_of_rows_alone_appends_them_and_writes_no_version(tmp_path: Pat
         ["alias", "url", "added_at"],
         ["https://docs.example.test/old", URL, "2026-10-03T00:00:00Z"],
     ]
+    # Two Rechecks with one answer in one second are two Rechecks: the row is never deduplicated.
     assert rows(tmp_path / "checks.csv") == [
         ["url", "checked_at", "result", "status", "sha256"],
+        [URL, "2026-10-02T00:00:00Z", "unchanged", "304", "ab" * 32],
         [URL, "2026-10-02T00:00:00Z", "unchanged", "304", "ab" * 32],
     ]
 

@@ -40,13 +40,23 @@ def install(repo: Path, *, force: bool) -> int:
     if target.exists() and not force:
         print(f"lorekeep: error: {target} exists; pass --force to replace it", file=sys.stderr)
         return 1
-    # Copy beside the target first, so a failed copy never leaves half a skill installed.
+    # Copy beside the target first, so a failed copy never leaves half a skill installed; the
+    # staging folder is removed on any failure.
     staging = target.with_name(f"{target.name}.tmp-{os.getpid()}")
-    with resources.as_file(skill_folder()) as source:
-        shutil.copytree(source, staging, ignore=shutil.ignore_patterns("__pycache__"))
-    if target.exists():
-        shutil.rmtree(target)
-    staging.rename(target)
+    try:
+        with resources.as_file(skill_folder()) as source:
+            shutil.copytree(source, staging, ignore=shutil.ignore_patterns("__pycache__"))
+        if target.is_dir():
+            shutil.rmtree(target)
+        elif target.exists():
+            target.unlink()
+        staging.rename(target)
+    except OSError as error:
+        print(f"lorekeep: error: could not install the skill in {target}: {error}", file=sys.stderr)
+        return 1
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
     print(f"Installed the lorekeep skill in {target}")
     print(_lock_reminder(repo))
     return 0

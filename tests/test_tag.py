@@ -138,6 +138,26 @@ def test_tag_add_takes_a_url_or_a_prefix_but_not_both_or_neither(tmp_path: Path)
     assert not (tmp_path / "tags.csv").exists()
 
 
+def test_tag_add_without_an_index_reads_the_store_and_builds_none(tmp_path: Path) -> None:
+    three_sources(tmp_path)
+    assert not (tmp_path / "sources.db").exists()
+
+    by_prefix = run_cli(
+        ["tag", "add", "nvidia", "--prefix", "https://docs.nvidia.com/", "--store", str(tmp_path)]
+    )
+    by_url = run_cli(["tag", "add", "aws", AWS, "--store", str(tmp_path)])
+
+    assert by_prefix.exit_code == 0, by_prefix.stderr
+    assert by_url.exit_code == 0, by_url.stderr
+    assert "rebuilt" not in by_prefix.stderr + by_url.stderr
+    assert not (tmp_path / "sources.db").exists(), "tag add built an Index: a second lock take"
+    assert sorted(tag_rows(tmp_path)) == [
+        (AWS, "aws"),
+        (NIM_OVERVIEW, "nvidia"),
+        (NIM_INTRODUCTION, "nvidia"),
+    ]
+
+
 def test_a_tag_added_is_in_the_search_scope_without_a_rebuild(tmp_path: Path) -> None:
     three_sources(tmp_path)
     assert run_cli(["index", "--store", str(tmp_path)]).exit_code == 0

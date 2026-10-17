@@ -12,6 +12,7 @@ from collections.abc import Callable, Mapping
 
 import httpx
 
+from lorekeep.cascade import html, pdf
 from lorekeep.cascade.html import convert_html, refresh_target
 from lorekeep.cascade.pdf import convert_pdf
 from lorekeep.cascade.step import Converted, Fallthrough, Fetched, Request
@@ -27,15 +28,14 @@ CONVERTERS: Mapping[str, Converter] = {
     "application/xhtml+xml": convert_html,
     "application/pdf": convert_pdf,
 }
+PDF_TYPES = ("application/pdf",)
+STEP_MEDIA_TYPES: Mapping[str, tuple[str, ...]] = {html.NAME: HTML_TYPES, pdf.NAME: PDF_TYPES}
 MAX_REFRESHES = 5
 REFUSED = (403, 429)
 """What a host answers a plain client it will not serve: the signal for the browser step."""
 
 
 class PageStep:
-    def __init__(self, converters: Mapping[str, Converter] = CONVERTERS) -> None:
-        self.converters = converters
-
     def attempt(self, request: Request) -> Fetched | Fallthrough:
         address = page_url(request.url, request.rule)
         for _ in range(MAX_REFRESHES + 1):
@@ -56,17 +56,21 @@ class PageStep:
                 else None
             )
             if target is None or target == final_url:
-                return convert_response(response, mediatype, self.converters)
+                return convert_response(response, mediatype)
             address = target
         return Fallthrough(f"{address}: more than {MAX_REFRESHES} meta refreshes")
 
 
-def convert_response(
-    response: httpx.Response, mediatype: str, converters: Mapping[str, Converter] = CONVERTERS
-) -> Fetched | Fallthrough:
+def media_types_of(converter: str) -> tuple[str, ...]:
+    """The media types the step that wrote `converter` takes; a Recheck of its Version accepts
+    no other (an HTML page now answering a PDF is an error, never a PDF Version)."""
+    return STEP_MEDIA_TYPES.get(converter.split(" ", 1)[0], ())
+
+
+def convert_response(response: httpx.Response, mediatype: str) -> Fetched | Fallthrough:
     """A `200` page converted by the converter its media type names; a media type no converter
     takes is unsupported."""
-    convert = converters.get(mediatype)
+    convert = CONVERTERS.get(mediatype)
     if convert is None:
         return Fallthrough(f"unsupported media type {mediatype or '(none)'}")
     received = response.content

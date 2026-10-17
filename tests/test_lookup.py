@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from lorekeep.project import load_project
-from lorekeep.store import AliasRow, CheckRow, commit, latest
+from lorekeep.store import AliasRow, RecheckRow, commit, latest
 from tests.support import FIXTURES, write_version
 
 PAGE = "https://learn.microsoft.com/en-us/azure/foundry/what-is-foundry"
@@ -42,7 +42,7 @@ def test_the_newest_version_is_found_by_url_and_by_alias_and_nothing_for_an_unkn
     assert unknown is None
 
 
-def test_the_version_named_by_the_latest_check_row_wins_over_the_newest_fetched_at(
+def test_the_version_named_by_the_latest_recheck_row_wins_over_the_newest_fetched_at(
     tmp_path: Path,
 ) -> None:
     rules = load_project(tmp_path).hosts
@@ -62,8 +62,8 @@ def test_the_version_named_by_the_latest_check_row_wins_over_the_newest_fetched_
     commit(
         tmp_path,
         checks=[
-            CheckRow(PAGE, "2026-10-02T00:00:00Z", "unchanged", "304", full_hash(b)),
-            CheckRow(PAGE, "2026-10-09T00:00:00Z", "changed", "200", full_hash(a)),
+            RecheckRow(PAGE, "2026-10-02T00:00:00Z", "unchanged", "304", full_hash(b)),
+            RecheckRow(PAGE, "2026-10-09T00:00:00Z", "changed", "200", full_hash(a)),
         ],
     )
 

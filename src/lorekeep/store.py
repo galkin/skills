@@ -4,6 +4,7 @@ Everything that writes to a Store goes through `commit`, which takes the one loc
 Version and its Original into place, appends the CSV rows that are not already there and notifies
 the Index. `lock` is the only place the lock file (`LOCK_FILE`) is opened; the commit, an Index
 rebuild and the package regeneration share it and none of them nests it (`flock` is not re-entrant).
+A Tag row and an alias row are appended once; a Recheck row is appended every time.
 """
 
 from __future__ import annotations
@@ -16,10 +17,10 @@ import re
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import astuple, dataclass, fields
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from lorekeep import frontmatter, index
+from lorekeep import frontmatter
 from lorekeep.project import HostRule
 from lorekeep.urls import normalise
 
@@ -27,8 +28,11 @@ LOCK_FILE = ".lorekeep.lock"
 TAGS_FILE = "tags.csv"
 CHECKS_FILE = "checks.csv"
 ALIASES_FILE = "aliases.csv"
+CITATIONS_FILE = "citations.csv"
+INDEX_FILE = "sources.db"
 MAX_NAME_BYTES = 200
 OWNER_SCHEME = "owner:"
+"""The scheme of an owner's Source (`owner:<slug>`): it has no publisher to ask."""
 
 
 class LockError(RuntimeError):
@@ -64,8 +68,12 @@ class TagRow:
     added_at: str
 
 
+RECHECK_RESULTS = ("unchanged", "changed", "gone", "error")
+type RecheckResult = Literal["unchanged", "changed", "gone", "error"]
+
+
 @dataclass(frozen=True)
-class CheckRow:
+class RecheckRow:
     url: str
     checked_at: str
     result: str
@@ -80,7 +88,37 @@ class AliasRow:
     added_at: str
 
 
-type Row = TagRow | CheckRow | AliasRow
+type Row = TagRow | RecheckRow | AliasRow
+
+FILE_OF: Mapping[type[Row], str] = {
+    TagRow: TAGS_FILE,
+    RecheckRow: CHECKS_FILE,
+    AliasRow: ALIASES_FILE,
+}
+"""The CSV each row type lives in; a row's fields, in order, are that file's columns."""
+
+WATCHED_FILES = (*FILE_OF.values(), CITATIONS_FILE)
+"""The files that grow: the Index fingerprints them, the backup copies them every time."""
+
+
+def columns(row_type: type[Row]) -> tuple[str, ...]:
+    return tuple(field.name for field in fields(row_type))
+
+
+def table_of(row_type: type[Row]) -> str:
+    """The Index table that mirrors the row type's file (`tags.csv` → `tags`)."""
+    return FILE_OF[row_type].removesuffix(".csv")
+
+
+def row_key(row: Row) -> tuple[str, ...] | None:
+    """What makes a row 'already present', as its leading columns: a Tag by Source and Tag, an
+    alias by its pair. A Recheck has no key: every Recheck is appended whatever its answer, two
+    in one second too."""
+    if isinstance(row, TagRow):
+        return (row.url, row.tag)
+    if isinstance(row, AliasRow):
+        return (row.alias, row.url)
+    return None
 
 
 @dataclass(frozen=True)
@@ -142,13 +180,13 @@ def commit(
     store: Path,
     version: NewVersion | None = None,
     tags: Sequence[TagRow] = (),
-    checks: Sequence[CheckRow] = (),
+    checks: Sequence[RecheckRow] = (),
     aliases: Sequence[AliasRow] = (),
 ) -> Path | None:
     """The one commit point: write what is new, append what is not there yet, notify the Index.
 
-    Returns the Version's path (new or already present) when a Version was given. The signature
-    is fixed; later tickets pass different arguments and never widen it.
+    Returns the Version's path (new or already present) when a Version was given. Every writer
+    passes what it has — a Version, Tag rows, Recheck rows, alias rows, any of them empty.
     """
     with lock(store):
         path: Path | None = None
@@ -160,75 +198,55 @@ def commit(
             if version.original is not None:
                 ext = (version.original_ext or "bin").lstrip(".")
                 _write_once(store / f"{stem(path.name)}.orig.{ext}", version.original)
-        _append_missing(store / TAGS_FILE, TagRow, tags)
-        _append_missing(store / CHECKS_FILE, CheckRow, checks)
-        _append_missing(store / ALIASES_FILE, AliasRow, aliases)
+        _append_missing(store, TagRow, tags)
+        _append_missing(store, RecheckRow, checks)
+        _append_missing(store, AliasRow, aliases)
+        from lorekeep import index  # the Index derives from the Store, so it imports this module
+
         index.notify(store, version=path, tags=tags, checks=checks, aliases=aliases)
         return path
 
 
-def _write_once(target: Path, data: bytes) -> bool:
+def _write_once(target: Path, data: bytes) -> None:
     """Write `data` to `<name>.tmp-<pid>` and rename it into place; an existing target is left
     alone (same name means same hash and same bytes)."""
     if target.exists():
-        return False
+        return
     tmp = target.with_name(f"{target.name}.tmp-{os.getpid()}")
     with open(tmp, "wb") as handle:
         handle.write(data)
         handle.flush()
         os.fsync(handle.fileno())
     os.replace(tmp, target)
-    return True
-
-
-def _columns(row_type: type[Row]) -> list[str]:
-    return [field.name for field in fields(row_type)]
 
 
 def read_rows[R: Row](store: Path, row_type: type[R]) -> list[R]:
     """Every row of the CSV that keeps `row_type` (`tags.csv`, `checks.csv`, `aliases.csv`)."""
-    path = store / _FILE_OF[row_type]
+    path = store / FILE_OF[row_type]
     if not path.is_file():
         return []
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
-        return [
-            row_type(**{column: row[column] for column in _columns(row_type)}) for row in reader
-        ]
+        return [row_type(**{column: row[column] for column in columns(row_type)}) for row in reader]
 
 
-_FILE_OF: Mapping[type[Row], str] = {
-    TagRow: TAGS_FILE,
-    CheckRow: CHECKS_FILE,
-    AliasRow: ALIASES_FILE,
-}
-
-
-def _append_missing(path: Path, row_type: type[Row], rows: Sequence[Row]) -> None:
+def _append_missing(store: Path, row_type: type[Row], rows: Sequence[Row]) -> None:
+    """Append the rows whose key is not in the file yet; a row without a key is always new."""
     if not rows:
         return
-    present = {_key(row) for row in read_rows(path.parent, row_type)}
-    new = [row for row in rows if _key(row) not in present]
+    present = {row_key(row) for row in read_rows(store, row_type)}
+    new = [row for row in rows if row_key(row) is None or row_key(row) not in present]
     if not new:
         return
+    path = store / FILE_OF[row_type]
     header = not path.exists()
     with path.open("a", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle, lineterminator="\n")
         if header:
-            writer.writerow(_columns(row_type))
+            writer.writerow(columns(row_type))
         writer.writerows(astuple(row) for row in new)
         handle.flush()
         os.fsync(handle.fileno())
-
-
-def _key(row: Row) -> tuple[str, ...]:
-    """What makes a row 'already present': a Tag by Source and Tag, an alias by its pair, a
-    Recheck by every column (its time makes it unique)."""
-    if isinstance(row, TagRow):
-        return (row.url, row.tag)
-    if isinstance(row, AliasRow):
-        return (row.alias, row.url)
-    return astuple(row)
 
 
 def latest(store: Path, url: str, rules: Sequence[HostRule]) -> VersionInfo | None:
@@ -241,13 +259,15 @@ def latest(store: Path, url: str, rules: Sequence[HostRule]) -> VersionInfo | No
     wanted = normalise(url, rules)
     aliases = {row.alias: row.url for row in read_rows(store, AliasRow)}
     wanted = aliases.get(wanted, wanted)
+    from lorekeep import index
+
     found = index.lookup(store, wanted)
     if not isinstance(found, index.Unanswered):
         return found
     versions = [info for info in scan(store) if info.url == wanted]
     if not versions:
         return None
-    checks = [row for row in read_rows(store, CheckRow) if row.url == wanted and row.sha256]
+    checks = [row for row in read_rows(store, RecheckRow) if row.url == wanted and row.sha256]
     if checks:
         # The last row wins a tie on `checked_at`: two Rechecks in one second append in order.
         current = max(enumerate(checks), key=lambda item: (item[1].checked_at, item[0]))[1].sha256

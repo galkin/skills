@@ -22,6 +22,8 @@ def test_the_readme_covers_install_settings_and_recovery() -> None:
         "gcloud storage rsync --recursive gs://",
         "lorekeep index",
         "scripts/smoke.py",
+        "per-call override",
+        "ADR 0008",
     ):
         assert needed in README, needed
 

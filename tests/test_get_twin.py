@@ -5,9 +5,12 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from lorekeep.edges import Edges
+from lorekeep.project import load_project
+from lorekeep.store import RecheckRow, commit, latest
 from tests.support import (
     FIXTURES,
     FakeFetcher,
@@ -248,6 +251,65 @@ def test_the_old_address_first_used_after_the_page_is_stored_adds_its_alias(
     assert third.stdout.splitlines()[-1] == str(version)
     assert len(transport.requests) == after_second
     assert len(aliases_rows(store)) == 1
+    # The second call found the Markdown already stored: that is a Recheck, recorded as one.
+    head, _ = read_version(version)
+    assert [
+        (row["url"], row["result"], row["status"], row["sha256"]) for row in checks_rows(store)
+    ] == [(MS_CANONICAL, "unchanged", "200", head["sha256"])]
+
+
+def checks_rows(store: Path) -> list[dict[str, str]]:
+    path = store / "checks.csv"
+    if not path.is_file():
+        return []
+    with path.open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def test_an_alias_first_used_when_the_page_changed_makes_the_new_version_current(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    first = get(store, edges_over(*MS_CHAIN)[0], MS_CANONICAL, tag="microsoft")
+    assert first.exit_code == 0, first.stderr
+    old = Path(first.stdout.splitlines()[-1])
+    old_head, _ = read_version(old)
+    commit(
+        store,
+        checks=[
+            RecheckRow(MS_CANONICAL, "2026-10-10T00:00:00Z", "unchanged", "304", old_head["sha256"])
+        ],
+    )
+    rewritten = tmp_path / "rewritten.md"
+    rewritten.write_text(
+        "# What is Microsoft Foundry?\n\nRewritten since the brief.\n", encoding="utf-8"
+    )
+    transport = FakeTransport.from_fixtures(*MS_CHAIN)
+    transport.fixtures = [
+        replace(fixture, body=rewritten) if fixture.folder.name == "ms-foundry.twin" else fixture
+        for fixture in transport.fixtures
+    ]
+    edges = Edges(transport=transport, fetcher=FakeFetcher(), runner=FakeRunner())
+
+    by_alias = get(store, edges, MS_ASKED, "--json", tag="microsoft")
+
+    assert by_alias.exit_code == 0, by_alias.stderr
+    printed = json.loads(by_alias.stdout)
+    new = Path(printed["path"])
+    assert new != old and new.parent == store
+    assert printed["outcome"] == "changed"
+    assert printed["url"] == MS_CANONICAL
+    new_head, _ = read_version(new)
+    assert [(row["result"], row["status"], row["sha256"]) for row in checks_rows(store)][-1] == (
+        "changed",
+        "200",
+        new_head["sha256"],
+    )
+    found = latest(store, MS_CANONICAL, load_project(store).hosts)
+    assert found is not None and found.path == new
+    again = get(store, edges_over()[0], MS_CANONICAL, "--json", tag="microsoft")
+    assert json.loads(again.stdout)["path"] == str(new)
+    assert json.loads(again.stdout)["outcome"] == "fresh"
 
 
 def test_get_without_a_tag_exits_before_any_request(tmp_path: Path) -> None:
@@ -270,6 +332,7 @@ def test_an_unknown_host_warns_on_stderr(tmp_path: Path) -> None:
 
     assert "unknown.example" in result.stderr
     assert "neither host table" in result.stderr
+    assert result.stderr.startswith("lorekeep: warning: ")
 
 
 def test_every_request_names_lorekeep_as_its_user_agent(tmp_path: Path) -> None:

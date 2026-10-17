@@ -33,8 +33,9 @@ Run all three before reporting work complete.
 - **A Version or an Original in a store is never rewritten.** A changed page is a new file beside
   the old one; the few files that grow (`tags.csv`, `checks.csv`, `datapackage.json`) are appended
   or regenerated, and the index is always rebuildable from the files.
-- **The tool never changes the machine it runs on** beyond the store it was pointed at — no
-  installs, no profiles, no services. Anything else is shown to the owner as a command to run.
+- **The tool never changes the machine it runs on** beyond the store it was pointed at and the
+  repository `skill --install <repo>` was pointed at — no installs, no profiles, no services.
+  Anything else is shown to the owner as a command to run.
 
 ## Agent skills
 

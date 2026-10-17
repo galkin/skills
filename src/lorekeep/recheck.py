@@ -1,8 +1,10 @@
-"""A Recheck: one conditional request to a Version's `original.url`, compared as ADR 0001 says.
+"""A Recheck: one conditional request to a Version's `original.url`, compared as ADR 0007 says.
 
-`get` runs it on a Version older than the freshness window and `recheck` (ticket 09) on every
-Source in scope. The plain client only: the browser is for a first fetch, never for a comparison.
-A `304`, equal received bytes, or equal Markdown after conversion by the Version's step is
+`get` runs it on a Version older than the freshness window and `recheck` on every Source in
+scope. The plain client only: the browser is for a first fetch, never for a comparison.
+A `200` passes the media-type gate of the Version's own step first (a Twin takes Markdown, the
+HTML step HTML, the PDF step a PDF; anything else is `error`, nothing stored). A `304`, equal
+received bytes, or equal Markdown after conversion by the Version's step is
 `unchanged`; different bytes and different Markdown is `changed` and a new Version; `404`/`410` is
 `gone`; anything else is `error` with the status code or the exception's class name. Every answer
 is one `checks.csv` row through the commit point, and the Version latest after the check is named
@@ -12,7 +14,7 @@ in that row.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -21,17 +23,24 @@ from typing import Any
 import httpx
 
 from lorekeep import provenance
-from lorekeep.cascade.page import CONVERTERS, convert_response
+from lorekeep.cascade.browser import via_browser
+from lorekeep.cascade.page import convert_response, media_types_of
 from lorekeep.cascade.step import Fallthrough
 from lorekeep.cascade.twin import CONVERTER as TWIN_CONVERTER
 from lorekeep.cascade.twin import accepts, read_twin
 from lorekeep.http import media_type
 from lorekeep.project import HostRule
-from lorekeep.store import CheckRow, NewVersion, TagRow, VersionInfo, commit
+from lorekeep.store import (
+    OWNER_SCHEME,
+    NewVersion,
+    RecheckResult,
+    RecheckRow,
+    TagRow,
+    VersionInfo,
+    commit,
+    read_rows,
+)
 from lorekeep.urls import trust
-
-BROWSER_MARK = "via crawl4ai"
-OWNER_SCHEME = "owner:"
 
 
 @dataclass(frozen=True)
@@ -39,7 +48,7 @@ class Recheck:
     """What one Recheck found: its `checks.csv` result, the status it records, the Version that
     is latest afterwards, and a warning for stderr when the stored text is returned regardless."""
 
-    result: str
+    result: RecheckResult
     status: str
     path: Path
     warning: str | None = None
@@ -50,7 +59,7 @@ def skipped_reason(stored: VersionInfo) -> str | None:
     differ on every visit."""
     if stored.url.startswith(OWNER_SCHEME):
         return f"{stored.url} is an owner's Source and has no publisher to ask"
-    if BROWSER_MARK in str(stored.frontmatter.get("converter", "")):
+    if via_browser(str(stored.frontmatter.get("converter", ""))):
         return f"{stored.url} was read through the browser and cannot be compared"
     return None
 
@@ -91,12 +100,14 @@ def perform(
     if status != 200:
         return _record(store, stored, "error", str(status), tags, f"{address} answered {status}")
 
-    rule = trust(stored.url, rules).rule
+    found = trust(stored.url, rules)
+    rule = found.rule
     mediatype = media_type(response)
-    twin = str(head.get("converter")) == TWIN_CONVERTER
-    gate = accepts(mediatype, rule) if twin else mediatype in CONVERTERS
+    converter = str(head.get("converter", ""))
+    twin = converter == TWIN_CONVERTER
+    gate = accepts(mediatype, rule) if twin else mediatype in media_types_of(converter)
     if not gate:
-        what = "no Twin" if twin else "unsupported media type"
+        what = "no Twin" if twin else f"not what {converter.split(' ', 1)[0]} reads"
         reason = f"{what}: {address} answered {mediatype or 'no media type'}"
         return _record(store, stored, "error", "200", tags, reason)
     if hashlib.sha256(response.content).hexdigest() == str(original.get("sha256")):
@@ -107,14 +118,13 @@ def perform(
     sha256 = hashlib.sha256(fetched.markdown).hexdigest()
     if sha256 == stored.sha256:
         return _record(store, stored, "unchanged", "200", tags)
-    found = trust(stored.url, rules)
     version = NewVersion(
         frontmatter=provenance.build(fetched, stored.url, found.publisher, found.authority),
         body=fetched.markdown,
         original=fetched.original,
         original_ext=fetched.original_ext,
     )
-    row = CheckRow(stored.url, provenance.now(), "changed", "200", sha256)
+    row = RecheckRow(stored.url, provenance.now(), "changed", "200", sha256)
     path = commit(store, version, tags=tags, checks=[row])
     assert path is not None
     return Recheck("changed", "200", path)
@@ -123,18 +133,33 @@ def perform(
 def _record(
     store: Path,
     stored: VersionInfo,
-    result: str,
+    result: RecheckResult,
     status: str,
     tags: Sequence[TagRow],
     warning: str | None = None,
 ) -> Recheck:
-    row = CheckRow(stored.url, provenance.now(), result, status, stored.sha256)
+    row = RecheckRow(stored.url, provenance.now(), result, status, stored.sha256)
     commit(store, tags=tags, checks=[row])
     message = None if warning is None else f"{warning}; returning the stored Version"
     return Recheck(result, status, stored.path, message)
 
 
-def is_fresh(stored: VersionInfo, checks: Sequence[CheckRow], window_days: int) -> bool:
+def verified_at(store: Path, head: Mapping[str, Any]) -> str:
+    """When the publisher last confirmed this very Version: the latest `unchanged` Recheck naming
+    its `sha256` and made after it was fetched; else its `fetched_at`."""
+    fetched_at = str(head["fetched_at"])
+    confirmed = [
+        row.checked_at
+        for row in read_rows(store, RecheckRow)
+        if row.url == head["url"]
+        and row.result == "unchanged"
+        and row.sha256 == head["sha256"]
+        and row.checked_at >= fetched_at
+    ]
+    return max(confirmed, default=fetched_at)
+
+
+def is_fresh(stored: VersionInfo, checks: Sequence[RecheckRow], window_days: int) -> bool:
     """Whether the Version's age, counted from the later of its `fetched_at` and its last
     `checks.csv` row of any result, is under the window."""
     last = max([stored.fetched_at, *(row.checked_at for row in checks if row.url == stored.url)])

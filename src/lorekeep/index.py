@@ -3,7 +3,8 @@
 It holds every Version's Provenance, the rows of `tags.csv`, `checks.csv` and `aliases.csv`, and
 the Versions' Sections with an FTS5 table over them. It is rebuilt in place, in one transaction,
 under the Store lock; a lookup reads it without the lock and only when it is current, which the
-`meta` table recorded at build time says. Ticket 14 fills the commit notification.
+`meta` table recorded at build time says. Every commit notifies it, so it stays current between
+rebuilds.
 """
 
 from __future__ import annotations
@@ -16,21 +17,25 @@ from collections.abc import Iterator, Sequence
 from dataclasses import astuple, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
-from urllib.parse import urlsplit
 
 from lorekeep import frontmatter
 from lorekeep import store as store_module
 from lorekeep.project import load_project
-from lorekeep.urls import normalise
+from lorekeep.provenance import TIME_FORMAT
+from lorekeep.store import (
+    CITATIONS_FILE,
+    FILE_OF,
+    INDEX_FILE,
+    WATCHED_FILES,
+    AliasRow,
+    RecheckRow,
+    Row,
+    TagRow,
+    VersionInfo,
+)
+from lorekeep.urls import normalise, unknown_host
 
-if TYPE_CHECKING:
-    from lorekeep.store import AliasRow, CheckRow, TagRow, VersionInfo
-
-INDEX_FILE = "sources.db"
-CITATIONS_FILE = "citations.csv"
 SECTION_BYTES = 4096
-WATCHED_FILES = ("tags.csv", "checks.csv", "aliases.csv", "citations.csv")
 
 VERSION_COLUMNS = (
     "url",
@@ -93,7 +98,8 @@ WHERE v.file = (
 
 
 def connect(store: Path) -> sqlite3.Connection:
-    """A connection to the Store's Index in WAL mode with a busy timeout; explicit transactions."""
+    """The one connection to the Store's Index: WAL mode, a busy timeout, explicit transactions.
+    It creates the file when there is none, so a reader checks `exists` first."""
     con = sqlite3.connect(store / INDEX_FILE, timeout=30.0, isolation_level=None)
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA busy_timeout=30000")
@@ -158,7 +164,7 @@ def _looks_current(store: Path) -> bool:
     if not exists(store):
         return False
     try:
-        con = sqlite3.connect(store / INDEX_FILE, timeout=30.0, isolation_level=None)
+        con = connect(store)
     except sqlite3.Error:
         return False
     try:
@@ -179,31 +185,13 @@ def _rebuild_locked(store: Path) -> Counts:
             con.execute("INSERT INTO sections_fts(sections_fts) VALUES('delete-all')")
             versions = sections = 0
             for path in sorted(store.glob("*.md")):
-                data = path.read_bytes()
-                head, body = frontmatter.parse(data)
-                _insert_version(con, path.name, head)
+                sections += _index_version(con, path)
                 versions += 1
-                first_line = data[: len(data) - len(body)].count(b"\n") + 1
-                text = body.decode("utf-8", errors="replace")
-                rows = [
-                    (path.name, section.heading, section.line, section.body, order)
-                    for order, section in enumerate(split_sections(text, first_line))
-                ]
-                con.executemany(
-                    "INSERT INTO sections(file, heading, line, body, ord) VALUES(?, ?, ?, ?, ?)",
-                    rows,
-                )
-                sections += len(rows)
-            tags = _insert_rows(con, "tags", store_module.read_rows(store, store_module.TagRow))
-            checks = _insert_rows(
-                con, "checks", store_module.read_rows(store, store_module.CheckRow)
-            )
-            aliases = _insert_rows(
-                con, "aliases", store_module.read_rows(store, store_module.AliasRow)
-            )
+            tags = _insert_rows(con, TagRow, store_module.read_rows(store, TagRow))
+            checks = _insert_rows(con, RecheckRow, store_module.read_rows(store, RecheckRow))
+            aliases = _insert_rows(con, AliasRow, store_module.read_rows(store, AliasRow))
             cited, warnings = read_citations(store)
             con.executemany("INSERT INTO citations VALUES(?, ?, ?)", cited)
-            con.execute("INSERT INTO sections_fts(sections_fts) VALUES('rebuild')")
             con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", fingerprint(store))
             con.execute("COMMIT")
         except BaseException:
@@ -216,7 +204,8 @@ def _rebuild_locked(store: Path) -> Counts:
 
 def read_citations(store: Path) -> tuple[list[tuple[str, str, str | None]], list[str]]:
     """The rows of `citations.csv` (`work_id, url[, as_of]`), written by the consuming Project:
-    `url` normalised and Twin-reduced like a request, `as_of` an ISO 8601 date or timestamp
+    `url` normalised, Twin-reduced and taken through `aliases.csv` like a request, so a work may
+    cite the address it was given; `as_of` an ISO 8601 date or timestamp
     brought to UTC `YYYY-MM-DDTHH:MM:SSZ` (a bare date means the end of that day, so a work
     written that day is measured against the Version current then) or `None` when absent. A
     row that cannot be read is left out and named with its line number in the warnings."""
@@ -224,6 +213,7 @@ def read_citations(store: Path) -> tuple[list[tuple[str, str, str | None]], list
     if not path.is_file():
         return [], []
     rules = load_project(store).hosts
+    aliases = {row.alias: row.url for row in store_module.read_rows(store, AliasRow)}
     rows: list[tuple[str, str, str | None]] = []
     warnings: list[str] = []
     with path.open(newline="", encoding="utf-8") as handle:
@@ -232,7 +222,9 @@ def read_citations(store: Path) -> tuple[list[tuple[str, str, str | None]], list
         if header is None:
             return [], []
         if [column.strip() for column in header[:2]] != ["work_id", "url"]:
-            return [], [f"warning: {CITATIONS_FILE} line 1: the header is not work_id,url[,as_of]"]
+            return [], [
+                f"lorekeep: warning: {CITATIONS_FILE} line 1: the header is not work_id,url[,as_of]"
+            ]
         for row in reader:
             line = reader.line_num
             cells = [cell.strip() for cell in row]
@@ -240,7 +232,7 @@ def read_citations(store: Path) -> tuple[list[tuple[str, str, str | None]], list
                 continue
             if len(cells) < 2 or not cells[0] or not cells[1]:
                 warnings.append(
-                    f"warning: {CITATIONS_FILE} line {line}: expected work_id,url[,as_of]"
+                    f"lorekeep: warning: {CITATIONS_FILE} line {line}: expected work_id,url[,as_of]"
                 )
                 continue
             as_of = cells[2] if len(cells) > 2 and cells[2] else None
@@ -248,11 +240,12 @@ def read_citations(store: Path) -> tuple[list[tuple[str, str, str | None]], list
                 when = _as_of(as_of)
             except ValueError:
                 warnings.append(
-                    f"warning: {CITATIONS_FILE} line {line}: as_of {as_of!r} is not an ISO 8601 "
-                    "date or timestamp"
+                    f"lorekeep: warning: {CITATIONS_FILE} line {line}: as_of {as_of!r} is not "
+                    "an ISO 8601 date or timestamp"
                 )
                 continue
-            rows.append((cells[0], normalise(cells[1], rules), when))
+            url = normalise(cells[1], rules)
+            rows.append((cells[0], aliases.get(url, url), when))
     return rows, warnings
 
 
@@ -264,28 +257,44 @@ def _as_of(text: str | None) -> str | None:
         parsed = parsed.replace(hour=23, minute=59, second=59)
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return parsed.astimezone(UTC).strftime(TIME_FORMAT)
 
 
-def _insert_version(con: sqlite3.Connection, file: str, head: dict[str, object]) -> None:
+def _index_version(con: sqlite3.Connection, path: Path) -> int:
+    """Insert one Version's row and its Sections (with their FTS rows); how many Sections."""
+    data = path.read_bytes()
+    head, body = frontmatter.parse(data)
     original = head.get("original")
     original = original if isinstance(original, dict) else {}
-    values = [file]
+    values = [path.name]
     values += [_text(head.get(column)) for column in VERSION_COLUMNS]
     values += [_text(original.get(column)) for column in ORIGINAL_COLUMNS]
-    marks = ", ".join("?" * len(values))
-    con.execute(f"INSERT INTO versions VALUES({marks})", values)
+    con.execute(f"INSERT INTO versions VALUES({', '.join('?' * len(values))})", values)
+    first_line = data[: len(data) - len(body)].count(b"\n") + 1
+    count = 0
+    for order, section in enumerate(
+        split_sections(body.decode("utf-8", errors="replace"), first_line)
+    ):
+        cursor = con.execute(
+            "INSERT INTO sections(file, heading, line, body, ord) VALUES(?, ?, ?, ?, ?)",
+            (path.name, section.heading, section.line, section.body, order),
+        )
+        con.execute(
+            "INSERT INTO sections_fts(rowid, heading, body) VALUES(?, ?, ?)",
+            (cursor.lastrowid, section.heading, section.body),
+        )
+        count += 1
+    return count
 
 
 def _text(value: object) -> str | None:
     return None if value is None else str(value)
 
 
-def _insert_rows(
-    con: sqlite3.Connection, table: str, rows: Sequence[TagRow | CheckRow | AliasRow]
-) -> int:
+def _insert_rows(con: sqlite3.Connection, row_type: type[Row], rows: Sequence[Row]) -> int:
     if rows:
-        marks = ", ".join("?" * len(astuple(rows[0])))
+        marks = ", ".join("?" * len(store_module.columns(row_type)))
+        table = store_module.table_of(row_type)
         con.executemany(f"INSERT INTO {table} VALUES({marks})", [astuple(row) for row in rows])
     return len(rows)
 
@@ -393,7 +402,11 @@ def _slices(heading: str, start: int, lines: list[tuple[int, str]]) -> Iterator[
 
 
 def _blocks(lines: list[tuple[int, str]]) -> list[list[tuple[int, str]]]:
-    """Paragraphs and code fences, each with the blank lines before the next one."""
+    """Paragraphs and code fences, each with the blank lines before the next one.
+
+    A block never starts with a blank line: blank lines belong to the block before them (or
+    to none, at the start), so a fence is recognised by its first line and a slice's `line`
+    points at text."""
     blocks: list[list[tuple[int, str]]] = []
     current: list[tuple[int, str]] = []
     fence: str | None = None
@@ -404,18 +417,19 @@ def _blocks(lines: list[tuple[int, str]]) -> list[list[tuple[int, str]]]:
             if opener and opener.group(1)[0] == fence[0] and len(opener.group(1)) >= len(fence):
                 fence = None
             continue
+        if not text.strip():
+            if current:
+                current.append((number, text))
+                blocks.append(current)
+                current = []
+            elif blocks:
+                blocks[-1].append((number, text))
+            continue
         if opener:
-            if any(t.strip() for _, t in current):
+            if current:
                 blocks.append(current)
                 current = []
             fence = opener.group(1)
-            current.append((number, text))
-            continue
-        if not text.strip() and any(t.strip() for _, t in current):
-            current.append((number, text))
-            blocks.append(current)
-            current = []
-            continue
         current.append((number, text))
     if current:
         blocks.append(current)
@@ -443,7 +457,7 @@ def lookup(store: Path, url: str) -> VersionInfo | Unanswered | None:
     if not exists(store):
         return UNANSWERED
     try:
-        con = sqlite3.connect(store / INDEX_FILE, timeout=30.0, isolation_level=None)
+        con = connect(store)
     except sqlite3.Error:
         return UNANSWERED
     try:
@@ -459,7 +473,7 @@ def lookup(store: Path, url: str) -> VersionInfo | Unanswered | None:
     path = store / row[0]
     if not path.is_file():
         return UNANSWERED
-    return store_module.VersionInfo(path, store_module.read_head(path))
+    return VersionInfo(path, store_module.read_head(path))
 
 
 def notify(
@@ -467,7 +481,7 @@ def notify(
     *,
     version: Path | None,
     tags: Sequence[TagRow],
-    checks: Sequence[CheckRow],
+    checks: Sequence[RecheckRow],
     aliases: Sequence[AliasRow],
 ) -> None:
     """Tell the Index what a commit wrote, in one small transaction, under the Store lock.
@@ -487,12 +501,17 @@ def notify(
     try:
         con.execute("BEGIN IMMEDIATE")
         try:
-            if version is not None:
-                _index_version(con, store, version)
+            if (
+                version is not None
+                and not con.execute(
+                    "SELECT 1 FROM versions WHERE file = ?", (version.name,)
+                ).fetchone()
+            ):
+                _index_version(con, version)
             touched = {
-                "tags.csv": _notify_rows(con, "tags", tags),
-                "checks.csv": _notify_rows(con, "checks", checks),
-                "aliases.csv": _notify_rows(con, "aliases", aliases),
+                FILE_OF[TagRow]: _notify_rows(con, TagRow, tags),
+                FILE_OF[RecheckRow]: _notify_rows(con, RecheckRow, checks),
+                FILE_OF[AliasRow]: _notify_rows(con, AliasRow, aliases),
             }
             if _agrees(con, store, touched):
                 con.execute("DELETE FROM meta")
@@ -507,49 +526,21 @@ def notify(
         con.close()
 
 
-def _index_version(con: sqlite3.Connection, store: Path, path: Path) -> None:
-    """Insert one Version and its Sections when the Index has no row for its file."""
-    if con.execute("SELECT 1 FROM versions WHERE file = ?", (path.name,)).fetchone():
-        return
-    data = path.read_bytes()
-    head, body = frontmatter.parse(data)
-    _insert_version(con, path.name, head)
-    first_line = data[: len(data) - len(body)].count(b"\n") + 1
-    for order, section in enumerate(
-        split_sections(body.decode("utf-8", errors="replace"), first_line)
-    ):
-        cursor = con.execute(
-            "INSERT INTO sections(file, heading, line, body, ord) VALUES(?, ?, ?, ?, ?)",
-            (path.name, section.heading, section.line, section.body, order),
-        )
-        con.execute(
-            "INSERT INTO sections_fts(rowid, heading, body) VALUES(?, ?, ?)",
-            (cursor.lastrowid, section.heading, section.body),
-        )
-
-
-def _notify_rows(
-    con: sqlite3.Connection, table: str, rows: Sequence[TagRow | CheckRow | AliasRow]
-) -> bool:
-    """Insert the rows the Index lacks; whether the commit touched this table at all."""
+def _notify_rows(con: sqlite3.Connection, row_type: type[Row], rows: Sequence[Row]) -> bool:
+    """Insert the rows the Index lacks, present by the same key as in the file (a Recheck row
+    has none and is always new); whether the commit touched this table at all."""
+    table = store_module.table_of(row_type)
+    columns = store_module.columns(row_type)
     for row in rows:
         values = astuple(row)
-        key = {"tags": ("url", "tag"), "aliases": ("alias", "url")}.get(table)
-        columns = _COLUMNS_OF[table]
-        wanted = columns if key is None else key
-        where = " AND ".join(f"{column} = ?" for column in wanted)
-        args = [values[columns.index(column)] for column in wanted]
-        if con.execute(f"SELECT 1 FROM {table} WHERE {where}", args).fetchone():
-            continue
+        key = store_module.row_key(row)
+        if key is not None:
+            key_columns = columns[: len(key)]
+            where = " AND ".join(f"{column} = ?" for column in key_columns)
+            if con.execute(f"SELECT 1 FROM {table} WHERE {where}", key).fetchone():
+                continue
         con.execute(f"INSERT INTO {table} VALUES({', '.join('?' * len(values))})", values)
     return bool(rows)
-
-
-_COLUMNS_OF = {
-    "tags": ("url", "tag", "added_at"),
-    "checks": ("url", "checked_at", "result", "status", "sha256"),
-    "aliases": ("alias", "url", "added_at"),
-}
 
 
 def _agrees(con: sqlite3.Connection, store: Path, touched: dict[str, bool]) -> bool:
@@ -563,15 +554,12 @@ def _agrees(con: sqlite3.Connection, store: Path, touched: dict[str, bool]) -> b
     md_files = con.execute("SELECT count(*) FROM versions").fetchone()[0]
     if current["md_files"] != str(md_files):
         return False
+    row_types = {name: row_type for row_type, name in FILE_OF.items()}
     for name in WATCHED_FILES:
         if touched.get(name):
-            row_type = {
-                "tags.csv": store_module.TagRow,
-                "checks.csv": store_module.CheckRow,
-                "aliases.csv": store_module.AliasRow,
-            }[name]
+            row_type = row_types[name]
             rows = len(store_module.read_rows(store, row_type))
-            table = name.removesuffix(".csv")
+            table = store_module.table_of(row_type)
             if con.execute(f"SELECT count(*) FROM {table}").fetchone()[0] != rows:
                 return False
         elif any(recorded.get(f"{name}:{k}") != current[f"{name}:{k}"] for k in ("size", "mtime")):
@@ -697,25 +685,28 @@ def _snippet(body: str, needle: str, around: int = 60) -> str:
 
 
 def source_urls(store: Path, prefix: str) -> list[str]:
-    """Every Source's `url` that starts with `prefix`, sorted."""
-    con = connect(store)
-    try:
-        rows = con.execute(
-            "SELECT DISTINCT url FROM versions WHERE substr(url, 1, ?) = ? ORDER BY url",
-            (len(prefix), prefix),
-        )
-        return [url for (url,) in rows]
-    finally:
-        con.close()
-
-
-def tagged_urls(store: Path, tag: str) -> set[str]:
-    """Every `url` that already carries `tag`."""
-    con = connect(store)
-    try:
-        return {url for (url,) in con.execute("SELECT url FROM tags WHERE tag = ?", (tag,))}
-    finally:
-        con.close()
+    """Every Source's `url` that starts with `prefix`, sorted: from a current Index without a
+    lock, else from the Store's files. Never rebuilds, so `tag add` takes the lock once, in its
+    commit."""
+    if exists(store):
+        try:
+            con = connect(store)
+        except sqlite3.Error:
+            con = None
+        if con is not None:
+            try:
+                if is_current(store, con):
+                    rows = con.execute(
+                        "SELECT DISTINCT url FROM versions WHERE substr(url, 1, ?) = ? "
+                        "ORDER BY url",
+                        (len(prefix), prefix),
+                    )
+                    return [url for (url,) in rows]
+            except sqlite3.Error:
+                pass
+            finally:
+                con.close()
+    return sorted({info.url for info in store_module.scan(store) if info.url.startswith(prefix)})
 
 
 def latest_in_scope(store: Path, scope: Scope, prefix: str | None = None) -> list[VersionInfo]:
@@ -734,7 +725,7 @@ def latest_in_scope(store: Path, scope: Scope, prefix: str | None = None) -> lis
     finally:
         con.close()
     paths = [store / file for (file,) in rows]
-    return [store_module.VersionInfo(path, store_module.read_head(path)) for path in paths]
+    return [VersionInfo(path, store_module.read_head(path)) for path in paths]
 
 
 @dataclass(frozen=True)
@@ -786,7 +777,7 @@ def _version_at(
     oldest = versions[0][1]
     if as_of is None:
         return oldest
-    # A check row in the same second as a fetch is the later answer: it names what is current.
+    # A Recheck row in the same second as a fetch is the later answer: it names what is current.
     events = [(fetched_at, 0, sha256) for fetched_at, sha256 in versions if fetched_at <= as_of]
     stored = {sha256 for _, sha256 in versions}
     events += [
@@ -798,9 +789,6 @@ def _version_at(
         if sha256 in stored
     ]
     return max(events)[2] if events else oldest
-
-
-RECHECK_RESULTS = ("unchanged", "changed", "gone", "error")
 
 
 @dataclass(frozen=True)
@@ -829,13 +817,13 @@ def summary(store: Path) -> Summary:
                 "SELECT tag, count(DISTINCT url) FROM tags GROUP BY tag ORDER BY tag"
             ).fetchall()
         )
-        checks: dict[str, int] = dict.fromkeys(RECHECK_RESULTS, 0)
+        checks: dict[str, int] = dict.fromkeys(store_module.RECHECK_RESULTS, 0)
         for result, count in con.execute("SELECT result, count(*) FROM checks GROUP BY result"):
             checks[result] = count
         hosts = {
             host
             for url, publisher in con.execute("SELECT DISTINCT url, publisher FROM versions")
-            if (host := (urlsplit(url).hostname or "").lower()) and publisher == host
+            if (host := unknown_host(url, publisher))
         }
         return Summary(
             versions=versions,

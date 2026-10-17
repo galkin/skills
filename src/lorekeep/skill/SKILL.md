@@ -231,7 +231,7 @@ skipped owner:caching-notes
 Rechecked 2 Sources: 1 unchanged, 0 changed, 0 gone, 0 error, 1 skipped
 ```
 
-`--dry-run` prints `ask  <address>` or `skip <url>` per Source, then
+`--dry-run` prints `would ask <address>` or `skipped <url>: <reason>` per Source, then
 `Would ask N Sources; N skipped`. `--citations` prints one line per work to revisit,
 `<work_id>, <url>, <old sha8> → <new sha8>`, and nothing when there is none.
 
@@ -258,7 +258,8 @@ files (`tags.csv`, `checks.csv`, `aliases.csv`, `citations.csv`, `datapackage.js
 `lorekeep.toml`) are copied every time and the bucket's versioning keeps their history.
 Regenerates `datapackage.json` first. Owner's tool.
 
-- `--dry-run` — show what would be copied, copy nothing.
+- `--dry-run` — `rsync` in dry-run mode; `datapackage.json` is still regenerated; the `cp` of
+  the growing files is listed, not run.
 - `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
 
 Text output: what `gcloud` prints; with `--dry-run`, also

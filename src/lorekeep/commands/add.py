@@ -11,8 +11,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from lorekeep.provenance import TIME_FORMAT, now
-from lorekeep.store import NewVersion, TagRow, commit
+from lorekeep.provenance import TIME_FORMAT, now, parse_time
+from lorekeep.recheck import verified_at
+from lorekeep.store import OWNER_SCHEME, NewVersion, TagRow, commit, read_head, version_name
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
@@ -30,9 +31,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
         return 2
     if args.fetched_at is not None:
         try:
-            fetched_at = (
-                datetime.fromisoformat(args.fetched_at).astimezone(UTC).strftime(TIME_FORMAT)
-            )
+            fetched_at = parse_time(args.fetched_at).strftime(TIME_FORMAT)
         except ValueError:
             print(
                 f"lorekeep: error: --fetched-at {args.fetched_at} is not ISO 8601", file=sys.stderr
@@ -49,7 +48,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     body = file.read_bytes()
     assert ctx.tag is not None
     head = {
-        "url": f"owner:{name}",
+        "url": f"{OWNER_SCHEME}{name}",
         "fetched_at": fetched_at,
         "sha256": hashlib.sha256(body).hexdigest(),
         "publisher": args.publisher or "owner",
@@ -58,6 +57,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
         "title": args.title,
         "origin": "owner",
     }
+    already = (ctx.store / version_name(head["url"], head["sha256"])).exists()
     path = commit(
         ctx.store,
         NewVersion(frontmatter=head, body=body),
@@ -65,18 +65,20 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     )
     assert path is not None
     if args.json:
+        # The file is what the Store has: an earlier `add` of the same text keeps its fields.
+        stored = read_head(path)
         print(
             json.dumps(
                 {
                     "path": str(path),
-                    "url": head["url"],
-                    "sha256": head["sha256"],
-                    "fetched_at": fetched_at,
-                    "converter": head["converter"],
-                    "publisher": head["publisher"],
-                    "authority": head["authority"],
-                    "verified_at": fetched_at,
-                    "outcome": "stored",
+                    "url": stored["url"],
+                    "sha256": stored["sha256"],
+                    "fetched_at": stored["fetched_at"],
+                    "converter": stored["converter"],
+                    "publisher": stored["publisher"],
+                    "authority": stored["authority"],
+                    "verified_at": verified_at(ctx.store, stored),
+                    "outcome": "unchanged" if already else "stored",
                 }
             )
         )

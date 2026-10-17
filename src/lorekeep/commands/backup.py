@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from lorekeep import package
 from lorekeep.edges import CommandRunner
 from lorekeep.project import PROJECT_FILE
-from lorekeep.store import ALIASES_FILE, CHECKS_FILE, LOCK_FILE, TAGS_FILE
+from lorekeep.store import INDEX_FILE, LOCK_FILE, WATCHED_FILES
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
@@ -23,15 +23,7 @@ if TYPE_CHECKING:
 GCLOUD = ("gcloud", "storage")
 
 # The files that grow, in the order they are copied: the bucket's versioning keeps their history.
-GROWING_FILES = (
-    TAGS_FILE,
-    CHECKS_FILE,
-    ALIASES_FILE,
-    package.CITATIONS_FILE,
-    package.PACKAGE_FILE,
-    PROJECT_FILE,
-)
-INDEX_FILE = "sources.db"
+GROWING_FILES = (*WATCHED_FILES, package.PACKAGE_FILE, PROJECT_FILE)
 
 # What `rsync` leaves out (a regular expression over a name in the Store): the growing files, which
 # `cp` copies, the Index with its journals, the lock file and a temporary file still being written.

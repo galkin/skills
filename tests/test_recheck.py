@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from dataclasses import replace
 from pathlib import Path
 
 from lorekeep.edges import Edges
@@ -189,6 +190,37 @@ def test_citations_against_a_page_that_went_a_b_a_lists_nothing(tmp_path: Path) 
     assert result.stdout == ""
 
 
+MS_ASKED = "https://learn.microsoft.com/en-us/azure/ai-foundry/what-is-azure-ai-foundry"
+MS_CANONICAL = "https://learn.microsoft.com/en-us/azure/foundry/what-is-foundry"
+MS_CHAIN = ("ms-foundry.redirect-1", "ms-foundry.redirect-2", "ms-foundry.twin")
+
+
+def test_a_citation_of_an_alias_is_measured_against_the_source_it_leads_to(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    first = lorekeep(store, edges_over(*MS_CHAIN)[0], "get", MS_ASKED, tag="microsoft")
+    assert first.exit_code == 0, first.stderr
+    old = Path(first.stdout.splitlines()[-1]).name.removesuffix(".md")[-8:]
+    rewritten = tmp_path / "rewritten.md"
+    rewritten.write_text("# What is Microsoft Foundry?\n\nRewritten since.\n", encoding="utf-8")
+    transport = FakeTransport.from_fixtures(*MS_CHAIN)
+    transport.fixtures = [
+        replace(fixture, body=rewritten) if fixture.folder.name == "ms-foundry.twin" else fixture
+        for fixture in transport.fixtures
+    ]
+    edges = Edges(transport=transport, fetcher=FakeFetcher(), runner=FakeRunner())
+    second = lorekeep(store, edges, "get", MS_CANONICAL, "--fresh", tag="microsoft")
+    assert second.exit_code == 0, second.stderr
+    new = Path(second.stdout.splitlines()[-1]).name.removesuffix(".md")[-8:]
+    assert new != old
+    write_citations(store, f"work_id,url\nguide-1,{MS_ASKED}\n")
+
+    result = lorekeep(store, edges_over()[0], "recheck", "--citations")
+
+    assert result.exit_code == 0, result.stderr
+    assert "warning" not in result.stderr
+    assert result.stdout.splitlines() == [f"guide-1, {MS_CANONICAL}, {old} → {new}"]
+
+
 def asked(transport: FakeTransport) -> list[str]:
     return sorted(str(request.url) for request in transport.requests)
 
@@ -267,11 +299,12 @@ def test_dry_run_asks_nothing_and_lists_what_would_be_asked(tmp_path: Path) -> N
     assert checks_rows(store) == []
     assert sorted(store.glob("*.md")) == versions
     assert result.stdout.splitlines() == [
-        f"ask  {EFFECTIVE_PROMPTS}/",
-        f"ask  {COORDINATOR}/",
-        f"ask  {ETHICAL_AI}/",
-        f"skip {BROWSER_PAGE}",
-        f"ask  {ANTHROPIC_TWIN}",
-        "skip owner:research",
+        f"would ask {EFFECTIVE_PROMPTS}/",
+        f"would ask {COORDINATOR}/",
+        f"would ask {ETHICAL_AI}/",
+        f"skipped {BROWSER_PAGE}: {BROWSER_PAGE} was read through the browser and cannot be "
+        "compared",
+        f"would ask {ANTHROPIC_TWIN}",
+        "skipped owner:research: owner:research is an owner's Source and has no publisher to ask",
         "Would ask 4 Sources; 2 skipped",
     ]

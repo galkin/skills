@@ -5,9 +5,13 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
+from lorekeep.store import RecheckRow, commit
 from tests.support import run_cli
 from tests.test_helpers import read_version
 
@@ -117,6 +121,40 @@ def test_add_of_the_same_content_twice_creates_one_file_and_tags_once_per_tag(
     ]
 
 
+def test_add_json_of_a_version_already_stored_is_unchanged_with_its_verified_at(
+    tmp_path: Path,
+) -> None:
+    store_dir = store(tmp_path)
+    file = note(tmp_path)
+    env = {"LOREKEEP_STORE": str(store_dir), "LOREKEEP_TAG": "anthropic"}
+    argv = [
+        "add",
+        str(file),
+        "--title",
+        "Research",
+        "--fetched-at",
+        "2026-09-01T00:00:00Z",
+        "--json",
+    ]
+    first = json.loads(run_cli(argv, env=env).stdout)
+    assert first["outcome"] == "stored"
+    commit(
+        store_dir,
+        checks=[
+            RecheckRow(
+                "owner:research", "2026-09-05T00:00:00Z", "unchanged", "304", first["sha256"]
+            )
+        ],
+    )
+
+    second = json.loads(run_cli(argv, env=env).stdout)
+
+    assert second["path"] == first["path"]
+    assert second["outcome"] == "unchanged"
+    assert second["fetched_at"] == "2026-09-01T00:00:00Z"
+    assert second["verified_at"] == "2026-09-05T00:00:00Z"
+
+
 def test_add_honours_authority_publisher_and_fetched_at(tmp_path: Path) -> None:
     store_dir = store(tmp_path)
     file = note(tmp_path)
@@ -144,6 +182,27 @@ def test_add_honours_authority_publisher_and_fetched_at(tmp_path: Path) -> None:
     assert head["authority"] == "primary"
     assert head["publisher"] == "claude"
     assert head["fetched_at"] == "2026-09-01T10:30:00Z"
+
+
+def test_a_fetched_at_without_a_timezone_is_utc_whatever_the_local_clock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_dir = store(tmp_path)
+    file = note(tmp_path)
+    monkeypatch.setenv("TZ", "Asia/Tokyo")
+    time.tzset()
+    try:
+        result = run_cli(
+            ["add", str(file), "--title", "Research", "--fetched-at", "2026-09-01T12:30:00"],
+            env={"LOREKEEP_STORE": str(store_dir), "LOREKEEP_TAG": "anthropic"},
+        )
+    finally:
+        monkeypatch.delenv("TZ")
+        time.tzset()
+
+    assert result.exit_code == 0, result.stderr
+    head, _ = read_version(Path(result.stdout.strip()))
+    assert head["fetched_at"] == "2026-09-01T12:30:00Z"
 
 
 def test_add_without_a_tag_with_two_tags_or_without_a_title_writes_nothing(

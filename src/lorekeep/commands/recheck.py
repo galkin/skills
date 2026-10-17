@@ -8,36 +8,34 @@ import sys
 from typing import TYPE_CHECKING
 
 from lorekeep import index, recheck
+from lorekeep.commands import plural, scope_tags
 from lorekeep.http import make_client
+from lorekeep.store import RECHECK_RESULTS
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
 
-RESULTS: tuple[str, ...] = (*index.RECHECK_RESULTS, "skipped")
-
-
-def _plural(count: int, word: str) -> str:
-    return f"{count} {word}{'' if count == 1 else 's'}"
+RESULTS: tuple[str, ...] = (*RECHECK_RESULTS, "skipped")
 
 
 def run(args: argparse.Namespace, ctx: Context) -> int:
     index.report(index.ensure(ctx.store))
     if args.citations:
         return report_citations(ctx)
-    tags = list(args.tag) if args.tag else ([ctx.tag] if ctx.tag else None)
-    scope = index.Scope(tags=tags, publisher=args.publisher)
+    scope = index.Scope(tags=scope_tags(args.tag, ctx.tag), publisher=args.publisher)
     versions = index.latest_in_scope(ctx.store, scope, args.prefix)
     counts = dict.fromkeys(RESULTS, 0)
     if args.dry_run:
         asked = 0
         for stored in versions:
-            if recheck.skipped_reason(stored) is not None:
+            skipped = recheck.skipped_reason(stored)
+            if skipped is not None:
                 counts["skipped"] += 1
-                print(f"skip {stored.url}")
+                print(f"skipped {stored.url}: {skipped}")
             else:
                 asked += 1
-                print(f"ask  {recheck.asked_address(stored)}")
-        print(f"Would ask {_plural(asked, 'Source')}; {counts['skipped']} skipped")
+                print(f"would ask {recheck.asked_address(stored)}")
+        print(f"Would ask {plural(asked, 'Source')}; {counts['skipped']} skipped")
         return 0
     with make_client(ctx.edges.transport) as client:
         for stored in versions:
@@ -51,7 +49,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
                 print(f"lorekeep: warning: {answer.warning}", file=sys.stderr)
             print(f"{answer.result} {stored.url}")
     summary = ", ".join(f"{counts[result]} {result}" for result in RESULTS)
-    print(f"Rechecked {_plural(len(versions), 'Source')}: {summary}")
+    print(f"Rechecked {plural(len(versions), 'Source')}: {summary}")
     return 0
 
 

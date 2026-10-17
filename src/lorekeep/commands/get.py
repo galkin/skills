@@ -15,15 +15,14 @@ from lorekeep.provenance import build as provenance
 from lorekeep.provenance import now
 from lorekeep.store import (
     AliasRow,
-    CheckRow,
     NewVersion,
+    RecheckRow,
     TagRow,
     VersionInfo,
     commit,
     latest,
     read_head,
     read_rows,
-    version_name,
 )
 from lorekeep.urls import normalise, trust
 
@@ -44,10 +43,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
 
     with make_client(ctx.edges.transport) as client:
         outcome = cascade.run_cascade(
-            cascade.Request(
-                url=args.url, rule=asked.rule, client=client, fetcher=ctx.edges.fetcher
-            ),
-            cascade.STEPS,
+            cascade.Request(url=args.url, rule=asked.rule, client=client, fetcher=ctx.edges.fetcher)
         )
     if not isinstance(outcome, cascade.Fetched):
         reasons = "; ".join(fallthrough.reason for fallthrough in outcome)
@@ -59,9 +55,18 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     if found.warning and found.warning != asked.warning:
         print(found.warning, file=sys.stderr)
     head = provenance(outcome, url, found.publisher, found.authority)
-    already = (ctx.store / version_name(url, str(head["sha256"]))).exists()
     alias = normalise(args.url, rules)
     added_at = now()
+    # The address was new, but the Source may not be: a page reached through an alias not yet
+    # known, or a canonical address. Then this fetch is a Recheck of its latest Version and is
+    # recorded as one, so the lookup names the Version that is current now.
+    current = latest(ctx.store, url, rules)
+    if current is None:
+        result = "stored"
+        checks: list[RecheckRow] = []
+    else:
+        result = "unchanged" if current.sha256 == head["sha256"] else "changed"
+        checks = [RecheckRow(url, added_at, result, "200", str(head["sha256"]))]
     path = commit(
         ctx.store,
         NewVersion(
@@ -71,10 +76,11 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
             original_ext=outcome.original_ext,
         ),
         tags=[TagRow(url=url, tag=ctx.tag, added_at=added_at)],
+        checks=checks,
         aliases=[AliasRow(alias=alias, url=url, added_at=added_at)] if alias != url else [],
     )
     assert path is not None
-    return report(args, ctx, path, "unchanged" if already else "stored")
+    return report(args, ctx, path, result)
 
 
 def return_stored(args: argparse.Namespace, ctx: Context, stored: VersionInfo) -> int:
@@ -84,7 +90,7 @@ def return_stored(args: argparse.Namespace, ctx: Context, stored: VersionInfo) -
     window = 0 if args.fresh else ctx.project.freshness_days
     if args.max_age is not None:
         window = args.max_age
-    if recheck.is_fresh(stored, read_rows(ctx.store, CheckRow), window):
+    if recheck.is_fresh(stored, read_rows(ctx.store, RecheckRow), window):
         commit(ctx.store, tags=[tag])
         return report(args, ctx, stored.path, "fresh")
     skipped = recheck.skipped_reason(stored)
@@ -105,11 +111,6 @@ def report(args: argparse.Namespace, ctx: Context, path: Path, outcome: str) -> 
         print(path)
         return 0
     head: dict[str, Any] = read_head(path)
-    unchanged = [
-        row.checked_at
-        for row in read_rows(ctx.store, CheckRow)
-        if row.url == head["url"] and row.result == "unchanged"
-    ]
     print(
         json.dumps(
             {
@@ -120,7 +121,7 @@ def report(args: argparse.Namespace, ctx: Context, path: Path, outcome: str) -> 
                 "converter": head["converter"],
                 "publisher": head["publisher"],
                 "authority": head["authority"],
-                "verified_at": max(unchanged) if unchanged else head["fetched_at"],
+                "verified_at": recheck.verified_at(ctx.store, head),
                 "outcome": outcome,
             }
         )

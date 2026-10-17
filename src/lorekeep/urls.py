@@ -7,10 +7,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
+from lorekeep import twins
 from lorekeep.project import HostRule
 
 TRACKING = ("ref", "source", "fbclid", "gclid")
-ACCEPT_MARKDOWN = ("accept", "text/markdown")
 QUERY_SAFE = "/:@!$'()*,;~"
 
 
@@ -23,14 +23,15 @@ def normalise(url: str, rules: Sequence[HostRule]) -> str:
     host = (parts.hostname or "").lower()
     netloc = f"{host}:{parts.port}" if parts.port else host
     path = re.sub(r"/{2,}", "/", parts.path) or "/"
-    query = [
-        (unquote(key), unquote(value))
-        for key, _, value in (piece.partition("=") for piece in parts.query.split("&") if piece)
-        if not (key.startswith("utm_") or key in TRACKING)
-    ]
+    pieces = [piece for piece in parts.query.split("&") if piece]
     rule = rule_for(f"{host}{path}", rules)
     if rule is not None:
-        path, query = _reduce_twin(path, query, rule)
+        path, pieces = twins.to_page(path, pieces, rule)
+    query = [
+        (unquote(key), unquote(value))
+        for key, _, value in (piece.partition("=") for piece in pieces)
+        if not (key.startswith("utm_") or key in TRACKING)
+    ]
     path = path.rstrip("/")
     query_text = "&".join(
         f"{quote(key, safe=QUERY_SAFE)}={quote(value, safe=QUERY_SAFE)}"
@@ -47,14 +48,11 @@ def rule_for(host_path: str, rules: Sequence[HostRule]) -> HostRule | None:
     return max(matching, key=lambda rule: len(rule.prefix), default=None)
 
 
-def _reduce_twin(
-    path: str, query: list[tuple[str, str]], rule: HostRule
-) -> tuple[str, list[tuple[str, str]]]:
-    if rule.twin == "md-suffix" and path.endswith(".md"):
-        return path.removesuffix(".md") + (rule.page_suffix or ""), query
-    if rule.twin == "accept-header":
-        return path, [pair for pair in query if pair != ACCEPT_MARKDOWN]
-    return path, query
+def unknown_host(url: str, publisher: str) -> str | None:
+    """The host of `url` when `publisher` is the fallback `trust` gives an unknown host (its own
+    host name), else `None`: what `status` lists under unknown hosts."""
+    host = (urlsplit(url).hostname or "").lower()
+    return host if host and publisher == host else None
 
 
 @dataclass(frozen=True)
@@ -76,7 +74,7 @@ def trust(url: str, rules: Sequence[HostRule]) -> Trust:
     if rule is not None:
         return Trust(rule.publisher, rule.authority, rule, None)
     warning = (
-        f"warning: {host} is in neither host table; recorded as third-party — "
+        f"lorekeep: warning: {host} is in neither host table; recorded as third-party — "
         f"add a [[hosts]] rule to lorekeep.toml before citing it"
     )
     return Trust(host, "third-party", None, warning)

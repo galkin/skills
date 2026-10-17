@@ -6,22 +6,20 @@ import argparse
 from typing import TYPE_CHECKING
 
 from lorekeep import index
+from lorekeep.commands import plural
+from lorekeep.store import INDEX_FILE
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
-
-
-def _plural(count: int, word: str, plural: str | None = None) -> str:
-    return f"{count} {word if count == 1 else plural or word + 's'}"
 
 
 def run(args: argparse.Namespace, ctx: Context) -> int:
     counts = index.rebuild(ctx.store)
     index.report(counts, note=False)
     print(
-        f"Indexed {_plural(counts.versions, 'Version')}, {_plural(counts.sections, 'Section')}, "
-        f"{_plural(counts.tags, 'Tag row')}, {_plural(counts.checks, 'Recheck')}, "
-        f"{_plural(counts.aliases, 'alias', 'aliases')}, {_plural(counts.citations, 'Citation')} "
-        f"into {ctx.store / index.INDEX_FILE}"
+        f"Indexed {plural(counts.versions, 'Version')}, {plural(counts.sections, 'Section')}, "
+        f"{plural(counts.tags, 'Tag row')}, {plural(counts.checks, 'Recheck')}, "
+        f"{plural(counts.aliases, 'alias', 'aliases')}, {plural(counts.citations, 'Citation')} "
+        f"into {ctx.store / INDEX_FILE}"
     )
     return 0

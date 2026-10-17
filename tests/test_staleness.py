@@ -8,7 +8,7 @@ from pathlib import Path
 
 from lorekeep import frontmatter
 from lorekeep.edges import Edges
-from lorekeep.store import AliasRow, CheckRow, NewVersion, TagRow, commit
+from lorekeep.store import AliasRow, NewVersion, RecheckRow, TagRow, commit
 from tests.support import (
     FIXTURES,
     FakeFetcher,
@@ -128,6 +128,7 @@ def test_rewriting_citations_makes_the_next_search_rebuild_and_see_the_new_rows(
     warnings = [line for line in first.stderr.splitlines() if "citations.csv" in line]
     assert len(warnings) == 2
     assert "line 5" in warnings[0] and "line 6" in warnings[1]
+    assert all(line.startswith("lorekeep: warning: ") for line in warnings), warnings
 
     (tmp_path / "citations.csv").write_text(f"work_id,url\nlesson-9,{FOUNDRY}\n", encoding="utf-8")
     second = run_cli(["search", "caching", "--all", "--store", str(tmp_path)])
@@ -201,10 +202,10 @@ def test_index_rebuilt_from_the_files_reports_the_same_counts_as_the_incremental
         store,
         NewVersion(frontmatter=head, body=body),
         tags=[TagRow(AWS, "aws", at)],
-        checks=[CheckRow(AWS, "2026-10-07T00:00:00Z", "changed", "200", str(head["sha256"]))],
+        checks=[RecheckRow(AWS, "2026-10-07T00:00:00Z", "changed", "200", str(head["sha256"]))],
         aliases=[AliasRow(AWS + "?view=old", AWS, at)],
     )
-    commit(store, checks=[CheckRow(ANTHROPIC, "2026-10-08T00:00:00Z", "unchanged", "304", "")])
+    commit(store, checks=[RecheckRow(ANTHROPIC, "2026-10-08T00:00:00Z", "unchanged", "304", "")])
     again = run_cli(["get", ANTHROPIC], env=env | {"LOREKEEP_TAG": "aws"})
     assert again.exit_code == 0, again.stderr
 
