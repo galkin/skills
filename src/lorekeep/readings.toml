@@ -1,9 +1,10 @@
 # The package's default reading rules, one [[readings]] table per rule, keyed by `engine` (or by
 # `prefix`). A Project's `lorekeep.toml` extends them, and replaces a rule with the same engine or
-# prefix and operation. Each came from the live run of `rules check` and `rules accept` on the
-# first Store (v1.3 ticket 03), with the measurements it was accepted at. Host rules stay in the
-# Store: the Microsoft Learn title suffix, and LangChain's `source-links` footer, which Mintlify's
-# other host there (modelcontextprotocol.io) does not carry.
+# prefix and operation (and, for `heading_before`, pattern). Each came from a live run of
+# `rules check` and `rules accept` on the first Store (v1.3 tickets 03 and 05), with the
+# measurements it was accepted at. Host rules stay in the Store: the Microsoft Learn title suffix,
+# and LangChain's `source-links` footer, which Mintlify's other host there
+# (modelcontextprotocol.io) does not carry.
 
 # Fern's llms.txt banner before the title (55 Versions on docs.nvidia.com, 813 lines).
 [[readings]]
@@ -20,9 +21,30 @@ drop_leading = "before exploring further\\.$"
 accepted = 2026-10-17
 removes = "4 lines"
 
-# A heading before each article of a EUR-Lex act (2 Versions, 212 headings).
+# A EUR-Lex act (2 Versions, the AI Act and the GDPR; accepted live in v1.3 ticket 05): the site's
+# `Need help?` box, which Trafilatura keeps as the first heading (2 lines each: the heading and the
+# blank after it), then a heading before the act line (one per act; the Reading is titled by it),
+# each chapter (24) and each article (212), stacked in this order.
+[[readings]]
+engine = "eur-lex"
+drop_leading = "^# Need help\\?$"
+accepted = 2026-10-17
+removes = "2 lines"
+
+[[readings]]
+engine = "eur-lex"
+heading_before = "^REGULATION \\(EU\\) \\d+/\\d+ OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL$"
+level = 1
+accepted = 2026-10-17
+
+[[readings]]
+engine = "eur-lex"
+heading_before = "^CHAPTER [IVXLC]+$"
+level = 2
+accepted = 2026-10-17
+
 [[readings]]
 engine = "eur-lex"
 heading_before = "^Article \\d+$"
-level = 2
+level = 3
 accepted = 2026-10-17

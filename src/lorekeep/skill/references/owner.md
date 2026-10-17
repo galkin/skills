@@ -259,9 +259,10 @@ and `status --rules` marks them `(inherited)`; `browser` and `cut` are never inh
 changed after pages were stored does not reach them on Recheck (see `recheck` above).
 
 `[[readings]]` rules make Readings (see [store.md](store.md#readings)), over the package's
-defaults (`readings.toml`: the Fern and Mintlify llms.txt banners, a heading per EUR-Lex
-article); a Project rule with the same `prefix` or `engine` and operation (and, for
-`heading_before`, pattern) replaces a default. Each operation has one rule per Version — the
+defaults (`readings.toml`: the Fern and Mintlify llms.txt banners; EUR-Lex's `Need help?` box
+and a heading per act, chapter and article, so a law's Reading is titled by its act line); a
+Project rule with the same `prefix` or `engine` and operation (and, for `heading_before`,
+pattern) replaces a default. Each operation has one rule per Version — the
 longest prefix's, else its engine's — except `heading_before`: every one of the winning scope
 applies, in file order, and a heading one inserts counts as a heading for the next (so a prefix
 with its own `heading_before` rules takes none of the engine's: list every level there).
