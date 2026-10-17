@@ -17,7 +17,7 @@ def _plural(count: int, word: str) -> str:
 
 def run(args: argparse.Namespace, ctx: Context) -> int:
     counts = index.rebuild(ctx.store)
-    index.report(counts)
+    index.report(counts, note=False)
     print(
         f"Indexed {_plural(counts.versions, 'Version')}, {_plural(counts.sections, 'Section')}, "
         f"{_plural(counts.tags, 'Tag row')}, {_plural(counts.checks, 'Recheck')}, "

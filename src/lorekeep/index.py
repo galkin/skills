@@ -138,11 +138,20 @@ def ensure(store: Path) -> Counts | None:
         return _rebuild_locked(store)
 
 
-def report(counts: Counts | None) -> None:
-    """Print a rebuild's warnings to stderr; nothing when there was no rebuild."""
-    if counts is not None:
-        for warning in counts.warnings:
-            print(warning, file=sys.stderr)
+def report(counts: Counts | None, *, note: bool = True) -> None:
+    """Print a rebuild's warnings to stderr, and, unless `note` is off, one line saying the
+    Index was rebuilt — so a log of six readers shows how many rebuilt it; nothing when there
+    was no rebuild."""
+    if counts is None:
+        return
+    if note:
+        print(
+            f"lorekeep: note: the Index was missing or stale and was rebuilt "
+            f"({counts.versions} Versions, {counts.sections} Sections)",
+            file=sys.stderr,
+        )
+    for warning in counts.warnings:
+        print(warning, file=sys.stderr)
 
 
 def _looks_current(store: Path) -> bool:

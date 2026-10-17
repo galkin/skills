@@ -135,7 +135,9 @@ def test_a_command_runs_with_the_three_fakes(tmp_path: Path) -> None:
 
     result = run_cli(["status", "--store", str(tmp_path)], edges=edges)
 
-    assert (result.exit_code, result.stderr) == (0, "")
+    assert result.exit_code == 0
+    # The only line on stderr is the note that `status` built the missing Index (ticket 12).
+    assert [line for line in result.stderr.splitlines() if "rebuilt" not in line] == []
     assert "0 Versions" in result.stdout
 
 
