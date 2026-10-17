@@ -1,0 +1,48 @@
+[
+ {
+  "cwd": "/Users/galkin/orca/workspaces/agentic-system.design/sources",
+  "file": "rollout-2026-10-18T00-31-14-01a14bc6-afd9-72d3-84c1-ae97d21c785a.jsonl",
+  "first": "2026-10-17T21:31:22.948Z",
+  "last_ts": "2026-10-17T21:37:50.136Z",
+  "turns": 31,
+  "total": {
+   "input_tokens": 3228469,
+   "cached_input_tokens": 3087488,
+   "cache_write_input_tokens": 0,
+   "output_tokens": 21141,
+   "reasoning_output_tokens": 2664,
+   "total_tokens": 3249610
+  },
+  "last_usage": {
+   "input_tokens": 148783,
+   "cached_input_tokens": 148096,
+   "cache_write_input_tokens": 0,
+   "output_tokens": 78,
+   "reasoning_output_tokens": 0,
+   "total_tokens": 148861
+  }
+ },
+ {
+  "cwd": "/Users/galkin/orca/workspaces/agentic-system.design/beta",
+  "file": "rollout-2026-10-18T00-31-25-01a14bc6-d8e4-7181-9252-6be388d5f207.jsonl",
+  "first": "2026-10-17T21:31:33.094Z",
+  "last_ts": "2026-10-17T21:37:47.842Z",
+  "turns": 29,
+  "total": {
+   "input_tokens": 2631124,
+   "cached_input_tokens": 2519808,
+   "cache_write_input_tokens": 0,
+   "output_tokens": 18602,
+   "reasoning_output_tokens": 1035,
+   "total_tokens": 2649726
+  },
+  "last_usage": {
+   "input_tokens": 119340,
+   "cached_input_tokens": 118656,
+   "cache_write_input_tokens": 0,
+   "output_tokens": 50,
+   "reasoning_output_tokens": 0,
+   "total_tokens": 119390
+  }
+ }
+]
