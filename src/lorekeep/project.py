@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib import resources
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -22,7 +22,8 @@ class ProjectError(Exception):
 
 @dataclass(frozen=True)
 class HostRule:
-    """One row of the host table: what is true of every page under `prefix` (`host/path`)."""
+    """One row of the host table: what is true of every page under `prefix` (`host/path`);
+    `inherited` when `twin` and `page_suffix` came from a shorter prefix's rule."""
 
     prefix: str
     publisher: str
@@ -32,6 +33,7 @@ class HostRule:
     browser: bool = False
     cut: tuple[str, ...] = ()
     source: Literal["default", "lorekeep.toml"] = "default"
+    inherited: bool = False
 
 
 @dataclass(frozen=True)
@@ -63,10 +65,33 @@ def load_project(store: Path) -> Project:
 
 def merge_rules(defaults: list[HostRule], own: list[HostRule]) -> tuple[HostRule, ...]:
     """The default rules in order, each replaced by the Project's rule with the same prefix, then
-    the Project's other rules in their order."""
+    the Project's other rules in their order; a rule naming neither `twin` nor `page_suffix`
+    inherits both from the merged table (`inherit`)."""
     by_prefix = {rule.prefix: rule for rule in own}
     merged = [by_prefix.pop(rule.prefix, rule) for rule in defaults]
-    return (*merged, *(rule for rule in own if rule.prefix in by_prefix))
+    return inherit([*merged, *(rule for rule in own if rule.prefix in by_prefix)])
+
+
+def inherit(rules: list[HostRule]) -> tuple[HostRule, ...]:
+    """Each rule that names neither `twin` nor `page_suffix` with both taken from the rule with the
+    longest shorter prefix that names a `twin`, if any; `browser` and `cut` are never inherited."""
+
+    def resolved(rule: HostRule) -> HostRule:
+        if rule.twin is not None or rule.page_suffix is not None:
+            return rule
+        donors = [
+            other
+            for other in rules
+            if other.twin is not None
+            and len(other.prefix) < len(rule.prefix)
+            and rule.prefix.startswith(other.prefix)
+        ]
+        donor = max(donors, key=lambda other: len(other.prefix), default=None)
+        if donor is None:
+            return rule
+        return replace(rule, twin=donor.twin, page_suffix=donor.page_suffix, inherited=True)
+
+    return tuple(resolved(rule) for rule in rules)
 
 
 def _read_default_table() -> dict[str, Any]:
