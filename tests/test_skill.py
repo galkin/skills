@@ -1,6 +1,7 @@
 import argparse
 import json
 import re
+import shlex
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -29,6 +30,16 @@ GUARDRAILS = (
     "https://docs.nvidia.com/nemo/guardrails/latest/configure-guardrails/guardrail-catalog/"
     "jailbreak-protection"
 )
+SELF_CHECK = (
+    "https://docs.nvidia.com/nemo/guardrails/configure-guardrails/guardrail-catalog/self-check"
+)
+# A host no rule knows, asked with a fragment: the address of the `get --json` example.
+HELM = "https://helm.sh/docs/helm/helm_rollback/#synopsis"
+# An example block: a `$ lorekeep …` line, then what the command printed, up to the next one.
+EXAMPLE = re.compile(r"^\$ lorekeep (.+)\n((?:(?!\$ |```).*\n)*)", re.MULTILINE)
+# What changes from one run to the next: the Store's folder and the time of the fetch.
+STORE_PATH = re.compile(r"/[^\s\"]*/store/")
+TIMES = {"fetched_at", "verified_at"}
 
 
 def skill_frontmatter(text: str) -> dict[str, str]:
@@ -134,12 +145,8 @@ def json_examples(skill: str) -> list[dict[str, Any]]:
 
 def test_the_json_examples_have_the_fields_the_commands_print(tmp_path: Path) -> None:
     store = make_store(tmp_path)
-    edges, _ = edges_over(
-        "helm-rollback.v3-redirect", "helm-rollback.html", "guardrails-jailbreak-protection.twin"
-    )
-    got = json.loads(
-        get(store, edges, "--json", "https://v3.helm.sh/docs/helm/helm_rollback/").stdout
-    )
+    edges, _ = edges_over("helm-rollback.html", "guardrails-jailbreak-protection.twin")
+    got = json.loads(get(store, edges, "--json", HELM).stdout)
     get(store, edges, GUARDRAILS, tag="nvidia")
     found = json.loads(lorekeep(store, edges, "search", "--json", "--exact", "threshold").stdout)
     status = json.loads(lorekeep(store, edges, "status", "--json").stdout)
@@ -155,6 +162,52 @@ def test_the_json_examples_have_the_fields_the_commands_print(tmp_path: Path) ->
     assert [result.keys() for result in examples[2]["results"]] == [
         result.keys() for result in found["results"]
     ][:1]
+
+
+def examples_of(skill: str, command: str) -> list[tuple[list[str], str]]:
+    """Every `$ lorekeep <command> …` example of SKILL.md: its arguments and what it printed."""
+    return [
+        (shlex.split(argv), printed)
+        for argv, printed in EXAMPLE.findall(skill)
+        if argv.split()[0] == command
+    ]
+
+
+def as_printed(text: str) -> str:
+    return STORE_PATH.sub("/…/store/", text)
+
+
+def test_the_get_example_is_what_get_prints_for_a_host_no_rule_knows(tmp_path: Path) -> None:
+    skill = run_cli(["skill"]).stdout
+    [(argv, stderr)] = examples_of(skill, "get")
+    edges, transport = edges_over("helm-rollback.html")
+
+    result = lorekeep(make_store(tmp_path), edges, *argv, tag="nvidia")
+
+    assert argv == ["get", "--json", HELM]
+    assert transport.misses == []
+    assert result.stderr == stderr
+    printed, example = json.loads(as_printed(result.stdout)), json_examples(skill)[0]
+    assert printed.keys() == example.keys() >= TIMES
+    assert {key: value for key, value in printed.items() if key not in TIMES} == {
+        key: value for key, value in example.items() if key not in TIMES
+    }
+    assert printed["authority"] == "third-party"
+
+
+def test_the_search_examples_are_what_search_prints(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    edges, _ = edges_over("guardrails-jailbreak-protection.twin", "guardrails-self-check.html")
+    get(store, edges, GUARDRAILS, tag="nvidia")
+    get(store, edges, SELF_CHECK, tag="nvidia")
+    examples = examples_of(run_cli(["skill"]).stdout, "search")
+
+    printed = [
+        as_printed(lorekeep(store, edges, *argv, tag="nvidia").stdout) for argv, _ in examples
+    ]
+
+    assert len(examples) >= 3
+    assert printed == [stdout for _, stdout in examples]
 
 
 def with_extra_flag(command: str, flag: str) -> Callable[[], argparse.ArgumentParser]:

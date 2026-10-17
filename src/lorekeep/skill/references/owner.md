@@ -112,8 +112,14 @@ matches `host/path` by prefix and the longest matching prefix wins. Its keys:
 - `prefix`, `publisher`, `authority` — required.
 - `twin` — `md-suffix`, `accept-header`, `raw` or `github-raw` (see [store.md](store.md#twins)).
 - `page_suffix` — with `md-suffix`, the page's suffix the Twin replaces (`.html`).
-- `browser` — `true` sends every page under the prefix straight to the browser.
-- `cut` — CSS selectors removed from a browser-rendered page before conversion.
+- `browser` — `true` sends the first fetch of every page under the prefix straight to the browser
+  (Crawl4AI, the `lorekeep[browser]` extra), past the Twin and the static page: for a host whose
+  pages build themselves in the browser (`build.nvidia.com`). Without it the browser is still the
+  last step, for a page the plain request could not read (`thin content`, a `403`). A
+  browser-rendered Version is never rechecked.
+- `cut` — a list of CSS selectors removed from a page the browser rendered under the prefix
+  before conversion (`cut = ["nav", ".cookie-banner"]`); the Original is the rendered document
+  before the cut. It changes nothing for a static page or a Twin.
 
 A Project rule with the same prefix as a default rule replaces it, and a Project rule with a longer
 prefix wins over it; either way nothing is inherited, so a rule that omits `twin` and
@@ -131,6 +137,11 @@ twin = "github-raw"
 The same holds for `docs.langchain.com/` (`twin = "md-suffix"`) and every other default rule
 `status --rules` shows with a `twin=`. A rule changed after pages were stored does not reach them
 on Recheck (see `recheck` above).
+
+A law or standard is `primary` where its issuer publishes the text, its official journal:
+EUR-Lex for EU law, the Federal Register, nist.gov for NIST. An institution's reproduction of it
+(the Commission's AI Act Service Desk) is `official`, and a Run cites the journal; set a rule's
+`authority` that way, since the skill tells a Run to report a Version that says otherwise.
 
 Pages a Run reports to you, and what fixes them: an unknown host or a mislabelled `authority` —
 a `[[hosts]]` rule; `thin content` — `uv tool install --editable '.[browser]'` from the lorekeep

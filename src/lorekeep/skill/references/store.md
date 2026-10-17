@@ -62,7 +62,7 @@ Every value is a quoted string; a field without a value is absent.
 - `publisher` — who authored the content; the host itself when no host rule knows it.
 - `authority` — how far to rely on it for a fact:
   - `primary` — a publisher documenting its own product or specification, or a law or standard
-    published by its issuer; cite it.
+    on its official journal (EUR-Lex, the Federal Register, nist.gov); cite it.
   - `official` — the publisher's other material (blog, announcements); cite with care.
   - `third-party` — anyone writing about someone else's product, or a host no rule knows;
     context, not a citation.
