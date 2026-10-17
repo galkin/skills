@@ -10,7 +10,8 @@ of file. Versions
 and Originals are written once, so they go with `--no-clobber`: an object already in the bucket is
 never replaced, and a local deletion never reaches it because
 `--delete-unmatched-destination-objects` is not given. The few files that grow — `tags.csv`,
-`checks.csv`, `citations.csv`, `datapackage.json`, `lorekeep.toml` — are copied plainly, and the
+`checks.csv`, `aliases.csv`, `citations.csv`, `datapackage.json`, `lorekeep.toml` — are copied
+plainly, and the
 bucket's own versioning keeps their history. `sources.db` with its `-wal` / `-shm` companions, the
 lock file and any `.tmp-*` a worker is still writing are excluded; the Index is rebuilt, not
 restored.

@@ -1,6 +1,6 @@
 # 12: Six workers on one Store
 
-**What to build:** A test drives a process pool of six workers calling `get` (fresh and repeated URLs, some forcing `--max-age 0`) and `add` against one Store, each worker building its own fake edges from the fixture paths, then asserts: one file per Version, no temporary files left, `tags.csv` and `checks.csv` intact with one header and no interleaved rows, and an Index whose counts equal a fresh `index` rebuild. Six workers starting against a Store with no Index produce one rebuild. Whatever the test exposes in the locking, atomic writes or SQLite busy handling is fixed here.
+**What to build:** A test drives a process pool of six workers calling `get` (fresh and repeated URLs, some forcing `--max-age 0`) and `add` against one Store, each worker building its own fake edges from the fixture paths, then asserts: one file per Version, no temporary files left, `tags.csv` and `checks.csv` intact with one header and no interleaved rows, and an Index whose counts equal a fresh `index` rebuild. Six workers each running `search` against a Store with no Index produce one rebuild; `get` and `add` never rebuild. Whatever the test exposes in the locking, atomic writes or SQLite busy handling is fixed here.
 
 **Blocked by:** 07, 14
 
@@ -10,4 +10,4 @@
 - [ ] no `.tmp-*` file remains; every Version file parses
 - [ ] CSV files have exactly one header and every row has the right number of columns; `tags.csv` has no duplicate `(url, tag)` pair although every worker tags every URL it gets
 - [ ] `index` rebuilt from the files reports the same counts as the incrementally updated Index
-- [ ] with the Index deleted before the pool starts, exactly one rebuild is logged
+- [ ] with the Index deleted before a pool of six `search` calls starts, exactly one rebuild is logged; a pool of `get`s against a missing Index logs none

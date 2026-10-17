@@ -12,7 +12,7 @@ bug; so Tags are `tags.csv`, the log of Rechecks is `checks.csv`, and Citations 
 lorekeep never parses a Project's Markdown, which keeps the tool free of any one consumer's format.
 
 A search is scoped to the Run's Tag by default and, whenever it is scoped, ends with one line,
-`+N matches under other tags (--all)` — N counts pages, not Sections — so a page another Run
+`+N matches under other tags (--all)` — N counts Sources, not Sections — so a page another Run
 fetched is never silently invisible;
 `--all`, `--tag`, `--authority` and `--publisher` widen or narrow the scope.
 

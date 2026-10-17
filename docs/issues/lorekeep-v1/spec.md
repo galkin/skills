@@ -129,8 +129,8 @@ file is written once, and the Index can always be rebuilt from the files.
 38. As the owner, I want `backup` to copy the Store to the Project's bucket without deleting
     anything there and without replacing an object already there, so that a local `rm` never
     propagates and an object is never overwritten.
-39. As the owner, I want the growing files (`tags.csv`, `checks.csv`, `citations.csv`,
-    `datapackage.json`, `lorekeep.toml`) copied on every backup, so that the bucket reflects them,
+39. As the owner, I want the growing files (`tags.csv`, `checks.csv`, `aliases.csv`,
+    `citations.csv`, `datapackage.json`, `lorekeep.toml`) copied on every backup, so that the bucket reflects them,
     with history kept by the bucket's own versioning.
 40. As the owner, I want the Index with its journal files, the lock file and half-written temporary
     files excluded from the backup, so that a derived or unfinished file never reaches the bucket.
@@ -175,8 +175,9 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 ### Commands and layout
 
 - A Python 3.12 package managed by `uv`; runtime dependencies are `httpx`, `trafilatura` (which
-  brings `lxml`), `markitdown[pdf]`, `PyYAML` (frontmatter is read with `safe_load` and every
-  scalar of a publisher's frontmatter is taken as a string, so a date is never a `datetime`;
+  brings `lxml`), `markitdown[pdf]`, `cssselect` (what `lxml` needs for CSS selectors; it comes with
+  neither `lxml` nor Trafilatura), `PyYAML` (frontmatter is read with `yaml.BaseLoader`, which
+  yields strings only — `safe_load` turns `2026-08-13T00:00:00.0000000Z` into a `datetime`;
   frontmatter is written with values quoted, so an ETag's quotes survive) and the optional
   `crawl4ai`; `frictionless` is a dev dependency. The package exposes one console script
   `lorekeep` with subcommands
@@ -186,7 +187,7 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
   In text mode `get` prints the Version's path on its last line so a shell can capture it; with
   `--json` it prints one object `{path, url, sha256, fetched_at, converter, publisher, authority,
   verified_at, outcome}` (`outcome` one of `stored | fresh | unchanged | changed | gone | error |
-  skipped`; `verified_at` the `checked_at` of the last `unchanged` row or else `fetched_at`) and
+  skipped`, `fresh` meaning returned without any request; `verified_at` the `checked_at` of the last `unchanged` row or else `fetched_at`) and
   nothing follows it; `add --json` prints the same object with `outcome: stored`. `search --json` prints `{results: [{file, line, heading, snippet, url,
   tag[]}], other_tags: N}`; `status --json` prints `{versions, sources, tags: {name: count}, oldest_fetched_at,
   newest_fetched_at, checks: {unchanged, changed, gone, error}, unknown_hosts: [host], bytes}`.
@@ -195,7 +196,7 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 - The Store is `LOREKEEP_STORE` (an environment variable or `--store`), one flat folder. The Run's
   Tag is `LOREKEEP_TAG` or `--tag`; `get` and `add` fail without one and accept exactly one;
   `search` and `recheck` take `--tag` repeated as their scope and without any cover the whole
-  Store.
+  Store. `--tag`, like every flag, belongs to the subcommand, never to the root parser.
 - The host table is two layers: a default table shipped in the package (every host probed so far,
   with its Twin rule, `publisher` and `authority`), and `lorekeep.toml` in the Store root, which
   holds `bucket`, `freshness_days` (default 30) and rules that extend or override the default.
@@ -238,8 +239,11 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 - Finding the latest Version of a URL never needs the Index: without one, the frontmatter of
   every `.md` file in the Store is read (a few thousand small headers, well under a second) and
   matched against the normalised request on `url`, and `aliases.csv` is consulted for an address
-  that maps to a `url`; the newest `fetched_at` wins. With an Index the same question is one
-  query. A lookup runs the staleness check like any reader: no lock on a current Index.
+  that maps to a `url`; among a Source's Versions the one named by the `sha256` of its latest
+  `checks.csv` row wins, and the newest `fetched_at` when there is no row — a page that goes
+  A → B → A reuses A's immutable file, and only the log says it is current again. With a current
+  Index the same question is one query; with a stale or missing one the lookup falls back to the
+  scan and never rebuilds: rebuilding is for `search`, `recheck`, `status` and `index`.
 - Version file name: `<host>--<path with every / and unsafe character as ->--<first 8 hex of
   sha256>.md`; the path part is cut to keep the whole name under 200 bytes. The *stem* is that
   name without `.md`, hash included; two Versions of one page share a prefix, never a stem.
@@ -284,7 +288,7 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
    when the response media type is `text/markdown`, or `text/plain` under a `raw` rule. The Twin's
    own frontmatter, if any, is removed from the body and mined for `title`, `canonicalUrl` and
    `modified` (the first present of `ms.date`, `updated_at`, `lastmod`, `date`); the body is
-   otherwise as published, links included. A Twin URL that
+   otherwise as published, links included, with leading blank lines removed. A Twin URL that
    answers anything but Markdown is discarded and the page URL is fetched by step 2. `converter:
    md-twin`; the Original is not stored, `original.sha256` hashes the bytes received.
 2. Static HTML over `httpx`: follow redirects and `<meta http-equiv="refresh">`; extract with
@@ -296,23 +300,26 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
    gets `403`/`429`, an empty or JavaScript-only body, or when the host rule says `browser = true`.
    The page fetcher returns the rendered document (`result.html`, untouched by Crawl4AI's own
    pruning) and the final URL; lorekeep removes the rule's `cut` selectors itself with `lxml`
-   (already present under Trafilatura), then step 2 converts that HTML and stores it as the
-   Original. `converter: trafilatura <version> via crawl4ai <version>`.
+   and `cssselect`, then step 2 converts that HTML and stores it as the
+   Original. `converter: trafilatura <version> via crawl4ai <version>` (the Crawl4AI version
+   string is `crawl4ai.__version__.__version__`; `crawl4ai.__version__` is a module).
 
 - Plain `httpx`, no cache library: the Store is the cache and the conditional requests below are
   lorekeep's own. The client sends a `User-Agent` naming lorekeep and its version.
 - Freshness: the window is `freshness_days` from `lorekeep.toml` (default 30) unless `--max-age
   <days>` is given on the call; `--fresh` is `--max-age 0`. A Version's age is counted from the
-  later of its `fetched_at` and its last `unchanged` row in `checks.csv`. If the latest Version is
+  later of its `fetched_at` and its last `checks.csv` row of any result, so a gone or failing
+  page is asked once per window, not once per call. If the latest Version is
   younger than the window, return it and append the Tag if missing. Otherwise send a conditional
   request (`If-None-Match`, `If-Modified-Since` from the frontmatter) to `original.url`, the
   address the Version's bytes came from; `304` → `unchanged` row, return the latest Version;
-  `200` → compare the received bytes with `original.sha256`: equal → `unchanged`; different →
-  convert with the Version's step and compare the Markdown hash with the Version's: equal →
-  `unchanged`; different → new Version and a `changed` row. `404`/`410` on a Twin address → the
-  cascade continues with the page URL: content → a new Version by that step and a `changed` row
-  (the publisher dropped its Twin, which is real news); `404`/`410` there too, or on a page
-  address → `gone` row, a warning, the latest Version is returned. Any other status (`403`,
+  `200` → the media-type gate of the Version's step applies first (a Twin address answering
+  `text/html` is `error` with status `200`, never stored), then compare the received bytes with
+  `original.sha256`: equal → `unchanged`; different → convert with the Version's step and compare
+  the Markdown hash with the Version's: equal → `unchanged`; different → new Version and a
+  `changed` row. `404`/`410` → `gone` row, a warning, the latest Version is returned; a publisher
+  that dropped its Twin shows up as `gone` and the next `get --fresh` on the page runs the whole
+  cascade. Any other status (`403`,
   `429`, `5xx`) → `error` row with that status, a warning, the latest Version returned — the
   browser is never used for a comparison; a transport exception → `error` row with the exception's class name, likewise.
   Without any stored Version the same failures exit non-zero. A Version whose `converter` says
@@ -356,20 +363,26 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
   mismatch or a missing file does it take the Store lock, compare again, and rebuild if still
   stale; so queries never wait, a commit (which holds the lock from rename to notification) is
   never seen half-done, six workers finding no Index produce one rebuild, and a rewritten
-  `citations.csv` is picked up by the next `recheck --citations`. The lock is never taken twice by
-  one command: a lookup queries without it, a commit and a rebuild each take it alone. `restore` and a hand-copied file
-  are therefore picked up on the next read.
+  `citations.csv` is picked up by the next `recheck --citations`. The incremental notification
+  updates `meta` in the same transaction, so a commit never looks like staleness. A rebuild runs
+  in place, in one transaction that empties and refills the tables, never by replacing the file
+  under other processes' open connections. The lock is never taken twice by one command: a
+  lookup queries without it, a commit and a rebuild each take it alone. `restore` and a
+  hand-copied file are therefore picked up by the next `search`, `recheck`, `status` or `index`,
+  and by a `get` through its scan.
 - Sections: split at Markdown headings; a Section over 4 KB is cut again at paragraph boundaries
   with the same heading path; code fences are never split.
 - `citations.csv` at ingest: `url` is normalised and Twin-reduced like a request, so a Project may
   cite the `.md` address; `as_of` is an ISO 8601 date or timestamp compared against `fetched_at`.
 - `search`: `bm25` ranking, `snippet()` of the body, default 5 results, `--limit`; output lines are
   `file:line | heading path | snippet`; the final line is always `+N matches under other tags
-  (--all)` where N counts distinct Versions matched by the same query outside the scope (`+0`
+  (--all)` where N counts distinct Sources matched by the same query outside the scope (`+0`
   when none), omitted when the scope is already everything. `--exact` is a case-sensitive substring match over `sections.body`
   instead of an FTS query, so an identifier is found as written. `--json` returns the same as
   objects.
-- Scope: default `tag = LOREKEEP_TAG`, everything when no Tag is set; `--all`; `--tag` repeated;
+- Scope: the latest Version of each Source (the one the lookup would return), so a page
+  rechecked three times appears once; default `tag = LOREKEEP_TAG`, everything when no Tag is
+  set; `--all`; `--tag` repeated;
   `--publisher`; `--authority`.
 
 ### Recheck
@@ -390,12 +403,15 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
   Store with `--recursive --no-clobber` and an `--exclude` covering the six growing files,
   `sources.db` with `-wal`/`-shm`, `.lorekeep.lock` and `.tmp-`; (2) `cp` of the six growing files
   (`tags.csv`, `checks.csv`, `aliases.csv`, `citations.csv`, `datapackage.json`, `lorekeep.toml`),
-  those that exist. `--dry-run` passes through. Nothing in `backup` deletes.
+  those that exist. `--dry-run` is passed to `rsync`, which has it; `cp` has no such flag, so in
+  dry-run the `cp` is not run and the files it would copy are printed instead. Nothing in
+  `backup` deletes.
 - `restore <name> [--generation N]` runs `gcloud storage cp gs://<bucket>/<name>[#N] <store>/` and
   refuses to overwrite an existing local file; the next Index read picks the file up. Bringing a
   whole Store back is a documented reverse `rsync` followed by `index`, in the README.
 - `datapackage.json` is regenerated by `backup` only, under the Store lock: a resource for each
-  CSV that exists, with a typed schema, and one `sources` resource whose `data` is inline — one
+  CSV that exists, with a typed schema (`checks.csv`'s `status` is a string: it holds `304` and
+  `ReadTimeout` alike), and one `sources` resource whose `data` is inline — one
   flat row per Version: `url, file, sha256, bytes, fetched_at, publisher, authority, converter`.
   The `#N` generation syntax of `restore` is documented by Google but was not exercised here; the
   smoke script proves it.
@@ -404,8 +420,8 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 
 - Versions and Originals: write to `<name>.tmp-<pid>` then `os.replace`; an existing target is left
   alone (same hash, same bytes).
-- CSV appends, `datapackage.json` regeneration and Index rebuilds under the one `fcntl` lock file
-  `.lorekeep.lock` in the Store, through the Store module's one lock context manager.
+- CSV appends, `datapackage.json` regeneration and Index rebuilds under the one `flock` lock file
+  `.lorekeep.lock` in the Store (`fcntl.flock`, not `lockf`, which is re-entrant), through the Store module's one lock context manager.
 - SQLite in WAL mode with a busy timeout; incremental updates are small transactions. The Store
   must be on a local filesystem, which WAL requires.
 
@@ -478,6 +494,10 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 - Publishing the package to PyPI (the name is taken by another project).
 
 ## Further Notes
+
+- A host added to the table after its pages were fetched does not change those Versions:
+  frontmatter is immutable, so they keep `publisher = <host>` and `third-party` until a `get
+  --fresh` stores a new Version. Known and accepted for v1.
 
 - Decisions and their reasons: `docs/adr/0001` – `0009`; vocabulary: `GLOSSARY.md`. Use its terms
   in code and output (`Version`, `Original`, `Tag`, `Recheck`, `Section`).

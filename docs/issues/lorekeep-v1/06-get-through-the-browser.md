@@ -1,6 +1,6 @@
 # 06: `get` falls back to the browser
 
-**What to build:** On a first fetch, when the plain client gets `403`/`429`, when extraction yields no text, or when the host rule says `browser = true`, `get` asks the page-fetcher edge (Crawl4AI in production, the optional extra `lorekeep[browser]`; it returns `result.html` untouched, not `cleaned_html`) for the rendered document and the final URL, removes the rule's `cut` selectors itself with `lxml`, then hands that HTML to ticket 04's extraction: the Original is the rendered HTML and `converter` is `trafilatura <version> via crawl4ai <version>`. If Crawl4AI is not installed, `get` says so, names the extra, and stores nothing.
+**What to build:** On a first fetch, when the plain client gets `403`/`429`, when extraction yields no text, or when the host rule says `browser = true`, `get` asks the page-fetcher edge (Crawl4AI in production, the optional extra `lorekeep[browser]`; it returns `result.html` untouched, not `cleaned_html`) for the rendered document and the final URL, removes the rule's `cut` selectors itself with `lxml` and `cssselect`, then hands that HTML to ticket 04's extraction: the Original is the rendered HTML and `converter` is `trafilatura <version> via crawl4ai <version>`, the latter read from `crawl4ai.__version__.__version__` (the attribute `crawl4ai.__version__` is a module). If Crawl4AI is not installed, `get` says so, names the extra, and stores nothing.
 
 **Blocked by:** 04
 

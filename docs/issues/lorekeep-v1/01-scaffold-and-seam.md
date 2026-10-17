@@ -10,7 +10,9 @@
 - [ ] `lorekeep status` on a new Store prints a summary with zero Versions and exits 0
 - [ ] a missing `LOREKEEP_STORE`/`--store` is an error with a one-line message; a missing Tag is an error only for `get` and `add`
 - [ ] `lorekeep.toml` is parsed in the spec's `[[hosts]]` shape; absent keys take the spec's defaults; a malformed file names the key that failed; the merged rule list has a `lorekeep.toml` rule in place of the default rule with the same prefix
-- [ ] a publisher frontmatter value such as `2026-08-13T00:00:00.0000000Z` is read as a string, never a `datetime`; a written ETag keeps its quotes
+- [ ] frontmatter is loaded with `yaml.BaseLoader`: a publisher value such as `2026-08-13T00:00:00.0000000Z` is read as a string, never a `datetime`; a written ETag keeps its quotes
+- [ ] every flag is declared on its subcommand, none on the root parser; `--tag` is single on `get`/`add` and repeatable on `search`/`recheck`
+- [ ] `cssselect` is a runtime dependency (`lxml`'s `.cssselect()` works after `uv sync` without extras)
 - [ ] the default host table holds exactly the spec's eight rows with their publishers, authorities, Twin kinds and AWS's `page_suffix`; `milvus.io` has no `browser` flag
 - [ ] `status` with a `--store` that does not exist exits non-zero and creates nothing
 - [ ] a test can run a command with a fake transport, fake fetcher and fake runner and read its stdout, stderr and exit code

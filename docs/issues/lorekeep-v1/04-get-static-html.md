@@ -8,7 +8,7 @@
 
 - [ ] the three termidy lesson fixtures and the Anthropic/AWS HTML fixtures each produce a Version whose body has no `<div`, no cookie-banner text and absolute links only
 - [ ] the NVIDIA NIM meta-refresh stub fixture is followed and the target page is stored under the target URL an `aliases.csv` row from the stub's URL and the target in `original.url`; the stub is never stored
-- [ ] the `google-md-answers-html` fixture plus a page fixture for the same URL without `.md`: the HTML answered to `.md` is discarded, the page is fetched and stored under the page URL
+- [ ] with the test `lorekeep.toml` rule from ticket 03 giving `cloud.google.com` a `md-suffix` Twin, the `google-md-answers-html` fixture plus `google-overview.html`: the HTML answered to `.md` is discarded, the page is fetched and stored under the page URL
 - [ ] the `termidy-coordinator-and-subagents.alias` fixture (`…/index.html`, canonical link to the lesson URL) is stored under the canonical URL with an `aliases.csv` row; fetched after the lesson itself, it produces no second file, still appends the row, and a later `get` by the alias makes no request; a request with `?utm_source=` and a trailing slash is sent as given, stored normalised, and adds no alias because the two normalise alike
 - [ ] the Original is stored beside the Version with its own sha256 in the frontmatter and `original.stored: true`
 - [ ] `converter` carries the Trafilatura version string

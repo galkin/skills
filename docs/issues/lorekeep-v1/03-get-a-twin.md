@@ -7,7 +7,7 @@
 **Status:** ready-for-agent
 
 - [ ] `get` of the Anthropic Twin fixture creates exactly one `.md` file and prints its path last (text) or as `path` in one object (`--json`); frontmatter holds every required field, `etag` from the fixture, `original.stored: false`, and no `.orig.*` file exists
-- [ ] the Microsoft Learn chain (two `301`s, then a Twin with its own frontmatter) is stored once under the `canonicalUrl` without the `?accept=` suffix, an `aliases.csv` row from the normalised `ai-foundry` address to it, the final address with `?accept=text/markdown` decoded in `original.url`, the body starting at the Twin's first heading, `title` from the Twin's frontmatter and `modified: 2026-08-13` parsed from its `ms.date`
+- [ ] the Microsoft Learn chain (two `301`s, then a Twin with its own frontmatter) is stored once under the `canonicalUrl` without the `?accept=` suffix, an `aliases.csv` row from the normalised `ai-foundry` address to it, the final address with `?accept=text/markdown` decoded in `original.url`, the body starting at the Twin's first heading with no leading blank line, `title` from the Twin's frontmatter and `modified: 2026-08-13` parsed from its `ms.date`
 - [ ] the AWS Twin fixture is stored under `…/prompt-caching.html` (the `page_suffix` restored) with `original.url` ending in `.md`
 - [ ] `get` of the Anthropic page by its Twin address (`….md`) and by its page address store and find one Version
 - [ ] the `google-md-answers-html` fixture, with a test `lorekeep.toml` rule giving `cloud.google.com` a `md-suffix` Twin, is not stored and `get` reports no Twin
