@@ -10,7 +10,7 @@ import importlib
 import subprocess
 import tempfile
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from importlib import metadata
 from typing import Any, Protocol
 
@@ -25,6 +25,22 @@ class RenderedPage:
 
     html: str
     final_url: str
+
+
+@dataclass(frozen=True)
+class Wait:
+    """How long the browser waits for a page before it returns the document: the `CrawlerRunConfig`
+    parameters of these names (Crawl4AI's Page Navigation & Timing), Crawl4AI's default where
+    `None`. `wait_for` is a `js:` condition, given up after `wait_for_timeout` milliseconds."""
+
+    wait_until: str = "domcontentloaded"
+    delay_before_return_html: float | None = None
+    wait_for: str | None = None
+    wait_for_timeout: int | None = None
+
+    def config(self) -> dict[str, Any]:
+        """The keywords `CrawlerRunConfig` receives: the parameters that are set."""
+        return {name: value for name, value in asdict(self).items() if value is not None}
 
 
 class FetcherNotInstalled(Exception):
@@ -42,8 +58,9 @@ class PageFetchError(Exception):
 
 
 class PageFetcher(Protocol):
-    def fetch(self, url: str) -> RenderedPage:
-        """Render `url`; raise `FetcherNotInstalled` or `PageFetchError` when that is impossible."""
+    def fetch(self, url: str, wait: Wait) -> RenderedPage:
+        """Render `url`, waiting as `wait` says; raise `FetcherNotInstalled` or `PageFetchError`
+        when that is impossible."""
         ...
 
     def version(self) -> str:
@@ -73,7 +90,7 @@ class Crawl4AIFetcher:
     never installed.
     """
 
-    def fetch(self, url: str) -> RenderedPage:
+    def fetch(self, url: str, wait: Wait) -> RenderedPage:
         try:
             crawl4ai: Any = importlib.import_module("crawl4ai")
         except ImportError as error:
@@ -81,7 +98,9 @@ class Crawl4AIFetcher:
 
         async def crawl(workdir: str) -> Any:
             browser = crawl4ai.BrowserConfig(headless=True, verbose=False)
-            run = crawl4ai.CrawlerRunConfig(cache_mode=crawl4ai.CacheMode.BYPASS, verbose=False)
+            run = crawl4ai.CrawlerRunConfig(
+                cache_mode=crawl4ai.CacheMode.BYPASS, verbose=False, **wait.config()
+            )
             async with crawl4ai.AsyncWebCrawler(config=browser, base_directory=workdir) as crawler:
                 return await crawler.arun(url=url, config=run)
 

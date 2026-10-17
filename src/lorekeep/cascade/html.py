@@ -69,11 +69,8 @@ def convert_html(received: bytes, url: str, charset: str | None) -> Converted | 
     converted = extract(document, url)
     if isinstance(converted, Fallthrough):
         return converted
-    text = _LINK_TARGET.sub("]", converted.markdown.decode("utf-8"))
-    characters, words = len(" ".join(text.split())), len(text.split())
-    if (characters < THIN_CHARACTERS or words < THIN_WORDS) and page_text >= THIN_RATIO * max(
-        characters, 1
-    ):
+    characters = thin(converted.markdown, page_text)
+    if characters is not None:
         return Fallthrough(
             f"thin content: {url} converted to {characters} characters of a page of {page_text}",
             needs_browser=True,
@@ -81,12 +78,33 @@ def convert_html(received: bytes, url: str, charset: str | None) -> Converted | 
     return converted
 
 
-def convert_rendered(html: str, url: str, cut: Sequence[str]) -> Converted | Fallthrough:
+def thin(markdown: bytes, page_text: int) -> int | None:
+    """The characters of text `markdown` holds when it is thin against a page whose text has
+    `page_text` characters, else `None`."""
+    text = _LINK_TARGET.sub("]", markdown.decode("utf-8"))
+    characters, words = len(" ".join(text.split())), len(text.split())
+    if (characters < THIN_CHARACTERS or words < THIN_WORDS) and page_text >= THIN_RATIO * max(
+        characters, 1
+    ):
+        return characters
+    return None
+
+
+@dataclass(frozen=True)
+class Shell:
+    """What the browser rendered when its Markdown is thin against the rendered document: the
+    page's scripts had not yet put its content in the document."""
+
+    characters: int
+
+
+def convert_rendered(html: str, url: str, cut: Sequence[str]) -> Converted | Shell | Fallthrough:
     """A document the browser rendered, without the elements the host rule's `cut` selectors
-    name, converted as static HTML is."""
+    name, converted as static HTML is; a `Shell` when the document is empty, yields no text, or
+    its Markdown is thin against the document left after the cut, as the static step measures."""
     document = parse(html.encode("utf-8"), "utf-8")
     if document is None:
-        return Fallthrough(f"no content: the browser rendered {url} empty")
+        return Shell(0)
     for selector in cut:
         try:
             found = document.cssselect(selector)
@@ -94,7 +112,12 @@ def convert_rendered(html: str, url: str, cut: Sequence[str]) -> Converted | Fal
             return Fallthrough(f"cut selector {selector!r} is not valid CSS")
         for element in found:
             element.drop_tree()
-    return extract(document, url)
+    page_text = len(" ".join(document.text_content().split()))
+    converted = extract(document, url)
+    if isinstance(converted, Fallthrough):
+        return Shell(0) if converted.needs_browser else converted
+    characters = thin(converted.markdown, page_text)
+    return converted if characters is None else Shell(characters)
 
 
 @dataclass(frozen=True)

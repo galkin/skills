@@ -84,7 +84,6 @@ prefix = "cloud.google.com/"
 publisher = "google"
 authority = "primary"
 
-# No `browser` flag: the 403 Milvus answers a plain client is what sends `get` to the browser.
 [[hosts]]
 prefix = "milvus.io/"
 publisher = "milvus"
