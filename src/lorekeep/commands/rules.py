@@ -24,6 +24,7 @@ from lorekeep import readings
 from lorekeep.commands import plural
 from lorekeep.project import (
     BLOCK_OPERATIONS,
+    ENGINES,
     PROJECT_FILE,
     ProjectError,
     ReadingRule,
@@ -38,6 +39,8 @@ if TYPE_CHECKING:
     from lorekeep.cli import Context
 
 DEFAULT_SAMPLE = 5
+OTHER = "other"
+"""The `rules sample` group of the Versions no engine made."""
 EXAMPLES = 3
 EXAMPLE_WIDTH = 100
 
@@ -89,11 +92,17 @@ def versions(store: Path) -> list[_Version]:
 
 
 def sample(args: argparse.Namespace, ctx: Context) -> int:
-    """Print the paths of up to `--sample` Versions under the prefix, the newest of each Source:
-    the shortest, the longest, then the rest spread evenly between them by length."""
+    """Print the paths of Versions under the prefix, the newest of each Source, by the engine that
+    made them: per engine (`other` for none) a `# engine: NAME` line, then up to `--sample` of its
+    Versions — the shortest, the longest, then the rest spread evenly between them by length.
+    `--engine` prints that group alone."""
     wanted = args.sample
     if wanted < 1:
         print("lorekeep: error: --sample must be at least 1", file=sys.stderr)
+        return 2
+    groups = (*ENGINES, OTHER)
+    if args.engine is not None and args.engine not in groups:
+        print(f"lorekeep: error: --engine must be one of {', '.join(groups)}", file=sys.stderr)
         return 2
     prefix = args.prefix.split("://", 1)[-1]
     newest: dict[str, _Version] = {}
@@ -107,9 +116,23 @@ def sample(args: argparse.Namespace, ctx: Context) -> int:
     if not newest:
         print(f"lorekeep: error: no Version under {prefix}", file=sys.stderr)
         return 1
-    by_length = sorted(newest.values(), key=lambda version: (version.lines, version.path.name))
-    for version in spread(by_length, wanted):
-        print(version.path)
+    by_engine: dict[str, list[_Version]] = {group: [] for group in groups}
+    for version in newest.values():
+        made = readings.engine_of(ctx.store, version.path, version.head, version.body)
+        by_engine[made or OTHER].append(version)
+    if args.engine is not None:
+        by_engine = {args.engine: by_engine[args.engine]}
+        if not by_engine[args.engine]:
+            made = "no engine made" if args.engine == OTHER else f"{args.engine} made"
+            print(f"lorekeep: error: no Version under {prefix} that {made}", file=sys.stderr)
+            return 1
+    for engine, group in by_engine.items():
+        if not group:
+            continue
+        print(f"# engine: {engine}")
+        by_length = sorted(group, key=lambda version: (version.lines, version.path.name))
+        for version in spread(by_length, wanted):
+            print(version.path)
     return 0
 
 
@@ -266,17 +289,19 @@ def accept(
     """Write the passing candidates (every one that is a rule, with `--all`) into the Store's
     `lorekeep.toml` with `accepted` and `removes`, then build the Readings they reach."""
     today = datetime.date.today().isoformat()
-    by_key: dict[tuple[str, str], tuple[int, ReadingRule]] = {}
+    by_key: dict[tuple[str, ...], tuple[int, ReadingRule]] = {}
     for verdict in verdicts:
         rule = verdict.candidate.rule
         if rule is None or not (verdict.passed or everything):
             continue
-        key = (rule.scope, rule.operation)
+        key = rule.key
         if key in by_key:
-            # As in lorekeep.toml, a later rule with the same prefix and operation replaces it.
+            # As in lorekeep.toml, a later rule that is the same rule (the same prefix and
+            # operation, and pattern for heading_before) replaces it.
+            same = "the same operation" if len(key) == 2 else "the same heading_before"
             print(
                 f"lorekeep: note: readings[{by_key[key][0]}] is replaced by "
-                f"readings[{verdict.candidate.number}], the same operation on {rule.scope}",
+                f"readings[{verdict.candidate.number}], {same} on {rule.scope}",
                 file=sys.stderr,
             )
         accepted = replace(rule, accepted=today, removes=verdict.removes)

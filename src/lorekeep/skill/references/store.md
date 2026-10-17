@@ -139,7 +139,9 @@ title: "Guardrail Types"
 - `version` — the Version's file name, beside `.cache/`: the evidence.
 - `sha256` — the hash of the Reading's body (the Version's `sha256` hashes the Version's).
 - `rules` — the hash of the rules applied; a Reading whose rules changed is stale and rebuilt.
-- `title` — the Version's `title`, with its suffix cut by a `strip_title_suffix` rule.
+- `title` — the Version's `title`, with its suffix cut by a `strip_title_suffix` rule; the
+  Reading's first heading (an inserted one included) when the Version has no `title` or a rule
+  removed its first heading (EUR-Lex's `# Need help?` box).
 - `warnings` — `rule <name> removed N lines (accepted at M lines)` (`N%` and `M%` for a
   `drop_lines` rule) for each rule the over-removal guard held back from this Version: the
   Reading was built without it. Absent when there is none.

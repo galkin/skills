@@ -118,14 +118,29 @@ Built 3 Readings, 41 current
 
 ## `lorekeep rules sample`
 
-`lorekeep rules sample PREFIX [--sample N] [--store DIR]`
+`lorekeep rules sample PREFIX [--sample N] [--engine NAME] [--store DIR]`
 
 Prints the paths of Versions under `PREFIX` (`host/path`, as a rule's `prefix`), the newest of each
-Source: the shortest, the longest, then the others spread between them by length. They are what a
-proposer of reading rules reads (below).
+Source, grouped by the engine that made them, since one host can mix engines (`docs.nvidia.com/`:
+Fern Twins beside Sphinx pages): per engine a `# engine: NAME` line (`fern`, `mintlify`, `sphinx`,
+`eur-lex`, `pdf`, then `other` for Versions no engine made), then its shortest, its longest and
+the others spread between them by length. They are what a proposer of reading rules reads (below).
 
-- `--sample N` — how many (default: 5).
+- `--sample N` — how many per engine (default: 5).
+- `--engine NAME` — only that group; an engine with no Version under `PREFIX` exits `1`.
 - `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
+
+```text
+$ lorekeep rules sample docs.nvidia.com/ --sample 2
+# engine: fern
+/…/store/docs.nvidia.com--nemo-gym-build-verifiers--ec90e6f1.md
+/…/store/docs.nvidia.com--dynamo-latest-kubernetes-model-deployment-model-loading-fast-model-loading--eb7e8d5d.md
+# engine: sphinx
+/…/store/docs.nvidia.com--nim-large-language-models-latest-resources-legal.html--9f4f8772.md
+/…/store/docs.nvidia.com--nim-large-language-models-latest-about-nim-llm-overview.html--7b6ff659.md
+# engine: other
+/…/store/docs.nvidia.com--rag-latest-_static-api_reference-openapi_schema_rag_server.json--00f1503a.md
+```
 
 ## `lorekeep rules check`
 
@@ -134,10 +149,11 @@ proposer of reading rules reads (below).
 Measures each candidate `[[readings]]` table of `FILE` on its own on every Version it reaches, and
 writes nothing. Per candidate: the lines removed (headings inserted, titles cut) in total and per
 Version, three of them, and `pass` or `fail: <reason>`. The limits: `drop_lines` removes at most
-30% of any Version's lines; a leading block ends before the first heading and no line after that
-heading matches (a trailing block mirrors it after the last heading), with no limit on its size; no
-rule removes a fence or table line; a candidate must be the grammar, carry no `accepted` or
-`removes`, and change some Version.
+30% of any Version's lines; a leading block ends at the first heading at most (it takes that
+heading when the pattern matches it) and no line after that heading matches (a trailing block
+mirrors it after the last heading, which it never takes), with no limit on its size; no rule
+removes a fence or table line; a candidate must be the grammar, carry no `accepted` or `removes`,
+and change some Version.
 
 - `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
 
@@ -164,9 +180,10 @@ Checked 2 candidates: 1 pass, 1 fail
 Runs `rules check`, writes the passing candidates into the Store's `lorekeep.toml` with `accepted`
 (today) and `removes` (the most one Version lost), prints `Accepted N rules, M failed`, then builds
 the Readings they reach (`Built N Readings, M current`). A rule with the same `prefix` or `engine`
-and operation as a `[[readings]]` table already there replaces that table where it stands; any
-other is appended at the end; every other line of the file stays as written, comments included.
-Of two candidates with the same operation, the later wins.
+and operation as a `[[readings]]` table already there (for `heading_before`, also the same pattern)
+replaces that table where it stands; any other is appended at the end; every other line of the
+file stays as written, comments included. Of two candidates with the same operation on one scope,
+the later wins — but `heading_before` candidates with different patterns are each accepted.
 
 - `--all` — also accept the failing ones (your override); a candidate that is not the grammar
   never is.
@@ -182,11 +199,16 @@ Reading with chrome left in it, or a new host lands in the Store:
    as any worker, with this brief:
    - read the printed paths, and propose rules that drop what is not the page's content (banners,
      chrome, a site suffix in the title) or insert a heading before each article of a law;
+   - a `# engine: NAME` line heads the pages one engine made, which share their banner and
+     chrome: a rule for one group needs checking against the others, and one that holds for a
+     whole group can be `engine = "NAME"` instead of `prefix` (not for `other`);
    - the grammar: `[[readings]]` tables, each with `prefix = "PREFIX"` and exactly one operation —
-     `drop_leading` (the lines up to the last match before the first heading), `drop_trailing`
-     (from the first match after the last heading), `drop_lines` (every matching line),
+     `drop_leading` (the lines up to the last match before the first heading, or through that
+     heading when it is the match: a site's box taken for the title), `drop_trailing` (from the
+     first match after the last heading), `drop_lines` (every matching line),
      `strip_title_suffix` (the match ending the first heading), `heading_before` with `level`
-     (a heading made of each matching line); every value a Python regular expression;
+     (a heading made of each matching line; several on one prefix stack, one per level of a
+     law's structure); every value a Python regular expression;
    - the limits of `rules check` above;
    - the answer: one TOML file of `[[readings]]` candidates and nothing else — no `accepted`, no
      `removes`, no prose; several candidates for one operation are fine.
@@ -238,7 +260,14 @@ changed after pages were stored does not reach them on Recheck (see `recheck` ab
 
 `[[readings]]` rules make Readings (see [store.md](store.md#readings)), over the package's
 defaults (`readings.toml`: the Fern and Mintlify llms.txt banners, a heading per EUR-Lex
-article); a Project rule with the same `prefix` or `engine` and operation replaces a default.
+article); a Project rule with the same `prefix` or `engine` and operation (and, for
+`heading_before`, pattern) replaces a default. Each operation has one rule per Version — the
+longest prefix's, else its engine's — except `heading_before`: every one of the winning scope
+applies, in file order, and a heading one inserts counts as a heading for the next (so a prefix
+with its own `heading_before` rules takes none of the engine's: list every level there).
+`drop_leading` may take the first heading itself when its pattern matches that line (EUR-Lex's
+`# Need help?` box, which the Version took as its title); the Reading's `title` is then its first
+remaining heading.
 Each rule has `prefix` (`host/path`, longest wins) or `engine` (`fern`, `mintlify`, `sphinx`,
 `eur-lex`, `pdf`), exactly one operation — `drop_leading`,
 `drop_trailing`, `drop_lines`, `strip_title_suffix`, or `heading_before` with `level` — whose value

@@ -6,7 +6,9 @@ builds their Readings; `removes` carries its unit and the guard compares in it.
 Each test names its fixture: five Fern Twins of `docs.nvidia.com` (NeMo Gym's Build Verifiers,
 Guardrails' Rail Types and Jailbreak Protection, Dynamo's Router Guide and Fast Model Loading),
 each with the llms.txt banner before its H1, and `readings-candidates-fern.toml`, the candidates a
-proposer returns for `docs.nvidia.com/`.
+proposer returns for `docs.nvidia.com/`. Ticket 05 adds two Sphinx pages of NIM, NVIDIA RAG's
+OpenAPI schema (stored verbatim, made by no engine), the AI Act cut `eur-lex-ai-act.v1` and
+`readings-candidates-eur-lex.toml`, the candidates for `eur-lex.europa.eu/`.
 """
 
 from __future__ import annotations
@@ -17,11 +19,22 @@ import tomllib
 from pathlib import Path
 
 from lorekeep.provenance import now
-from tests.support import FIXTURES, Result, edges_over, lorekeep, make_store, write_version
+from tests.support import (
+    FIXTURES,
+    Result,
+    edges_over,
+    get,
+    lorekeep,
+    make_store,
+    write_version,
+)
 from tests.test_helpers import read_version
 from tests.test_readings import readings_of, set_rules
 
 CANDIDATES = FIXTURES / "readings-candidates-fern.toml"
+EUR_LEX_CANDIDATES = FIXTURES / "readings-candidates-eur-lex.toml"
+SPHINX = ("nim-overview.html", "nim-legal.html")
+SCHEMA = "https://docs.nvidia.com/rag/latest/_static/api_reference/openapi_schema_rag_server.json"
 # The five Fern Twins by the lines of their body: 39, 42, 63, 159 and 240.
 GYM = "nemo-gym-build-verifiers.twin"
 RAIL_TYPES = "guardrails-rail-types.twin"
@@ -88,9 +101,64 @@ def test_rules_sample_prints_the_shortest_and_the_longest_first(tmp_path: Path) 
 
     assert five.exit_code == 0, five.stderr
     assert five.stdout.splitlines() == [
-        str(stored[name]) for name in (GYM, LOADING, RAIL_TYPES, ROUTER, JAILBREAK)
+        "# engine: fern",
+        *(str(stored[name]) for name in (GYM, LOADING, RAIL_TYPES, ROUTER, JAILBREAK)),
     ]
-    assert two.stdout.splitlines() == [str(stored[GYM]), str(stored[LOADING])]
+    assert two.stdout.splitlines() == ["# engine: fern", str(stored[GYM]), str(stored[LOADING])]
+
+
+def test_rules_sample_prints_a_group_per_engine(tmp_path: Path) -> None:
+    """The five Fern Twins, `nim-overview.html` and `nim-legal.html` converted (Sphinx pages: their
+    Originals load `_static/documentation_options.js`), and `rag-openapi-schema.json` stored
+    verbatim, which no engine made: three groups under `docs.nvidia.com/`."""
+    store, stored = fern_store(tmp_path)
+    edges, _ = edges_over(*SPHINX, "rag-openapi-schema.json")
+    for fixture in SPHINX:
+        url = json.loads((FIXTURES / fixture / "response.json").read_text())["url"]
+        assert get(store, edges, url, tag="nvidia").exit_code == 0
+    assert get(store, edges, SCHEMA, tag="nvidia").exit_code == 0
+    sphinx = {
+        fixture: next(store.glob(f"docs.nvidia.com--nim-*{part}*.md"))
+        for fixture, part in zip(SPHINX, ("overview", "legal"), strict=True)
+    }
+    [schema] = store.glob("docs.nvidia.com--rag-*.md")
+
+    every = rules(store, "sample", "docs.nvidia.com/")
+    two = rules(store, "sample", "docs.nvidia.com/", "--sample", "2")
+    fern = rules(store, "sample", "docs.nvidia.com/", "--engine", "fern")
+    pdf = rules(store, "sample", "docs.nvidia.com/", "--engine", "pdf")
+    unknown = rules(store, "sample", "docs.nvidia.com/", "--engine", "hugo")
+
+    assert every.exit_code == 0, every.stderr
+    shortest, longest = sphinx["nim-legal.html"], sphinx["nim-overview.html"]
+    assert read_version(shortest)[1].count(b"\n") < read_version(longest)[1].count(b"\n")
+    fern_group = [
+        "# engine: fern",
+        *(str(stored[name]) for name in (GYM, LOADING, RAIL_TYPES, ROUTER, JAILBREAK)),
+    ]
+    assert every.stdout.splitlines() == [
+        *fern_group,
+        "# engine: sphinx",
+        str(shortest),
+        str(longest),
+        "# engine: other",
+        str(schema),
+    ]
+    assert two.stdout.splitlines() == [
+        "# engine: fern",
+        str(stored[GYM]),
+        str(stored[LOADING]),
+        "# engine: sphinx",
+        str(shortest),
+        str(longest),
+        "# engine: other",
+        str(schema),
+    ]
+    assert fern.stdout.splitlines() == fern_group
+    assert (pdf.exit_code, pdf.stdout) == (1, "")
+    assert pdf.stderr == "lorekeep: error: no Version under docs.nvidia.com/ that pdf made\n"
+    assert (unknown.exit_code, unknown.stdout) == (2, "")
+    assert "--engine must be one of fern, mintlify, sphinx, eur-lex, pdf, other" in unknown.stderr
 
 
 def test_rules_check_measures_each_candidate_and_writes_nothing(tmp_path: Path) -> None:
@@ -255,3 +323,40 @@ def test_rules_accept_replaces_a_rule_with_the_same_prefix_and_operation(tmp_pat
     assert (store / "lorekeep.toml").read_text(encoding="utf-8") == (
         f"{OWNER_TOML}\n{banner}\n# Microsoft Learn's titles.\n{learn}"
     )
+
+
+def test_rules_accept_keeps_two_heading_before_rules_on_one_prefix(tmp_path: Path) -> None:
+    """`readings-candidates-eur-lex.toml` over `eur-lex-ai-act.v1` converted by Trafilatura: the
+    help-box rule and the chapter and article headings are all accepted, the two `heading_before`
+    tables side by side; a second accept replaces each where it stands."""
+    store = make_store(tmp_path)
+    write_version(
+        store,
+        FIXTURES / "eur-lex-ai-act.v1",
+        fetched_at=now(),
+        converter="trafilatura 2.3.1",
+        title="Need help?",
+    )
+
+    first = rules(store, "accept", str(EUR_LEX_CANDIDATES))
+    text = (store / "lorekeep.toml").read_text(encoding="utf-8")
+    again = rules(store, "accept", str(EUR_LEX_CANDIDATES))
+
+    assert first.exit_code == 0, first.stderr
+    assert first.stderr == ""
+    assert first.stdout.endswith("Accepted 3 rules, 0 failed\nBuilt 1 Reading, 0 current\n")
+    today = datetime.date.today().isoformat()
+    assert text == (
+        '[[readings]]\nprefix = "eur-lex.europa.eu/"\ndrop_leading = "^# Need help\\\\?$"\n'
+        f'accepted = {today}\nremoves = "2 lines"\n\n'
+        '[[readings]]\nprefix = "eur-lex.europa.eu/"\nheading_before = "^CHAPTER [IVXLC]+$"\n'
+        f"level = 1\naccepted = {today}\n\n"
+        '[[readings]]\nprefix = "eur-lex.europa.eu/"\nheading_before = "^Article \\\\d+$"\n'
+        f"level = 2\naccepted = {today}\n"
+    )
+    assert again.stdout.endswith("Accepted 3 rules, 0 failed\nBuilt 0 Readings, 1 current\n")
+    assert (store / "lorekeep.toml").read_text(encoding="utf-8") == text
+    [reading] = readings_of(store)
+    body = read_version(reading)[1]
+    assert b"# CHAPTER I\nCHAPTER I\n" in body
+    assert body.count(b"\n## Article ") == 3

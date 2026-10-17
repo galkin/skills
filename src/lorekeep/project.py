@@ -23,6 +23,8 @@ ENGINES = ("fern", "mintlify", "sphinx", "eur-lex", "pdf")
 OPERATIONS = ("drop_leading", "drop_trailing", "drop_lines", "strip_title_suffix", "heading_before")
 BLOCK_OPERATIONS = ("drop_leading", "drop_trailing")
 """The operations that drop one block of lines, bounded by the first or the last heading."""
+STACKED = "heading_before"
+"""The one operation several rules of one scope can carry, told apart by their pattern."""
 
 Operation = Literal[
     "drop_leading", "drop_trailing", "drop_lines", "strip_title_suffix", "heading_before"
@@ -69,6 +71,14 @@ class ReadingRule:
     def scope(self) -> str:
         """What the rule applies to: its prefix, or `engine:<name>`."""
         return self.prefix if self.prefix is not None else f"engine:{self.engine}"
+
+    @property
+    def key(self) -> tuple[str, ...]:
+        """What makes two rules the same rule, the later replacing the earlier: the scope and the
+        operation, and the pattern for `heading_before`, of which a scope holds several."""
+        if self.operation == STACKED:
+            return (self.scope, self.operation, self.pattern)
+        return (self.scope, self.operation)
 
     @property
     def unit(self) -> Literal["lines", "%"] | None:
@@ -159,11 +169,12 @@ def inherit(rules: list[HostRule]) -> tuple[HostRule, ...]:
 
 
 def merge_readings(defaults: list[ReadingRule], own: list[ReadingRule]) -> tuple[ReadingRule, ...]:
-    """The default reading rules in order, each replaced by the Project's rule with the same
-    prefix or engine and operation, then the Project's other rules in their order."""
-    by_key = {(rule.scope, rule.operation): rule for rule in own}
-    merged = [by_key.pop((rule.scope, rule.operation), rule) for rule in defaults]
-    return (*merged, *(rule for rule in own if (rule.scope, rule.operation) in by_key))
+    """The default reading rules in order, each replaced by the Project's same rule (the same
+    prefix or engine and operation, and pattern for `heading_before`: `ReadingRule.key`), then
+    the Project's other rules in their order."""
+    by_key = {rule.key: rule for rule in own}
+    merged = [by_key.pop(rule.key, rule) for rule in defaults]
+    return (*merged, *(rule for rule in own if rule.key in by_key))
 
 
 def _read_default_table() -> dict[str, Any]:
@@ -245,17 +256,17 @@ def _parse_readings(
     if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
         raise ProjectError(f"{where}: readings must be [[readings]] tables")
     rules: list[ReadingRule] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, ...]] = set()
     for number, row in enumerate(cast(list[dict[str, Any]], rows), start=1):
         try:
             rule = parse_reading(row, number, source)
         except ProjectError as error:
             raise ProjectError(f"{where}: {error}") from error
-        if (rule.scope, rule.operation) in seen:
+        if rule.key in seen:
             raise ProjectError(
                 f"{where}: readings[{number}] repeats {rule.operation} for {rule.scope}"
             )
-        seen.add((rule.scope, rule.operation))
+        seen.add(rule.key)
         rules.append(rule)
     return rules
 
@@ -346,8 +357,9 @@ TABLE_HEADER = re.compile(r"\s*\[\[?\s*[A-Za-z0-9_.\"' -]+\s*\]\]?\s*(#.*)?")
 
 def with_readings(text: str, rules: Sequence[ReadingRule]) -> str:
     """The text of a `lorekeep.toml` with `rules` written into it as `[[readings]]` tables: a
-    rule with the same `prefix`/`engine` and operation as a table already there replaces that
-    table where it stands, any other is appended at the end. Every other line stays as written,
+    rule that is the same rule as a table already there (`ReadingRule.key`: the same
+    `prefix`/`engine` and operation, and pattern for `heading_before`) replaces that table where
+    it stands, any other is appended at the end. Every other line stays as written,
     comments included; `ProjectError` when the result would not read back as the old settings
     plus exactly these rules (a `readings` array written inline, say)."""
     before = _loads(text)
@@ -359,7 +371,7 @@ def with_readings(text: str, rules: Sequence[ReadingRule]) -> str:
             f"{PROJECT_FILE}: its readings are not one [[readings]] header per rule; "
             "add the rules by hand"
         )
-    spans: dict[tuple[str, str], tuple[int, int]] = {}
+    spans: dict[tuple[str, ...], tuple[int, int]] = {}
     for at, rule in zip(starts, existing, strict=True):
         end = next(
             (
@@ -371,12 +383,12 @@ def with_readings(text: str, rules: Sequence[ReadingRule]) -> str:
         )
         while end > at + 1 and (not lines[end - 1].strip() or lines[end - 1].lstrip()[0] == "#"):
             end -= 1
-        spans[(rule.scope, rule.operation)] = (at, end)
+        spans[rule.key] = (at, end)
     replacing: dict[int, tuple[int, str]] = {}
     appended: list[str] = []
     for rule in rules:
         table = render_reading(rule)
-        span = spans.get((rule.scope, rule.operation))
+        span = spans.get(rule.key)
         if span is None:
             appended.append(table)
         else:
@@ -437,17 +449,10 @@ def _same_but_readings(
     others = {key: value for key, value in before.items() if key != "readings"}
     if {key: value for key, value in after.items() if key != "readings"} != others:
         raise ProjectError(f"{PROJECT_FILE}: writing the rules would change other settings")
-    keys = {(rule.scope, rule.operation) for rule in rules}
+    keys = {rule.key for rule in rules}
     wanted = {
-        (rule.scope, rule.operation): rule
-        for rule in [
-            *(rule for rule in existing if (rule.scope, rule.operation) not in keys),
-            *rules,
-        ]
+        rule.key: rule for rule in [*(rule for rule in existing if rule.key not in keys), *rules]
     }
-    got = {
-        (rule.scope, rule.operation): rule
-        for rule in _parse_readings(after, "lorekeep.toml", PROJECT_FILE)
-    }
+    got = {rule.key: rule for rule in _parse_readings(after, "lorekeep.toml", PROJECT_FILE)}
     if got != wanted:
         raise ProjectError(f"{PROJECT_FILE}: the rules did not read back as written")

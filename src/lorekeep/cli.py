@@ -140,8 +140,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rules_sample = rules_commands.add_parser(
         "sample",
-        help="print the paths of Versions under a prefix, for a proposer",
-        description="print the paths of Versions under a prefix, for a proposer",
+        help="print the paths of Versions under a prefix by engine, for a proposer",
+        description="print the paths of Versions under a prefix by engine, for a proposer",
     )
     rules_sample.add_argument("prefix", help="host/path, as a rule's prefix")
     rules_sample.add_argument(
@@ -149,7 +149,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=rules_command.DEFAULT_SAMPLE,
         metavar="N",
-        help="how many: the shortest, the longest, the rest between (default: 5)",
+        help="how many per engine: the shortest, the longest, the rest between (default: 5)",
+    )
+    rules_sample.add_argument(
+        "--engine",
+        metavar="NAME",
+        help="only the Versions this engine made (fern, mintlify, sphinx, eur-lex, pdf, other)",
     )
     _store_flag(rules_sample)
     rules_check = rules_commands.add_parser(
