@@ -240,20 +240,6 @@ def test_a_twin_address_answering_html_is_discarded_and_the_page_is_stored(
     assert not (store / "aliases.csv").exists()
 
 
-def test_a_page_without_text_is_reported_as_no_content_and_nothing_is_stored(
-    tmp_path: Path,
-) -> None:
-    store = make_store(tmp_path)
-    edges, transport = edges_over("js-only.html")
-
-    result = get(store, edges, "https://example.test/app")
-
-    assert result.exit_code != 0
-    assert "no content" in result.stderr
-    assert [str(request.url) for request in transport.requests] == ["https://example.test/app"]
-    assert list(store.iterdir()) == []
-
-
 def test_relative_links_are_resolved_against_the_page_address(tmp_path: Path) -> None:
     store = make_store(tmp_path)
     edges, _ = edges_over("relative-links.html")

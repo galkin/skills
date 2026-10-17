@@ -6,11 +6,13 @@ Trafilatura is imported on first use, like MarkItDown, so `lorekeep --help` stay
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from importlib import metadata
 from urllib.parse import urljoin
 
 import lxml.etree
 import lxml.html
+from cssselect import SelectorError
 
 from lorekeep.cascade.step import Converted, Fallthrough
 
@@ -20,16 +22,37 @@ _REFRESH = re.compile(
 
 
 def convert_html(received: bytes, url: str, charset: str | None) -> Converted | Fallthrough:
-    """The page's main content as Markdown with absolute links, and its canonical address.
+    """The page's main content as Markdown with absolute links, and its canonical address."""
+    document = parse(received, charset)
+    if document is None:
+        return Fallthrough(f"no content: {url} is empty", needs_browser=True)
+    return extract(document, url)
+
+
+def convert_rendered(html: str, url: str, cut: Sequence[str]) -> Converted | Fallthrough:
+    """A document the browser rendered, without the elements the host rule's `cut` selectors
+    name, converted as static HTML is."""
+    document = parse(html.encode("utf-8"), "utf-8")
+    if document is None:
+        return Fallthrough(f"no content: the browser rendered {url} empty")
+    for selector in cut:
+        try:
+            found = document.cssselect(selector)
+        except SelectorError:
+            return Fallthrough(f"cut selector {selector!r} is not valid CSS")
+        for element in found:
+            element.drop_tree()
+    return extract(document, url)
+
+
+def extract(document: lxml.html.HtmlElement, url: str) -> Converted | Fallthrough:
+    """Trafilatura over the parsed document.
 
     Trafilatura's own `url=` resolves links against scheme and host only, so the links are made
     absolute in the tree the browser way (`<base>` honoured) and the tree is handed to it.
     """
     import trafilatura
 
-    document = parse(received, charset)
-    if document is None:
-        return Fallthrough(f"no content: {url} is empty")
     canonical = canonical_link(document, url)
     document.make_links_absolute(url, resolve_base_href=True)
     markdown = trafilatura.extract(
@@ -44,7 +67,7 @@ def convert_html(received: bytes, url: str, charset: str | None) -> Converted | 
         with_metadata=False,
     )
     if markdown is None or not markdown.strip():
-        return Fallthrough(f"no content: {url} yielded no text")
+        return Fallthrough(f"no content: {url} yielded no text", needs_browser=True)
     return Converted(
         markdown=(markdown.strip() + "\n").encode("utf-8"),
         converter=f"trafilatura {metadata.version('trafilatura')}",

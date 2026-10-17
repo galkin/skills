@@ -7,16 +7,19 @@ from typing import Protocol
 
 import httpx
 
+from lorekeep.edges import PageFetcher
 from lorekeep.project import HostRule
 
 
 @dataclass(frozen=True)
 class Request:
-    """What a step is asked for: the address as given (sent untouched) and its host rule."""
+    """What a step is asked for: the address as given (sent untouched) and its host rule, with
+    the plain client and the browser to ask it with."""
 
     url: str
     rule: HostRule | None
     client: httpx.Client
+    fetcher: PageFetcher | None = None
 
 
 @dataclass(frozen=True)
@@ -57,9 +60,11 @@ class Converted:
 
 @dataclass(frozen=True)
 class Fallthrough:
-    """Why a step declined; the next step runs."""
+    """Why a step declined; the next step runs. `needs_browser` says the page may still be read
+    by the browser: the plain client was refused (`403`/`429`) or the HTML yielded no text."""
 
     reason: str
+    needs_browser: bool = False
 
 
 class Step(Protocol):

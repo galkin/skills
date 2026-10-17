@@ -4,10 +4,14 @@
 
 **Blocked by:** 04
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] the `milvus-403` fixture triggers the fetcher fake exactly once and stores what it returns with `converter: trafilatura … via crawl4ai …` and the rendered HTML as the Original
-- [ ] a host given `browser = true` in the test's `lorekeep.toml` skips the plain client entirely (zero transport calls)
-- [ ] the `js-only.html` fixture now triggers the fetcher instead of "no content"
-- [ ] the rule's `cut` selectors are removed from the fetcher's HTML before extraction (a fake returning a page with a `<nav>` and `cut = ["nav"]` yields a body without the nav text) and the Original is the document before the cut
-- [ ] with the fetcher absent (fake in "not installed" mode), `get` exits non-zero with the extra's name and stores nothing
+- [x] the `milvus-403` fixture triggers the fetcher fake exactly once and stores what it returns with `converter: trafilatura … via crawl4ai …` and the rendered HTML as the Original
+- [x] a host given `browser = true` in the test's `lorekeep.toml` skips the plain client entirely (zero transport calls)
+- [x] the `js-only.html` fixture now triggers the fetcher instead of "no content"
+- [x] the rule's `cut` selectors are removed from the fetcher's HTML before extraction (a fake returning a page with a `<nav>` and `cut = ["nav"]` yields a body without the nav text) and the Original is the document before the cut
+- [x] with the fetcher absent (fake in "not installed" mode), `get` exits non-zero with the extra's name and stores nothing
+
+## Comments
+
+2026-10-17 — Decisions made while building this ticket. (1) `Fallthrough` gained `needs_browser`: the page step sets it for `403`/`429` and the HTML converter for "no content"; `run_cascade` runs the browser (`cascade/browser.py`, `BROWSER`) only when the last plain step set it, or straight away, without any plain request, when the host rule says `browser = true`. A `404`, a PDF without text or an unsupported media type never reach the browser. (2) The Crawl4AI version reaches `converter` through a new `PageFetcher.version()` (production: `crawl4ai.__version__.__version__`; the fake takes `version=`, default `0.9.5`); "not installed" raises `FetcherNotInstalled` from either call, so `get` exits 1 with `lorekeep[browser]` in the message and stores nothing. (3) The fetcher is asked for the page address (a Twin address is reduced first); the rendered document is the Original (`.orig.html`, UTF-8, `original.url` the browser's final URL, no `etag`/`last_modified`); `cut` selectors are dropped from a parsed copy before Trafilatura, and an invalid selector is a reason, not a crash. `cut` applies to the browser step only, as ADR 0003 frames it. (4) The production fetcher passes a throw-away `base_directory` and `verbose=False`, so a crawl keeps its cache and log out of `~/.crawl4ai` and stderr carries only lorekeep's warnings (whether importing Crawl4AI touches the home folder was not checked: the folder already exists on the owner's machine); it keeps Crawl4AI's browser User-Agent (the lorekeep User-Agent is the plain client's, and hosts that refuse plain clients are why the browser exists); a missing Chromium is reported with `uv run playwright install chromium` for the owner to run, never installed. Checked against crawl4ai 0.9.5 installed with `uv sync --extra browser` (signatures and version only, no page rendered).

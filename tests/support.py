@@ -109,11 +109,21 @@ class FakeFetcher:
     """The browser: renders the pages it was given (`url → (html file, final url)`)."""
 
     def __init__(
-        self, pages: Mapping[str, tuple[Path | str, str]] | None = None, *, installed: bool = True
+        self,
+        pages: Mapping[str, tuple[Path | str, str]] | None = None,
+        *,
+        installed: bool = True,
+        version: str = "0.9.5",
     ) -> None:
         self.pages = {url: (Path(path), final) for url, (path, final) in (pages or {}).items()}
         self.installed = installed
+        self._version = version
         self.calls: list[str] = []
+
+    def version(self) -> str:
+        if not self.installed:
+            raise FetcherNotInstalled()
+        return self._version
 
     def fetch(self, url: str) -> RenderedPage:
         if not self.installed:

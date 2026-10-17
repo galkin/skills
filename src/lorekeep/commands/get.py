@@ -44,7 +44,10 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
 
     with make_client(ctx.edges.transport) as client:
         outcome = cascade.run_cascade(
-            cascade.Request(url=args.url, rule=asked.rule, client=client), cascade.STEPS
+            cascade.Request(
+                url=args.url, rule=asked.rule, client=client, fetcher=ctx.edges.fetcher
+            ),
+            cascade.STEPS,
         )
     if not isinstance(outcome, cascade.Fetched):
         reasons = "; ".join(fallthrough.reason for fallthrough in outcome)

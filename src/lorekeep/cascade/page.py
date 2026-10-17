@@ -28,6 +28,8 @@ CONVERTERS: Mapping[str, Converter] = {
     "application/pdf": convert_pdf,
 }
 MAX_REFRESHES = 5
+REFUSED = (403, 429)
+"""What a host answers a plain client it will not serve: the signal for the browser step."""
 
 
 class PageStep:
@@ -42,7 +44,10 @@ class PageStep:
             except httpx.HTTPError as error:
                 return Fallthrough(f"{address} failed ({type(error).__name__})")
             if response.status_code != 200:
-                return Fallthrough(f"{address} answered {response.status_code}")
+                return Fallthrough(
+                    f"{address} answered {response.status_code}",
+                    needs_browser=response.status_code in REFUSED,
+                )
             mediatype = media_type(response)
             final_url = str(response.url)
             target = (
