@@ -63,8 +63,13 @@ lorekeep itself calls no model and holds no key.
     line, inserted before each matching line outside fences, unless the previous line is already a
     heading.
 - Every kept line of a Reading is byte-equal to a line of the Version; a rule cannot touch a
-  fence or a pipe-table line. A rule carries `accepted` (date) and `removes` (the share of lines
-  it removed over the Store's Versions when accepted, as `rules check` measured it).
+  fence or a pipe-table line. A rule carries `accepted` (date) and `removes`: what it removed at
+  most over the Store's Versions when accepted, as `rules check` measured it, written with its
+  unit — a count for a block operation (`"31 lines"`, since a banner has a size, not a share: on
+  the first Store a 30-line Dynamo banner is 38% of a short page and 2% of a long one) and a
+  share for `drop_lines` (`"4%"`). `strip_title_suffix` and `heading_before` carry no `removes`.
+  (Amended 2026-10-17 after ticket 01's live check: a share-based guard held the Fern rule back on
+  20 of 55 banner pages.)
 - Two layers, as host rules: `src/lorekeep/readings.toml` (engines) and the Store's
   `lorekeep.toml`; a Store rule with the same `prefix`/`engine` and operation replaces the default.
 
@@ -81,8 +86,9 @@ lorekeep itself calls no model and holds no key.
 - `search` indexes Readings where they exist (`sections` rows name the file searched, so
   `file:line` points into it); `SCHEMA_VERSION` bumps. `status` prints `Readings: N of M Versions,
   K rules`.
-- When rebuilding a Reading, a rule that removes more than twice its `removes` share on a
-  Version prints `lorekeep: warning: <url>: rule <name> removed N% (accepted at M%)` and is NOT
+- When rebuilding a Reading, a rule that removes more than twice its `removes` on a Version
+  (lines for a block operation, share for `drop_lines`) prints
+  `lorekeep: warning: <url>: rule <name> removed N (accepted at M)` with the unit and is NOT
   applied to that Version.
 
 ### Rules proposed by a subagent (no model inside the tool)
@@ -95,8 +101,9 @@ lorekeep itself calls no model and holds no key.
   returns one TOML file of `[[readings]]` candidates in the rule grammar, nothing else;
   `lorekeep rules check FILE` applies every candidate to every Version under its prefix and prints
   what it would remove (totals, min/median/max per Version, three examples) and `pass`/`fail`
-  against the limits (at most 30% of a Version's lines, never a fence or table line,
-  `drop_leading` only before the first heading); `lorekeep rules accept FILE` writes the passing
+  against the limits (`drop_lines` at most 30% of any Version's lines; a block operation is
+  bounded by the first or last heading and has no share limit; never a fence or table line);
+  `lorekeep rules accept FILE` writes the passing
   rules into the Store's `lorekeep.toml` with `accepted` and `removes` and rebuilds the Readings
   (`--all` overrides the verdicts). `get` and `search` never involve a model.
 - The brief for the proposer lives in `references/owner.md`: model tier, input, the exact output

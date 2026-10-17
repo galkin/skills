@@ -84,3 +84,15 @@
   (ticket 03 owns the full brief); `SKILL.md` one sentence in "How a Run works" and the stderr row,
   kept at 248 lines by dropping the exit-`1` example, which repeated the log example. That
   `.cache/` is never backed up is not written yet: `backup` still copies it until ticket 02.
+
+**2026-10-17 — accepted (orchestrator), merged as `34e762e`.** Live check on a copy of the first
+Store with `drop_leading = "llms\\.txt|For clean Markdown|/_mcp/server"` for `docs.nvidia.com/`
+(`removes = 4`) and the Microsoft Learn `strip_title_suffix`: `read` built 39 Readings in 0.7 s,
+`get --json` returned the Reading as `path` and the Version as `version`, the Retry pattern
+Reading is headed `# Retry pattern` with `title: Retry pattern`. The guard held the Fern rule
+back on 20 of the 55 banner Versions: a Fern banner is 11–31 lines whatever the page, so on a
+79-line Dynamo page it is 38% and twice `removes` is 8%. That is the spec's mistake, not the
+implementation's: `removes` for a block operation must be a count of lines. Amended in `spec.md`
+› Rules and carried by ticket 03. A second finding, filed as ticket 04: NVIDIA moved the
+Guardrails pages off `/latest/`, and the Twin at the old address answers `200` with a
+`# Page Not Found` body that `get` stored as a Version.
