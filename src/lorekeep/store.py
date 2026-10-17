@@ -14,6 +14,7 @@ import csv
 import fcntl
 import os
 import re
+import sys
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import astuple, dataclass, fields
 from pathlib import Path
@@ -290,9 +291,43 @@ def source_urls(store: Path, prefix: str) -> list[str]:
 
 
 def scan(store: Path) -> Iterator[VersionInfo]:
-    """Every Version in the Store, from the head of each `.md` file."""
+    """Every Version in the Store, from the head of each `.md` file; a `.md` file that is not
+    a Version is left out (`not_a_version`)."""
     for path in sorted(store.glob("*.md")):
-        yield VersionInfo.read(path)
+        try:
+            yield VersionInfo.read(path)
+        except frontmatter.FrontmatterError as error:
+            not_a_version(path, error)
+
+
+REQUIRED_FIELDS = ("url", "sha256", "fetched_at")
+"""What makes a `.md` file's frontmatter a Version's: without them it is someone's note."""
+
+_ignored: set[Path] = set()
+
+
+def not_a_version(path: Path, error: frontmatter.FrontmatterError) -> None:
+    """Say on stderr, once per command run (`forget_ignored`), that the `.md` file at `path`
+    is not a Version and is ignored: an owner's note or the source file of an `add` may sit in
+    the Store's folder, and no reader or rebuild fails because of it."""
+    if path in _ignored:
+        return
+    _ignored.add(path)
+    print(f"lorekeep: warning: {path.name}: not a Version ({error}), ignored", file=sys.stderr)
+
+
+def forget_ignored() -> None:
+    """Start a command run: every `.md` file that is not a Version is named again."""
+    _ignored.clear()
+
+
+def parse_version(data: bytes) -> tuple[dict[str, Any], bytes]:
+    """A Version file's frontmatter and body; `FrontmatterError` when it is not a Version's."""
+    fields, body = frontmatter.parse(data)
+    for name in REQUIRED_FIELDS:
+        if name not in fields:
+            raise frontmatter.FrontmatterError(f"no {name} in the frontmatter")
+    return fields, body
 
 
 def read_head(path: Path) -> dict[str, Any]:
@@ -301,11 +336,11 @@ def read_head(path: Path) -> dict[str, Any]:
     with path.open("rb") as handle:
         first = handle.readline()
         if first != frontmatter.FENCE:
-            raise frontmatter.FrontmatterError(f"{path.name}: no frontmatter")
+            raise frontmatter.FrontmatterError("no frontmatter")
         head += first
         for line in handle:
             head += line
             if line == frontmatter.FENCE:
                 break
-    fields, _ = frontmatter.parse(bytes(head))
+    fields, _ = parse_version(bytes(head))
     return fields

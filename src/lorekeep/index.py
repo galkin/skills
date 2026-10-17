@@ -19,8 +19,9 @@ from dataclasses import astuple, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from lorekeep import frontmatter, history, sections
+from lorekeep import history, sections
 from lorekeep import store as store_module
+from lorekeep.frontmatter import FrontmatterError
 from lorekeep.project import HostRule
 from lorekeep.provenance import TIME_FORMAT
 from lorekeep.store import (
@@ -175,16 +176,21 @@ def _rebuild_locked(store: Path, rules: Sequence[HostRule]) -> Counts:
             for table in tables:
                 con.execute(f"DELETE FROM {table}")
             con.execute("INSERT INTO sections_fts(sections_fts) VALUES('delete-all')")
-            versions = sections = 0
+            versions = sections = ignored = 0
             for path in sorted(store.glob("*.md")):
-                sections += _index_version(con, path)
+                try:
+                    sections += _index_version(con, path)
+                except FrontmatterError as error:
+                    store_module.not_a_version(path, error)
+                    ignored += 1
+                    continue
                 versions += 1
             tags = _insert_rows(con, TagRow, store_module.read_rows(store, TagRow))
             checks = _insert_rows(con, RecheckRow, store_module.read_rows(store, RecheckRow))
             aliases = _insert_rows(con, AliasRow, store_module.read_rows(store, AliasRow))
             cited, warnings = _read_citations(store, rules)
             con.executemany("INSERT INTO citations VALUES(?, ?, ?)", cited)
-            con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", _fingerprint(store))
+            _write_meta(con, store, ignored)
             con.execute("COMMIT")
         except BaseException:
             con.execute("ROLLBACK")
@@ -256,7 +262,7 @@ def _as_of(text: str | None) -> str | None:
 def _index_version(con: sqlite3.Connection, path: Path) -> int:
     """Insert one Version's row and its Sections (with their FTS rows); how many Sections."""
     data = path.read_bytes()
-    head, body = frontmatter.parse(data)
+    head, body = store_module.parse_version(data)
     original = head.get("original")
     original = original if isinstance(original, dict) else {}
     values = [path.name]
@@ -309,12 +315,24 @@ def _fingerprint(store: Path) -> list[tuple[str, str]]:
     return values
 
 
+_IGNORED = "md_ignored"
+"""The `meta` key for how many of the `md_files` are not Versions and have no `versions` row,
+so a commit can tell that `versions` still accounts for every `.md` file."""
+
+
+def _write_meta(con: sqlite3.Connection, store: Path, ignored: int) -> None:
+    con.execute("DELETE FROM meta")
+    values = [*_fingerprint(store), (_IGNORED, str(ignored))]
+    con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", values)
+
+
 def _is_current(store: Path, con: sqlite3.Connection) -> bool:
     """Whether the Index's `meta` still describes the Store's files; no lock is taken."""
     try:
         recorded = dict(con.execute("SELECT key, value FROM meta").fetchall())
     except sqlite3.Error:
         return False
+    recorded.pop(_IGNORED, None)
     return bool(recorded) and recorded == dict(_fingerprint(store))
 
 
@@ -359,8 +377,7 @@ def notify(
                 FILE_OF[AliasRow]: _notify_rows(con, AliasRow, aliases),
             }
             if _agrees(con, store, touched):
-                con.execute("DELETE FROM meta")
-                con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", _fingerprint(store))
+                _write_meta(con, store, _ignored_of(con))
             con.execute("COMMIT")
         except BaseException:
             con.execute("ROLLBACK")
@@ -369,6 +386,11 @@ def notify(
         return
     finally:
         con.close()
+
+
+def _ignored_of(con: sqlite3.Connection) -> int:
+    row = con.execute("SELECT value FROM meta WHERE key = ?", (_IGNORED,)).fetchone()
+    return int(row[0]) if row else 0
 
 
 def _notify_rows(con: sqlite3.Connection, row_type: type[Row], rows: Sequence[Row]) -> bool:
@@ -390,13 +412,14 @@ def _notify_rows(con: sqlite3.Connection, row_type: type[Row], rows: Sequence[Ro
 
 def _agrees(con: sqlite3.Connection, store: Path, touched: dict[str, bool]) -> bool:
     """Whether the Index, after this commit's inserts, describes the Store: every table the
-    commit touched has as many rows as its file, `versions` as many as there are `.md` files,
-    and every watched file the commit did not touch is as `meta` recorded it."""
+    commit touched has as many rows as its file, `versions` and the `.md` files the rebuild
+    ignored as many as there are `.md` files, and every watched file the commit did not touch
+    is as `meta` recorded it."""
     recorded = dict(con.execute("SELECT key, value FROM meta").fetchall())
     if not recorded:
         return False
     current = dict(_fingerprint(store))
-    md_files = con.execute("SELECT count(*) FROM versions").fetchone()[0]
+    md_files = con.execute("SELECT count(*) FROM versions").fetchone()[0] + _ignored_of(con)
     if current["md_files"] != str(md_files):
         return False
     row_types = {name: row_type for row_type, name in FILE_OF.items()}

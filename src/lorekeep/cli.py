@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from lorekeep import store as store_module
 from lorekeep.commands import add as add_command
 from lorekeep.commands import backup as backup_command
 from lorekeep.commands import get as get_command
@@ -209,6 +210,7 @@ def run(
 ) -> int:
     """Run one command; return its exit code. Output goes to `sys.stdout` and `sys.stderr`."""
     env = os.environ if env is None else env
+    store_module.forget_ignored()
     try:
         args = build_parser().parse_args(list(argv))
     except SystemExit as exit_:

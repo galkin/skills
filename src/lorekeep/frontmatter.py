@@ -19,17 +19,20 @@ type Fields = Mapping[str, str | bool | int | Mapping[str, str | bool | int] | N
 
 
 class FrontmatterError(ValueError):
-    """The file does not start with a YAML frontmatter block."""
+    """The file does not start with a YAML frontmatter block; the message says why, briefly."""
 
 
 def parse(data: bytes) -> tuple[dict[str, Any], bytes]:
     """Split a Version file into its frontmatter (strings, and one level of mappings) and body."""
     if not data.startswith(FENCE):
-        raise FrontmatterError("no frontmatter: the file does not start with ---")
+        raise FrontmatterError("no frontmatter")
     head, fence, body = data[len(FENCE) :].partition(b"\n" + FENCE)
     if not fence:
         raise FrontmatterError("the frontmatter is not closed by ---")
-    fields = yaml.load(head.decode("utf-8"), Loader=yaml.BaseLoader) or {}
+    try:
+        fields = yaml.load(head.decode("utf-8"), Loader=yaml.BaseLoader) or {}
+    except (UnicodeDecodeError, yaml.YAMLError) as error:
+        raise FrontmatterError("the frontmatter is not YAML") from error
     if not isinstance(fields, dict):
         raise FrontmatterError("the frontmatter is not a mapping")
     return fields, body
