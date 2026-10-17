@@ -191,4 +191,11 @@ A rule's `twin` names how its host serves Markdown beside a page:
 - `github-raw` — `github.com/<owner>/<repo>/blob/<ref>/<path>` is read from
   `raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>` and stored under the `blob/` address.
 
-A Twin that answers anything else (`404`, HTML) falls through to the page itself.
+A Twin that answers anything else (`404`, HTML) falls through to the page itself. So does a
+Twin's not-found page, which is never a Version: a `200` whose first `# ` heading is `Page Not
+Found` or `404` (any case) in under 40 lines, as Fern answers for a page that moved; a Recheck
+that receives one records `error` and keeps the Version. When the page then redirects to an
+address whose rule names an `md-suffix` or `accept-header` Twin, that Twin is read in place of the
+page's HTML, and the Version is stored under the new address with the old one as its alias. The
+order: the Twin of the address asked, the page, the Twin of the address it redirected to, the
+page's HTML, the browser.

@@ -1,0 +1,6 @@
+{
+  "url": "https://docs.nvidia.com/nemo/guardrails/about-nemo-guardrails-library/rail-types",
+  "status": 200,
+  "headers": { "content-type": "text/html; charset=utf-8" },
+  "body": "body.html"
+}

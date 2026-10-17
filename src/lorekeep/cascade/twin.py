@@ -7,6 +7,14 @@ redirected to, never under a page built back from the Twin's address: under `pag
 Under a `github-raw` rule the Twin is the raw file behind a `blob` page: kept as published when it
 is Markdown or text, else in one fence named by its extension under a `# <path>` heading, and
 filed under the `blob` page (`converter: raw-twin`).
+
+A Twin answered `200` with the publisher's not-found page (a soft 404) is no Twin: the step falls
+through, so `get` asks the page next, and a Recheck records an `error` and keeps the Version. The
+marker, pinned on Fern's (`guardrails-rail-types.notfound.twin`, served as `text/plain`): after
+the publisher's frontmatter, the first `# ` heading outside a fence is `Page Not Found` or `404`
+in any case, and the Markdown has fewer than 40 lines. Fern's whole page is `# Page Not Found`,
+`This page does not exist.` and a `## Similar pages` list. A `github-raw` file is never taken for
+one: raw GitHub answers a real `404`, and a repository's own `# 404` page is a file like any other.
 """
 
 from __future__ import annotations
@@ -36,6 +44,8 @@ _LEADING_BLANK_LINES = re.compile(rb"\A(?:[ \t]*\r?\n)+")
 _DATE = re.compile(r"\A\s*(\d{4}-\d{2}-\d{2})")
 _HEADING = re.compile(r"^# +(.+?)[ #]*$")
 _FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+NOT_FOUND_HEADINGS = ("page not found", "404")
+NOT_FOUND_LINES = 40
 
 
 def twin_url(url: str, rule: HostRule) -> str | None:
@@ -115,21 +125,26 @@ class TwinStep:
         """What a `200` to a Twin address holds, once its media type passes the Twin's gate
         under the host's current rule (`text/markdown` is taken even when the rule no longer
         names a Twin; plain text only from a raw file host, or under `md-suffix` when it is not
-        HTML). Under `github-raw` the file is filed under its `blob` page."""
+        HTML), and once it is not the publisher's not-found page (`not_found`), which is never
+        `Same`, even to a Version that holds one. Under `github-raw` the file is filed under its
+        `blob` page."""
         address = str(response.url)
         mediatype = media_type(response)
         received = response.content
         if not twins.accepts(mediatype, received, rule):
             return Fallthrough(f"no Twin: {address} answered {mediatype or 'no media type'}")
+        raw = rule is not None and rule.twin == "github-raw"
+        fields, body = split_frontmatter(received)
+        markdown = _LEADING_BLANK_LINES.sub(b"", body)
+        if not raw and not_found(markdown):
+            return Fallthrough(f"no Twin: {address} answered 200 with a not-found page")
         sha256 = hashlib.sha256(received).hexdigest()
         if sha256 == unchanged:
             return Same()
-        if rule is not None and rule.twin == "github-raw":
+        if raw:
             markdown, fields, title = raw_file(urlsplit(address).path, received)
             converter, final_url = RAW_CONVERTER, blob_url(address)
         else:
-            fields, body = split_frontmatter(received)
-            markdown = _LEADING_BLANK_LINES.sub(b"", body)
             title = _text(fields.get("title")) or first_heading(markdown)
             converter = CONVERTER
             final_url = address
@@ -166,6 +181,18 @@ def raw_file(raw_path: str, received: bytes) -> tuple[bytes, dict[str, Any], str
         return received, {}, path
     text = received.decode("utf-8", errors="replace")
     return f"# {path}\n\n{fence(text, suffix[1:])}".encode(), {}, path
+
+
+def not_found(markdown: bytes) -> bool:
+    """Whether a Twin's Markdown (its frontmatter gone) is the publisher's not-found page: its
+    first `# ` heading is `Page Not Found` or `404`, in any case, and it has under
+    `NOT_FOUND_LINES` lines."""
+    heading = first_heading(markdown)
+    return (
+        heading is not None
+        and heading.casefold() in NOT_FOUND_HEADINGS
+        and len(markdown.splitlines()) < NOT_FOUND_LINES
+    )
 
 
 def first_heading(markdown: bytes) -> str | None:
