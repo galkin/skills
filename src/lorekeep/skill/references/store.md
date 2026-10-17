@@ -48,7 +48,7 @@ origin: "web"
 ---
 ```
 
-Every value is a quoted string; a field without a value is absent.
+Every value is a quoted string (`warnings` a list of them); a field without a value is absent.
 
 - `url` — the address the page was served at: the final one after redirects and meta refreshes,
   normalised (lower-case host, no fragment, no tracking parameters, sorted query, no trailing
@@ -83,6 +83,12 @@ Every value is a quoted string; a field without a value is absent.
   Twin's or the raw file's), `mediatype`, `sha256`, and `stored` (`true` when `<stem>.orig.<ext>`
   is beside the Version; `false` for a Twin, whose Markdown is the text received).
 - `origin` — `web`, or `owner` for a Source added with `lorekeep add`.
+- `warnings` — what the conversion knowingly lost, one line each, written once with the Version:
+  `["1 code blocks / 0 tables of the page are missing from the Markdown"]`, or `["the Markdown
+  holds 14% of the page's main text"]` (under a fifth of the text of the page's `<main>`,
+  `role=main` or `<article>`, its navigation left out). `lorekeep get` prints each as
+  `lorekeep: warning: <url>: <warning>` on every return of the Version. Absent when nothing was
+  lost, and on every Version stored before the field existed.
 
 Nothing that changes later is in the frontmatter: Tags are rows of `tags.csv`, Rechecks rows of
 `checks.csv`.
@@ -93,6 +99,8 @@ Nothing that changes later is in the frontmatter: Tags are rows of `tags.csv`, R
 `publisher`, `authority`, and:
 
 - `path` — the Version's absolute path.
+- `asked` — the command's argument exactly as given: for `get` the address with its `#fragment`,
+  which no other field keeps; for `add` the file.
 - `requested_url` — the address asked, normalised; it differs from `url` after a redirect or a
   Twin reduction. `add` has none of its own: it equals `url`.
 - `verified_at` — the last `unchanged` Recheck, else `fetched_at`.

@@ -4,7 +4,8 @@ the Store has none.
 The Version's `url` is where the page was served — the final address after redirects and meta
 refreshes, normalised and Twin-reduced — and never the canonical address the page declares, which
 is recorded as `canonical` with a warning (ADR 0003). The unknown-host warning names the host of
-the Version returned, once.
+the Version returned, once, and so does the note on a `third-party` verdict from no rule or a
+catch-all rule; the Version's own `warnings` (what its conversion lost) print on every return.
 """
 
 from __future__ import annotations
@@ -22,8 +23,8 @@ from lorekeep.http import make_client
 from lorekeep.project import HostRule
 from lorekeep.provenance import build as provenance
 from lorekeep.provenance import now
-from lorekeep.store import AliasRow, NewVersion, TagRow, VersionInfo, commit, latest
-from lorekeep.urls import normalise, other_canonical, trust
+from lorekeep.store import AliasRow, NewVersion, TagRow, VersionInfo, commit, latest, read_head
+from lorekeep.urls import Trust, normalise, other_canonical, trust
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
@@ -36,7 +37,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
 
     stored = latest(ctx.store, args.url, rules)
     if stored is not None:
-        warn_unknown_host(stored.url, rules)
+        say_trust(stored.url, rules)
         return return_stored(args, ctx, stored)
 
     with make_client(ctx.edges.transport) as client:
@@ -50,13 +51,8 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
         reasons = "; ".join(fallthrough.reason for fallthrough in outcome)
         print(f"lorekeep: error: nothing stored for {args.url}: {reasons}", file=sys.stderr)
         return 1
-    for warning in outcome.warnings:
-        print(f"lorekeep: warning: {warning}", file=sys.stderr)
-
     url = normalise(outcome.final_url, rules)
-    found = trust(url, rules)
-    if found.warning:
-        print(found.warning, file=sys.stderr)
+    found = say_trust(url, rules)
     canonical = other_canonical(outcome.canonical, url, rules)
     if canonical is not None:
         print(
@@ -109,18 +105,27 @@ def return_stored(args: argparse.Namespace, ctx: Context, stored: VersionInfo) -
             return report(args, ctx, answer.path, answer.result)
 
 
-def warn_unknown_host(url: str, rules: Sequence[HostRule]) -> None:
+def say_trust(url: str, rules: Sequence[HostRule]) -> Trust:
+    """What the host table says of the Version's `url`, its unknown-host warning and its
+    `third-party` note printed."""
     found = trust(url, rules)
-    if found.warning:
-        print(found.warning, file=sys.stderr)
+    for line in (found.warning, found.note):
+        if line:
+            print(line, file=sys.stderr)
+    return found
 
 
 def report(args: argparse.Namespace, ctx: Context, path: Path, outcome: str) -> int:
-    """The path on the last line, or one JSON object with `--json`, read from the file itself,
-    with `requested_url` the normalised address asked."""
+    """The Version's `warnings`, then the path on the last line, or one JSON object with
+    `--json`, read from the file itself, with `asked` the address as given and `requested_url`
+    it normalised."""
+    head = read_head(path)
+    for warning in head.get("warnings") or ():
+        print(f"lorekeep: warning: {head['url']}: {warning}", file=sys.stderr)
     if not args.json:
         print(path)
         return 0
-    asked = normalise(args.url, ctx.project.hosts)
-    print(json.dumps(version_json(ctx.store, path, outcome, requested_url=asked)))
+    requested = normalise(args.url, ctx.project.hosts)
+    printed = version_json(ctx.store, path, outcome, asked=args.url, requested_url=requested)
+    print(json.dumps(printed))
     return 0

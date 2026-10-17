@@ -25,7 +25,8 @@ def build(
     fetched: Fetched, url: str, publisher: str, authority: str, *, canonical: str | None = None
 ) -> dict[str, Any]:
     """The Version's frontmatter, in the order a reader expects; absent values are left out.
-    `canonical` is the address the page declares as its own when it is not `url`."""
+    `canonical` is the address the page declares as its own when it is not `url`; `warnings`
+    are what the conversion knowingly lost, kept with the Version so every `get` repeats them."""
     return {
         "url": url,
         "fetched_at": now(),
@@ -38,6 +39,7 @@ def build(
         "title": fetched.title,
         "modified": fetched.modified,
         "canonical": canonical,
+        "warnings": list(fetched.warnings),
         "original": {
             "url": fetched.original_url,
             "mediatype": fetched.mediatype,

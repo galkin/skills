@@ -67,24 +67,38 @@ def unknown_host(url: str, publisher: str) -> str | None:
 
 @dataclass(frozen=True)
 class Trust:
-    """What the host table says of a URL; `warning` is set when no rule matched."""
+    """What the host table says of a URL; `warning` is set when no rule matched, and `note` when
+    the verdict is `third-party` from no rule or from a catch-all rule."""
 
     publisher: str
     authority: str
     rule: HostRule | None
     warning: str | None
+    note: str | None = None
 
 
 def trust(url: str, rules: Sequence[HostRule]) -> Trust:
     """`publisher` and `authority` for `url` by longest prefix; an unknown host is `third-party`
-    under its own name, with a warning for stderr that a Run passes on to the owner."""
+    under its own name, with a warning for stderr that a Run passes on to the owner. A
+    `third-party` verdict no rule made for this page's publisher — no rule, or a catch-all — is
+    named in a note, so a Run sees it without reading `authority`."""
     parts = urlsplit(url)
     host = (parts.hostname or "").lower()
     rule = rule_for(f"{host}{parts.path}", rules)
     if rule is not None:
-        return Trust(rule.publisher, rule.authority, rule, None)
+        note = None
+        if rule.authority == "third-party" and catch_all(rule):
+            note = f"lorekeep: note: {url} is third-party under the {rule.prefix} rule"
+        return Trust(rule.publisher, rule.authority, rule, None, note)
     warning = (
         f"lorekeep: warning: {host} is in no host table; stored as third-party — "
         f"tell the owner, who may add a [[hosts]] rule"
     )
-    return Trust(host, "third-party", None, warning)
+    return Trust(
+        host, "third-party", None, warning, f"lorekeep: note: {url} is third-party under no rule"
+    )
+
+
+def catch_all(rule: HostRule) -> bool:
+    """Whether `rule` covers a whole host (`github.com/`), whoever wrote the pages under it."""
+    return "/" not in rule.prefix.rstrip("/")
