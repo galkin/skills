@@ -1,5 +1,9 @@
 """Step 1: the publisher's Twin, accepted only when the response really is Markdown.
 
+A Twin read for a page is filed under the page as asked (`asked_page`), or under the page its Twin
+redirected to, never under a page built back from the Twin's address: under `page_suffix =
+"/modelcard"` both `<model>` and `<model>/modelcard` are read from `<model>.md`.
+
 Under a `github-raw` rule the Twin is the raw file behind a `blob` page: kept as published when it
 is Markdown or text, else in one fence named by its extension under a `# <path>` heading, and
 filed under the `blob` page (`converter: raw-twin`).
@@ -9,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from dataclasses import replace
 from typing import Any
 from urllib.parse import unquote, urlsplit, urlunsplit
 
@@ -61,6 +66,18 @@ def page_url(url: str, rule: HostRule | None) -> str:
     return urlunsplit((parts.scheme, parts.netloc, path, "&".join(kept), parts.fragment))
 
 
+def asked_page(asked: str, served: str, rule: HostRule, *, redirected: bool) -> str:
+    """The page a Twin read at `served` is filed under when `asked` was given: `asked` itself
+    when the Twin answered at the address built from it, so a Twin address reduces to the page
+    asked and nothing else; after a redirect, the page of `served` in the form asked (with or
+    without `page_suffix`). Normalising reduces whatever Twin address is left."""
+    if not redirected:
+        return asked
+    parts = urlsplit(served)
+    path = twins.to_asked_page(parts.path, urlsplit(asked).path, rule)
+    return urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
+
+
 def blob_url(url: str) -> str:
     """The GitHub `blob` page of a raw file's address; any other address is returned as is."""
     parts = urlsplit(url)
@@ -86,6 +103,10 @@ class TwinStep:
             return Fallthrough(f"no Twin: {address} answered {response.status_code}")
         found = self.reread(response, rule)
         assert not isinstance(found, Same)  # nothing was `unchanged`
+        if isinstance(found, Fetched) and rule.twin != "github-raw":
+            redirected = bool(response.history)
+            page = asked_page(request.url, found.final_url, rule, redirected=redirected)
+            return replace(found, final_url=page)
         return found
 
     def reread(

@@ -150,7 +150,10 @@ the unknown-host warning. Writing rules: [owner.md](owner.md#lorekeeptoml).
 A rule's `twin` names how its host serves Markdown beside a page:
 
 - `md-suffix` — `<page>.md` (with `page_suffix`, that suffix replaced: `page.html` → `page.md`);
-  `text/markdown`, or `text/plain` that is not HTML. Fern, Mintlify, Anthropic, AWS.
+  `text/markdown`, or `text/plain` that is not HTML. Fern, Mintlify, Anthropic, AWS. The
+  Version's `url` is the page's address as asked, with or without `page_suffix`: under
+  `page_suffix = "/modelcard"`, `<model>` and `<model>/modelcard` both read `<model>.md` and each
+  is stored under the address asked (after a redirect, the page redirected to, in that form).
 - `accept-header` — the page's address with `?accept=text/markdown`. Microsoft Learn.
 - `raw` — the address is its own Twin (`raw.githubusercontent.com`).
 - `github-raw` — `github.com/<owner>/<repo>/blob/<ref>/<path>` is read from

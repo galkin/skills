@@ -1,0 +1,6 @@
+{
+  "url": "https://build.nvidia.com/nvidia/safety-for-agentic-ai.md",
+  "status": 200,
+  "headers": { "content-type": "text/markdown; charset=utf-8" },
+  "body": "body.md"
+}
