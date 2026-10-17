@@ -82,7 +82,7 @@ def test_status_json_is_one_object_in_the_spec_shape(tmp_path: Path) -> None:
         "checks": {"unchanged": 3, "changed": 1, "gone": 1, "error": 1},
         "unknown_hosts": ["cloud.google.com", "docs.nvidia.com"],
         "readings": 0,
-        "rules": 0,
+        "rules": 3,
         "bytes": store_bytes(tmp_path),
     }
 

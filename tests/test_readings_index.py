@@ -118,9 +118,12 @@ def test_a_version_without_a_reading_is_searched_as_before(tmp_path: Path) -> No
 def test_a_rule_added_rebuilds_the_index_and_the_hits_point_into_the_new_readings(
     tmp_path: Path,
 ) -> None:
-    """`guardrails-rail-types.twin`, searched before and after the banner rule is added."""
+    """`guardrails-rail-types.twin`, searched before and after the banner rule is added; stored
+    as a conversion, so the package's Fern rule, which reaches Twins only, does not."""
     store = make_store(tmp_path)
-    version = rail_types(store)
+    version = stored(
+        store, "guardrails-rail-types.twin", url=RAIL_TYPES, converter="trafilatura 2.3.1"
+    )
 
     first = search(store, "execution rails")
     second = search(store, "execution rails")
@@ -164,7 +167,8 @@ def test_a_reading_built_by_get_reaches_a_current_index_without_a_rebuild(
 
 def test_status_counts_the_readings_and_the_rules(tmp_path: Path) -> None:
     """`guardrails-rail-types.twin` and `ms-retry-pattern.twin` get a Reading under the Fern and
-    Learn rules; the synthesised `readings-fence-table.v1` matches no rule."""
+    Learn rules; the synthesised `readings-fence-table.v1` matches no rule. The count of rules adds
+    the package's three engine rules to the Store's two."""
     store = store_with(tmp_path, FERN_RULE, LEARN_RULE)
     rail_types(store)
     stored(store, "ms-retry-pattern.twin", url=RETRY, converter="md-twin")
@@ -174,9 +178,9 @@ def test_status_counts_the_readings_and_the_rules(tmp_path: Path) -> None:
     printed = lorekeep(store, edges_over()[0], "status", "--json")
 
     assert text.exit_code == printed.exit_code == 0, text.stderr
-    assert "Readings: 2 of 3 Versions, 2 rules" in text.stdout.splitlines()
+    assert "Readings: 2 of 3 Versions, 5 rules" in text.stdout.splitlines()
     found = json.loads(printed.stdout)
-    assert (found["readings"], found["rules"], found["versions"]) == (2, 2, 3)
+    assert (found["readings"], found["rules"], found["versions"]) == (2, 5, 3)
     assert len(readings_of(store)) == 2
 
 

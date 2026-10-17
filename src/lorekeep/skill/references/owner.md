@@ -194,8 +194,8 @@ Reading with chrome left in it, or a new host lands in the Store:
 4. `lorekeep rules accept FILE` — the passing rules go into `lorekeep.toml` and the Readings under
    them are rebuilt; the next `search` reindexes them.
 
-Engine rules (Fern, EUR-Lex, Microsoft Learn) found this way belong in lorekeep's own
-`readings.toml`: file them as a lorekeep issue.
+A rule that holds for every Version an engine made, not for one host, belongs in lorekeep's own
+`readings.toml` as an `engine` rule: file it as a lorekeep issue.
 
 ## `lorekeep skill`
 
@@ -237,9 +237,10 @@ and `status --rules` marks them `(inherited)`; `browser` and `cut` are never inh
 changed after pages were stored does not reach them on Recheck (see `recheck` above).
 
 `[[readings]]` rules make Readings (see [store.md](store.md#readings)), over the package's
-defaults (`readings.toml`); a Project rule with the same `prefix` or `engine` and operation
-replaces a default. Each rule has `prefix` (`host/path`, longest wins) or `engine` (`fern`,
-`mintlify`, `sphinx`, `eur-lex`, `pdf`), exactly one operation — `drop_leading`,
+defaults (`readings.toml`: the Fern and Mintlify llms.txt banners, a heading per EUR-Lex
+article); a Project rule with the same `prefix` or `engine` and operation replaces a default.
+Each rule has `prefix` (`host/path`, longest wins) or `engine` (`fern`, `mintlify`, `sphinx`,
+`eur-lex`, `pdf`), exactly one operation — `drop_leading`,
 `drop_trailing`, `drop_lines`, `strip_title_suffix`, or `heading_before` with `level` — whose value
 is a regular expression, and `accepted` (a date) and `removes` (the most it removed from one
 Version when accepted, with its unit: `"26 lines"` for `drop_leading` and `drop_trailing`, `"4%"`

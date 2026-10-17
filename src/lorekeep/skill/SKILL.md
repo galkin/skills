@@ -178,9 +178,9 @@ Sections holding most of the words but stopwords: a weaker answer, check it in t
 ```text
 $ lorekeep search 'how do I set the perplexity threshold for jailbreak detection' --limit 1
 lorekeep: note: no Section has every word; these have most of them
-/…/store/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md:37 | Jailbreak Protection > Jailbreak Detection | …[jailbreak]_[detection]: server_endpoint: "http://0.0.0.0:1337/heuristics" length_per_[perplexity]_[threshold]: 89…
+/…/store/.cache/readings/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md:16 | Jailbreak Protection > Jailbreak Detection | …[jailbreak]_[detection]: server_endpoint: "http://0.0.0.0:1337/heuristics" length_per_[perplexity]_[threshold]: 89…
 $ lorekeep search 'jailbreak perplexity threshold' --limit 1
-/…/store/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md:37 | Jailbreak Protection > Jailbreak Detection | …[jailbreak]_detection: server_endpoint: "http://0.0.0.0:1337/heuristics" length_per_[perplexity]_[threshold]: 89…
+/…/store/.cache/readings/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md:16 | Jailbreak Protection > Jailbreak Detection | …[jailbreak]_detection: server_endpoint: "http://0.0.0.0:1337/heuristics" length_per_[perplexity]_[threshold]: 89…
 ```
 
 - `--tag TAG` — limit the scope to this Tag; repeat it for several (default: `$LOREKEEP_TAG`,
@@ -205,7 +205,7 @@ or `--tag`.
 
 ```text
 $ lorekeep search --exact length_per_perplexity_threshold --limit 1
-/…/store/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md:60 | Jailbreak Protection > Jailbreak Detection | …server_endpoint: "http://0.0.0.0:1337/heuristics" [length_per_perplexity_threshold]: 89.79 prefix_suffix_perplexity_threshold: 1845.65 ``…
+/…/store/.cache/readings/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md:39 | Jailbreak Protection > Jailbreak Detection | …server_endpoint: "http://0.0.0.0:1337/heuristics" [length_per_perplexity_threshold]: 89.79 prefix_suffix_perplexity_threshold: 1845.65 ``…
 $ lorekeep search jailbreak --tag anthropic
 no matches
 +2 matches under other tags (--all)
@@ -216,7 +216,7 @@ no matches
 `"relaxed": true` comes with the note line.
 
 ```json
-{"results": [{"file": "/…/store/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md", "line": 60, "heading_line": 35, "heading": "Jailbreak Protection > Jailbreak Detection", "snippet": "…server_endpoint: \"http://0.0.0.0:1337/heuristics\" [length_per_perplexity_threshold]: 89.79 prefix_suffix_perplexity_threshold: 1845.65 ``…", "url": "https://docs.nvidia.com/nemo/guardrails/latest/configure-guardrails/guardrail-catalog/jailbreak-protection", "tag": ["nvidia"]}], "other_tags": 0}
+{"results": [{"file": "/…/store/.cache/readings/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md", "line": 39, "heading_line": 14, "heading": "Jailbreak Protection > Jailbreak Detection", "snippet": "…server_endpoint: \"http://0.0.0.0:1337/heuristics\" [length_per_perplexity_threshold]: 89.79 prefix_suffix_perplexity_threshold: 1845.65 ``…", "url": "https://docs.nvidia.com/nemo/guardrails/latest/configure-guardrails/guardrail-catalog/jailbreak-protection", "tag": ["nvidia"]}], "other_tags": 0}
 ```
 
 ## `lorekeep status`
@@ -233,17 +233,17 @@ fetch, Recheck results, hosts no rule knows, size, and the Project's settings.
 ```text
 Store: /…/store
 5 Versions of 5 Sources
-Readings: 0 of 5 Versions, 0 rules
+Readings: 1 of 5 Versions, 3 rules
 Tags: nvidia 5
-Oldest fetched_at: 2026-10-17T17:16:51Z
-Newest fetched_at: 2026-10-17T17:16:52Z
+Oldest fetched_at: 2026-10-17T20:08:26Z
+Newest fetched_at: 2026-10-17T20:08:26Z
 Rechecks: 0 unchanged, 0 changed, 0 gone, 0 error
 Unknown hosts: genai.owasp.org, helm.sh
-Size on disk: 133079 bytes
+Size on disk: 303355 bytes
 Bucket: none
 Freshness window: 30 days
 ```
 
 ```json
-{"versions": 5, "sources": 5, "tags": {"nvidia": 5}, "oldest_fetched_at": "2026-10-17T17:16:51Z", "newest_fetched_at": "2026-10-17T17:16:52Z", "checks": {"unchanged": 0, "changed": 0, "gone": 0, "error": 0}, "unknown_hosts": ["genai.owasp.org", "helm.sh"], "readings": 0, "rules": 0, "bytes": 133079}
+{"versions": 5, "sources": 5, "tags": {"nvidia": 5}, "oldest_fetched_at": "2026-10-17T20:08:26Z", "newest_fetched_at": "2026-10-17T20:08:26Z", "checks": {"unchanged": 0, "changed": 0, "gone": 0, "error": 0}, "unknown_hosts": ["genai.owasp.org", "helm.sh"], "readings": 1, "rules": 3, "bytes": 303355}
 ```
