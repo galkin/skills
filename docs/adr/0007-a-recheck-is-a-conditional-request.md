@@ -16,8 +16,9 @@ have no answer a byte comparison can use, so both are counted as skipped.
 `get` performs the same request on its own when the latest Version is older than the Project's
 freshness window (`lorekeep.toml`, default 30 days, `--max-age <days>` for one call): younger, it
 returns what is stored; older, one conditional request decides, and `--fresh` forces it. The age
-is counted from the later of the Version's `fetched_at` and its last `unchanged` row in
-`checks.csv`, because the file is immutable and an `unchanged` answer is what moves the clock. When that
+is counted from the later of the Version's `fetched_at` and its last `checks.csv` row of any
+result, because the file is immutable and any recorded answer — `unchanged`, `gone` or `error`
+alike — moves the clock: a gone or failing page is asked once per window, not once per call. When that
 request fails or the page is gone, `get` still returns the stored Version, with a warning, because
 a stale page the Run knows about beats no page. Without the window a Run months after the last one
 would read stale pages without knowing.
