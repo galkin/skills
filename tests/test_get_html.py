@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import re
 from dataclasses import replace
@@ -12,36 +11,23 @@ import pytest
 import trafilatura
 
 from lorekeep.edges import Edges
-from tests.support import FIXTURES, FakeFetcher, FakeRunner, FakeTransport, run_cli
+from tests.support import (
+    FIXTURES,
+    FakeFetcher,
+    FakeRunner,
+    FakeTransport,
+    edges_over,
+    get,
+    make_store,
+    rows,
+)
 from tests.test_helpers import read_version
 
 LESSON = "https://claude.termidy.com/learn/ccar-f/agentic-architecture/coordinator-and-subagents"
 
 
-def make_store(tmp_path: Path) -> Path:
-    path = tmp_path / "store"
-    path.mkdir()
-    return path
-
-
-def edges_over(*fixtures: str) -> tuple[Edges, FakeTransport]:
-    transport = FakeTransport.from_fixtures(*fixtures)
-    return Edges(transport=transport, fetcher=FakeFetcher(), runner=FakeRunner()), transport
-
-
-def get(store: Path, edges: Edges, *argv: str, tag: str = "anthropic"):
-    return run_cli(
-        ["get", *argv], env={"LOREKEEP_STORE": str(store), "LOREKEEP_TAG": tag}, edges=edges
-    )
-
-
 def fixture_bytes(name: str) -> bytes:
     return (FIXTURES / name / "body.html").read_bytes()
-
-
-def aliases_rows(store: Path) -> list[dict[str, str]]:
-    with (store / "aliases.csv").open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
 
 
 def link_targets(body: bytes) -> list[str]:
@@ -136,7 +122,9 @@ def test_a_meta_refresh_stub_is_followed_and_never_stored(tmp_path: Path) -> Non
     assert head["original"]["url"] == NIM_TARGET
     assert head["etag"] == '"05e0903d68b11fdf4da3d162a0b700ce"'
     assert head["publisher"] == "nvidia"
-    assert [(row["alias"], row["url"]) for row in aliases_rows(store)] == [(NIM_STUB, NIM_TARGET)]
+    assert [(row["alias"], row["url"]) for row in rows(store, "aliases.csv")] == [
+        (NIM_STUB, NIM_TARGET)
+    ]
     assert b"redirect file" not in body
     [original] = store.glob("*.orig.html")
     assert original.read_bytes() == fixture_bytes("nim-overview.html")
@@ -157,7 +145,9 @@ def test_a_page_with_a_canonical_link_is_stored_under_the_canonical_url(tmp_path
     assert head["url"] == LESSON
     assert head["original"]["url"] == LESSON_ALIAS
     assert version.name.startswith("claude.termidy.com--learn-ccar-f-agentic-architecture-")
-    assert [(row["alias"], row["url"]) for row in aliases_rows(store)] == [(LESSON_ALIAS, LESSON)]
+    assert [(row["alias"], row["url"]) for row in rows(store, "aliases.csv")] == [
+        (LESSON_ALIAS, LESSON)
+    ]
 
 
 def test_the_alias_fetched_after_the_lesson_adds_its_row_and_no_second_file(
@@ -177,14 +167,16 @@ def test_the_alias_fetched_after_the_lesson_adds_its_row_and_no_second_file(
     assert by_alias.exit_code == 0, by_alias.stderr
     assert by_alias.stdout.splitlines()[-1] == str(version)
     assert list(store.glob("*.md")) == [version]
-    assert [(row["alias"], row["url"]) for row in aliases_rows(store)] == [(LESSON_ALIAS, LESSON)]
+    assert [(row["alias"], row["url"]) for row in rows(store, "aliases.csv")] == [
+        (LESSON_ALIAS, LESSON)
+    ]
     calls = len(transport.requests)
 
     again = get(store, edges, LESSON_ALIAS)
 
     assert again.stdout.splitlines()[-1] == str(version)
     assert len(transport.requests) == calls
-    assert len(aliases_rows(store)) == 1
+    assert len(rows(store, "aliases.csv")) == 1
 
 
 def test_tracking_parameters_and_a_trailing_slash_are_sent_as_given_and_add_no_alias(

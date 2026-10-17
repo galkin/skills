@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from lorekeep import frontmatter
+from lorekeep import frontmatter, history
 from lorekeep.project import HostRule
 from lorekeep.urls import normalise
 
@@ -138,6 +138,11 @@ class VersionInfo:
     path: Path
     frontmatter: dict[str, Any]
 
+    @classmethod
+    def read(cls, path: Path) -> VersionInfo:
+        """The Version at `path`, from the head of its file."""
+        return cls(path, read_head(path))
+
     @property
     def url(self) -> str:
         return str(self.frontmatter["url"])
@@ -253,8 +258,8 @@ def latest(store: Path, url: str, rules: Sequence[HostRule]) -> VersionInfo | No
     """The latest Version of `url` (normalised, Twin-reduced, or an alias of a stored `url`).
 
     A current Index answers in one query without a lock; otherwise every `.md` frontmatter is
-    read. Among a Source's Versions the one named by its latest `checks.csv` row wins, and the
-    newest `fetched_at` when there is no row. A lookup never rebuilds the Index.
+    read and the Latest Version rule (`history.latest`) picks among them. A lookup never
+    rebuilds the Index.
     """
     wanted = normalise(url, rules)
     aliases = {row.alias: row.url for row in read_rows(store, AliasRow)}
@@ -265,16 +270,12 @@ def latest(store: Path, url: str, rules: Sequence[HostRule]) -> VersionInfo | No
         if reader is not None:
             return reader.latest(wanted)
     versions = [info for info in scan(store) if info.url == wanted]
-    if not versions:
-        return None
-    checks = [row for row in read_rows(store, RecheckRow) if row.url == wanted and row.sha256]
-    if checks:
-        # The last row wins a tie on `checked_at`: two Rechecks in one second append in order.
-        current = max(enumerate(checks), key=lambda item: (item[1].checked_at, item[0]))[1].sha256
-        named = [info for info in versions if info.sha256 == current]
-        if named:
-            return named[0]
-    return max(versions, key=lambda info: info.fetched_at)
+    checks = [row for row in read_rows(store, RecheckRow) if row.url == wanted]
+    sha256 = history.latest(
+        [(info.fetched_at, info.sha256) for info in versions],
+        [(row.checked_at, row.sha256) for row in checks],
+    )
+    return next((info for info in versions if info.sha256 == sha256), None)
 
 
 def source_urls(store: Path, prefix: str) -> list[str]:
@@ -291,7 +292,7 @@ def source_urls(store: Path, prefix: str) -> list[str]:
 def scan(store: Path) -> Iterator[VersionInfo]:
     """Every Version in the Store, from the head of each `.md` file."""
     for path in sorted(store.glob("*.md")):
-        yield VersionInfo(path, read_head(path))
+        yield VersionInfo.read(path)
 
 
 def read_head(path: Path) -> dict[str, Any]:

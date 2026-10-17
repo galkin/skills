@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import json
 from dataclasses import replace
@@ -17,29 +16,16 @@ from tests.support import (
     FakeRunner,
     FakeTransport,
     comparable_url,
+    edges_over,
+    get,
+    make_store,
+    rows,
     run_cli,
 )
 from tests.test_helpers import read_version
 
 ANTHROPIC_PAGE = "https://platform.claude.com/docs/en/build-with-claude/prompt-caching"
 ANTHROPIC_TWIN = f"{ANTHROPIC_PAGE}.md"
-
-
-def make_store(tmp_path: Path) -> Path:
-    path = tmp_path / "store"
-    path.mkdir()
-    return path
-
-
-def edges_over(*fixtures: str) -> tuple[Edges, FakeTransport]:
-    transport = FakeTransport.from_fixtures(*fixtures)
-    return Edges(transport=transport, fetcher=FakeFetcher(), runner=FakeRunner()), transport
-
-
-def get(store: Path, edges: Edges, *argv: str, tag: str = "anthropic"):
-    return run_cli(
-        ["get", *argv], env={"LOREKEEP_STORE": str(store), "LOREKEEP_TAG": tag}, edges=edges
-    )
 
 
 def fixture_bytes(name: str, body: str = "body.md") -> bytes:
@@ -109,16 +95,6 @@ MS_CANONICAL = "https://learn.microsoft.com/en-us/azure/foundry/what-is-foundry"
 MS_CHAIN = ("ms-foundry.redirect-1", "ms-foundry.redirect-2", "ms-foundry.twin")
 
 
-def aliases_rows(store: Path) -> list[dict[str, str]]:
-    with (store / "aliases.csv").open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
-
-
-def tags_rows(store: Path) -> list[dict[str, str]]:
-    with (store / "tags.csv").open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
-
-
 def test_the_microsoft_chain_is_stored_once_under_its_canonical_url(tmp_path: Path) -> None:
     store = make_store(tmp_path)
     edges, _ = edges_over(*MS_CHAIN)
@@ -130,7 +106,9 @@ def test_the_microsoft_chain_is_stored_once_under_its_canonical_url(tmp_path: Pa
     head, body = read_version(version)
     assert head["url"] == MS_CANONICAL
     assert version.name.startswith("learn.microsoft.com--en-us-azure-foundry-what-is-foundry--")
-    assert [(row["alias"], row["url"]) for row in aliases_rows(store)] == [(MS_ASKED, MS_CANONICAL)]
+    assert [(row["alias"], row["url"]) for row in rows(store, "aliases.csv")] == [
+        (MS_ASKED, MS_CANONICAL)
+    ]
     assert head["original"]["url"] == f"{MS_CANONICAL}?accept=text/markdown"
     assert body.startswith(b"# What is Microsoft Foundry? - Microsoft Foundry | Microsoft Learn")
     assert b"canonicalUrl" not in body
@@ -214,7 +192,7 @@ def test_a_second_get_and_a_get_by_an_alias_make_no_request(tmp_path: Path) -> N
     assert again.stdout.splitlines()[-1] == by_alias.stdout.splitlines()[-1] == str(version)
     assert json.loads(other_run.stdout)["path"] == str(version)
     assert json.loads(other_run.stdout)["outcome"] == "fresh"
-    assert [(row["url"], row["tag"]) for row in tags_rows(store)] == [
+    assert [(row["url"], row["tag"]) for row in rows(store, "tags.csv")] == [
         (MS_CANONICAL, "microsoft"),
         (MS_CANONICAL, "azure"),
     ]
@@ -243,27 +221,22 @@ def test_the_old_address_first_used_after_the_page_is_stored_adds_its_alias(
     ]
     assert second.stdout.splitlines()[-1] == str(version)
     assert list(store.glob("*.md")) == [version]
-    assert [(row["alias"], row["url"]) for row in aliases_rows(store)] == [(MS_ASKED, MS_CANONICAL)]
+    assert [(row["alias"], row["url"]) for row in rows(store, "aliases.csv")] == [
+        (MS_ASKED, MS_CANONICAL)
+    ]
     after_second = len(transport.requests)
 
     third = get(store, edges, MS_ASKED, tag="microsoft")
 
     assert third.stdout.splitlines()[-1] == str(version)
     assert len(transport.requests) == after_second
-    assert len(aliases_rows(store)) == 1
+    assert len(rows(store, "aliases.csv")) == 1
     # The second call found the Markdown already stored: that is a Recheck, recorded as one.
     head, _ = read_version(version)
     assert [
-        (row["url"], row["result"], row["status"], row["sha256"]) for row in checks_rows(store)
+        (row["url"], row["result"], row["status"], row["sha256"])
+        for row in rows(store, "checks.csv")
     ] == [(MS_CANONICAL, "unchanged", "200", head["sha256"])]
-
-
-def checks_rows(store: Path) -> list[dict[str, str]]:
-    path = store / "checks.csv"
-    if not path.is_file():
-        return []
-    with path.open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
 
 
 def test_an_alias_first_used_when_the_page_changed_makes_the_new_version_current(
@@ -300,7 +273,9 @@ def test_an_alias_first_used_when_the_page_changed_makes_the_new_version_current
     assert printed["outcome"] == "changed"
     assert printed["url"] == MS_CANONICAL
     new_head, _ = read_version(new)
-    assert [(row["result"], row["status"], row["sha256"]) for row in checks_rows(store)][-1] == (
+    assert [(row["result"], row["status"], row["sha256"]) for row in rows(store, "checks.csv")][
+        -1
+    ] == (
         "changed",
         "200",
         new_head["sha256"],

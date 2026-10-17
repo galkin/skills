@@ -25,13 +25,13 @@ Converter = Callable[[bytes, str, str | None], Converted | Fallthrough]
 """`(received bytes, the address they came from, the charset the response named)`."""
 
 HTML_TYPES = ("text/html", "application/xhtml+xml")
-CONVERTERS: Mapping[str, Converter] = {
-    "text/html": convert_html,
-    "application/xhtml+xml": convert_html,
-    "application/pdf": convert_pdf,
-}
 PDF_TYPES = ("application/pdf",)
 STEP_MEDIA_TYPES: Mapping[str, tuple[str, ...]] = {html.NAME: HTML_TYPES, pdf.NAME: PDF_TYPES}
+"""The media types each converter of this step reads, by the first word of its `converter`."""
+CONVERTERS: Mapping[str, Converter] = {
+    **dict.fromkeys(HTML_TYPES, convert_html),
+    **dict.fromkeys(PDF_TYPES, convert_pdf),
+}
 MAX_REFRESHES = 5
 REFUSED = (403, 429)
 """What a host answers a plain client it will not serve: the signal for the browser step."""

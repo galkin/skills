@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -24,21 +25,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
         found = reader.summary()
     size = size_on_disk(ctx.store)
     if args.json:
-        print(
-            json.dumps(
-                {
-                    "versions": found.versions,
-                    "sources": found.sources,
-                    "tags": found.tags,
-                    "oldest_fetched_at": found.oldest_fetched_at,
-                    "newest_fetched_at": found.newest_fetched_at,
-                    "checks": found.checks,
-                    "unknown_hosts": found.unknown_hosts,
-                    "bytes": size,
-                },
-                ensure_ascii=False,
-            )
-        )
+        print(json.dumps({**asdict(found), "bytes": size}, ensure_ascii=False))
         return 0
     print(f"Store: {ctx.store}")
     print(f"{plural(found.versions, 'Version')} of {plural(found.sources, 'Source')}")

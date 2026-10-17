@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 from dataclasses import replace
 from pathlib import Path
 
@@ -12,9 +11,11 @@ from tests.support import (
     FakeFetcher,
     FakeRunner,
     FakeTransport,
-    Result,
     age_version,
-    run_cli,
+    edges_over,
+    lorekeep,
+    make_store,
+    rows,
     write_version,
 )
 
@@ -27,25 +28,7 @@ EFFECTIVE_PROMPTS = f"{LESSONS}/ccao-f/prompting-task-execution/effective-prompt
 BROWSER_PAGE = "https://example.test/app"
 
 
-def make_store(tmp_path: Path) -> Path:
-    path = tmp_path / "store"
-    path.mkdir()
-    return path
-
-
-def edges_over(*fixtures: str) -> tuple[Edges, FakeTransport]:
-    transport = FakeTransport.from_fixtures(*fixtures)
-    return Edges(transport=transport, fetcher=FakeFetcher(), runner=FakeRunner()), transport
-
-
-def lorekeep(store: Path, edges: Edges, *argv: str, tag: str | None = None) -> Result:
-    env = {"LOREKEEP_STORE": str(store)}
-    if tag is not None:
-        env["LOREKEEP_TAG"] = tag
-    return run_cli(list(argv), env=env, edges=edges)
-
-
-def get(store: Path, url: str, fixture: str, *, tag: str) -> None:
+def get_aged(store: Path, url: str, fixture: str, *, tag: str) -> None:
     """A real `get` of `url`, aged by the helper so any window would have it rechecked."""
     edges, _ = edges_over(fixture)
     before = set(store.glob("*.md"))
@@ -55,21 +38,13 @@ def get(store: Path, url: str, fixture: str, *, tag: str) -> None:
     age_version(version, days=40)
 
 
-def checks_rows(store: Path) -> list[dict[str, str]]:
-    path = store / "checks.csv"
-    if not path.exists():
-        return []
-    with path.open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
-
-
 def mixed_store(tmp_path: Path) -> Path:
     """Four real `get`s under two Tags, one owner's Source and one Version read by a browser."""
     store = make_store(tmp_path)
-    get(store, ANTHROPIC_PAGE, "anthropic-prompt-caching.twin", tag="anthropic")
-    get(store, f"{ETHICAL_AI}/", "termidy-ethical-ai.html", tag="termidy")
-    get(store, f"{COORDINATOR}/", "termidy-coordinator-and-subagents.html", tag="termidy")
-    get(store, f"{EFFECTIVE_PROMPTS}/", "termidy-effective-prompts.html", tag="termidy")
+    get_aged(store, ANTHROPIC_PAGE, "anthropic-prompt-caching.twin", tag="anthropic")
+    get_aged(store, f"{ETHICAL_AI}/", "termidy-ethical-ai.html", tag="termidy")
+    get_aged(store, f"{COORDINATOR}/", "termidy-coordinator-and-subagents.html", tag="termidy")
+    get_aged(store, f"{EFFECTIVE_PROMPTS}/", "termidy-effective-prompts.html", tag="termidy")
     research = tmp_path / "research.md"
     research.write_text("# Research\n\nPasted from a chat.\n", encoding="utf-8")
     edges, _ = edges_over()
@@ -104,8 +79,8 @@ def test_recheck_records_every_answer_stores_the_change_and_counts_the_skipped(
     result = lorekeep(store, edges, "recheck")
 
     assert result.exit_code == 0, result.stderr
-    rows = checks_rows(store)
-    assert sorted((row["url"], row["result"], row["status"]) for row in rows) == [
+    checks = rows(store, "checks.csv")
+    assert sorted((row["url"], row["result"], row["status"]) for row in checks) == [
         (EFFECTIVE_PROMPTS, "gone", "404"),
         (COORDINATOR, "changed", "200"),
         (ETHICAL_AI, "unchanged", "200"),
@@ -113,7 +88,7 @@ def test_recheck_records_every_answer_stores_the_change_and_counts_the_skipped(
     ]
     [new] = set(store.glob("*.md")) - versions_before
     assert new.name.startswith("claude.termidy.com--learn-ccar-f-agentic-architecture-")
-    assert [row["sha256"][:8] for row in rows if row["result"] == "changed"] == [
+    assert [row["sha256"][:8] for row in checks if row["result"] == "changed"] == [
         new.name.removesuffix(".md")[-8:]
     ]
     assert len(transport.requests) == 4
@@ -129,7 +104,7 @@ def changed_store(tmp_path: Path) -> tuple[Path, str, str]:
     store = mixed_store(tmp_path)
     edges, _ = edges_over(*NOW)
     assert lorekeep(store, edges, "recheck").exit_code == 0
-    [changed] = [row for row in checks_rows(store) if row["result"] == "changed"]
+    [changed] = [row for row in rows(store, "checks.csv") if row["result"] == "changed"]
     [old] = [
         path
         for path in store.glob("claude.termidy.com--learn-ccar-f-*.md")
@@ -284,7 +259,7 @@ def test_prefix_limits_the_sources_asked(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.stderr
     assert asked(transport) == sorted([f"{COORDINATOR}/", f"{ETHICAL_AI}/"])
-    assert sorted(row["url"] for row in checks_rows(store)) == [COORDINATOR, ETHICAL_AI]
+    assert sorted(row["url"] for row in rows(store, "checks.csv")) == [COORDINATOR, ETHICAL_AI]
 
 
 def test_dry_run_asks_nothing_and_lists_what_would_be_asked(tmp_path: Path) -> None:
@@ -296,7 +271,7 @@ def test_dry_run_asks_nothing_and_lists_what_would_be_asked(tmp_path: Path) -> N
 
     assert result.exit_code == 0, result.stderr
     assert transport.requests == []
-    assert checks_rows(store) == []
+    assert rows(store, "checks.csv") == []
     assert sorted(store.glob("*.md")) == versions
     assert result.stdout.splitlines() == [
         f"would ask {EFFECTIVE_PROMPTS}/",

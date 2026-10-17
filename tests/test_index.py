@@ -11,12 +11,9 @@ import threading
 from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
-
-from lorekeep import store as store_module
 from lorekeep.project import load_project
 from lorekeep.store import AliasRow, RecheckRow, TagRow, VersionInfo, commit, latest
-from tests.support import FIXTURES, Result, run_cli, write_version
+from tests.support import FIXTURES, Result, edges_over, get, run_cli, write_version
 
 ANTHROPIC = "https://platform.claude.com/docs/en/build-with-claude/prompt-caching"
 AWS = "https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html"
@@ -449,8 +446,22 @@ def test_search_without_an_index_builds_it_under_the_store_lock_and_answers(
     assert meta["citations.csv:size"] == "missing"
 
 
+@contextlib.contextmanager
+def only_readable(store: Path, *keep: Path) -> Iterator[None]:
+    """Every Version file but `keep` stripped of its permission bits: a scan of the Store opens
+    them all and fails on the first, a current Index opens only the file it names."""
+    others = [path for path in store.glob("*.md") if path not in keep]
+    for path in others:
+        path.chmod(0)
+    try:
+        yield
+    finally:
+        for path in others:
+            path.chmod(0o644)
+
+
 def test_the_lookup_answers_from_a_current_index_without_scanning_or_locking(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
     three_twins(tmp_path)
     newer = write_version(
@@ -461,19 +472,16 @@ def test_the_lookup_answers_from_a_current_index_without_scanning_or_locking(
     )
     run_cli(["index", "--store", str(tmp_path)])
     rules = load_project(tmp_path).hosts
+    [foundry] = [path for path in tmp_path.glob("*.md") if path.name.startswith("learn.microsoft")]
 
-    def no_scan(store: Path) -> Iterator[VersionInfo]:
-        raise AssertionError("the lookup scanned the Store")
-
-    monkeypatch.setattr(store_module, "scan", no_scan)
     found: list[VersionInfo | None] = []
-    with store_lock_held(tmp_path):
+    with only_readable(tmp_path, newer, foundry), store_lock_held(tmp_path):
         worker = threading.Thread(
             target=lambda: found.append(latest(tmp_path, ANTHROPIC + ".md", rules))
         )
         worker.start()
         worker.join(timeout=5)
-    by_alias = latest(tmp_path, FOUNDRY + "-old", rules)
+        by_alias = latest(tmp_path, FOUNDRY + "-old", rules)
 
     assert found and found[0] is not None and found[0].path == newer
     assert found[0].url == ANTHROPIC
@@ -495,18 +503,18 @@ def test_the_lookup_scans_when_the_index_is_stale(tmp_path: Path) -> None:
     assert found is not None and found.path == by_hand
 
 
-def test_an_unknown_url_on_a_current_index_is_not_found_without_scanning(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_an_unknown_url_on_a_current_index_is_not_found_without_scanning(tmp_path: Path) -> None:
     three_twins(tmp_path)
     run_cli(["index", "--store", str(tmp_path)])
+    edges, transport = edges_over()
 
-    def no_scan(store: Path) -> Iterator[VersionInfo]:
-        raise AssertionError("the lookup scanned the Store")
+    with only_readable(tmp_path):
+        result = get(tmp_path, edges, "https://example.test/nowhere")
 
-    monkeypatch.setattr(store_module, "scan", no_scan)
-
-    assert latest(tmp_path, "https://example.test/nowhere", load_project(tmp_path).hosts) is None
+    assert result.exit_code == 1
+    assert "nothing stored for https://example.test/nowhere" in result.stderr
+    assert transport.misses == ["https://example.test/nowhere"]
+    assert len(list(tmp_path.glob("*.md"))) == 3
 
 
 def test_an_empty_query_is_a_one_line_error(tmp_path: Path) -> None:

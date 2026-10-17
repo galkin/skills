@@ -19,7 +19,7 @@ from dataclasses import astuple, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from lorekeep import frontmatter, sections
+from lorekeep import frontmatter, history, sections
 from lorekeep import store as store_module
 from lorekeep.project import HostRule
 from lorekeep.provenance import TIME_FORMAT
@@ -77,9 +77,9 @@ CREATE INDEX IF NOT EXISTS sections_file ON sections(file);
 CREATE VIRTUAL TABLE IF NOT EXISTS sections_fts USING fts5(
   heading, body, content='sections', content_rowid='id', tokenize='porter unicode61'
 );
--- The latest Version of each Source: the one its latest `checks.csv` row names, else the newest
--- `fetched_at`; the same answer as the Store's scan, whose tie on `checked_at` goes to the later
--- row in the file (rows enter `checks` in file order, so `rowid` is that order).
+-- The Latest Version of each Source, as `history.latest` says it and a test proves: the one its
+-- latest `checks.csv` row names, else the newest `fetched_at`; a tie on `checked_at` goes to the
+-- later row in the file (rows enter `checks` in file order, so `rowid` is that order).
 DROP VIEW IF EXISTS latest;
 CREATE VIEW latest AS
 SELECT v.* FROM versions v
@@ -498,13 +498,12 @@ class Reader:
     con: sqlite3.Connection
 
     def latest(self, url: str) -> VersionInfo | None:
-        """The latest Version of `url` (the one its latest `checks.csv` row names, else the
-        newest `fetched_at`), or `None` when the Store has none."""
+        """The Latest Version of `url` from the view `latest` (the rule `history.latest`
+        states), or `None` when the Store has none."""
         row = self.con.execute("SELECT file FROM latest WHERE url = ?", (url,)).fetchone()
         if row is None:
             return None
-        path = self.store / row[0]
-        return VersionInfo(path, store_module.read_head(path))
+        return VersionInfo.read(self.store / row[0])
 
     def urls(self, prefix: str) -> list[str]:
         """Every Source's `url` that starts with `prefix`, sorted."""
@@ -526,8 +525,7 @@ class Reader:
             f"SELECT l.file FROM latest l WHERE 1{filters}{tag_filter} ORDER BY l.url",
             [*args, *tag_args],
         ).fetchall()
-        paths = [self.store / file for (file,) in rows]
-        return [VersionInfo(path, store_module.read_head(path)) for path in paths]
+        return [VersionInfo.read(self.store / file) for (file,) in rows]
 
     def search(
         self, query: str, scope: Scope, *, limit: int, exact: bool
@@ -581,10 +579,9 @@ class Reader:
         """Every Citation whose Source changed since the work was written, and one warning per
         Citation of a `url` the Store has no Version of.
 
-        The work was written from the Version the lookup would have returned at `as_of` — the
-        one the latest `checks.csv` row up to then names, else the newest `fetched_at` up to
-        then — or from the oldest Version when `as_of` is absent or earlier than every Version.
-        It is measured against the latest Version now.
+        The work was written from the Latest Version at `as_of` (`history.latest`), or from
+        the oldest Version when `as_of` is absent or earlier than every Version. It is measured
+        against the Latest Version now.
         """
         con = self.con
         citations = con.execute(
@@ -594,16 +591,20 @@ class Reader:
         warnings: list[str] = []
         for work_id, url, as_of in citations:
             versions = con.execute(
-                "SELECT fetched_at, sha256 FROM versions WHERE url = ? ORDER BY fetched_at, file",
-                (url,),
+                "SELECT fetched_at, sha256 FROM versions WHERE url = ? ORDER BY file", (url,)
             ).fetchall()
             if not versions:
                 warnings.append(f"lorekeep: warning: {work_id} cites {url}, which is not stored")
                 continue
-            current = con.execute("SELECT sha256 FROM latest WHERE url = ?", (url,)).fetchone()[0]
-            written_from = _version_at(con, url, versions, as_of)
-            if written_from != current:
-                found.append(Revisit(work_id, url, written_from, current))
+            checks = con.execute(
+                "SELECT checked_at, sha256 FROM checks WHERE url = ? ORDER BY rowid", (url,)
+            ).fetchall()
+            now = history.latest(versions, checks)
+            assert now is not None, "a Source with Versions has a Latest Version"
+            then = history.latest(versions, checks, as_of) if as_of else None
+            written_from = then or min(versions, key=lambda version: version[0])[1]
+            if written_from != now:
+                found.append(Revisit(work_id, url, written_from, now))
         return found, warnings
 
     def summary(self) -> Summary:
@@ -676,23 +677,3 @@ def _snippet(body: str, needle: str, around: int = 60) -> str:
     start, end = max(0, at - around), min(len(body), at + len(needle) + around)
     text = body[start:at] + "[" + needle + "]" + body[at + len(needle) : end]
     return ("…" if start else "") + _one_line(text) + ("…" if end < len(body) else "")
-
-
-def _version_at(
-    con: sqlite3.Connection, url: str, versions: list[tuple[str, str]], as_of: str | None
-) -> str:
-    oldest = versions[0][1]
-    if as_of is None:
-        return oldest
-    # A Recheck row in the same second as a fetch is the later answer: it names what is current.
-    events = [(fetched_at, 0, sha256) for fetched_at, sha256 in versions if fetched_at <= as_of]
-    stored = {sha256 for _, sha256 in versions}
-    events += [
-        (checked_at, 1, sha256)
-        for checked_at, sha256 in con.execute(
-            "SELECT checked_at, sha256 FROM checks WHERE url = ? AND checked_at <= ?",
-            (url, as_of),
-        )
-        if sha256 in stored
-    ]
-    return max(events)[2] if events else oldest

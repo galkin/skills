@@ -23,7 +23,10 @@ from tests.support import (
     FakeTransport,
     Result,
     age_version,
-    run_cli,
+    edges_over,
+    get,
+    make_store,
+    rows,
     write_version,
 )
 from tests.test_helpers import read_version
@@ -32,35 +35,10 @@ ANTHROPIC_PAGE = "https://platform.claude.com/docs/en/build-with-claude/prompt-c
 ANTHROPIC_TWIN = f"{ANTHROPIC_PAGE}.md"
 
 
-def make_store(tmp_path: Path) -> Path:
-    path = tmp_path / "store"
-    path.mkdir()
-    return path
-
-
-def edges_over(*fixtures: str) -> tuple[Edges, FakeTransport]:
-    transport = FakeTransport.from_fixtures(*fixtures)
-    return Edges(transport=transport, fetcher=FakeFetcher(), runner=FakeRunner()), transport
-
-
 def edges_over_nothing() -> tuple[Edges, FakeTransport]:
     """A transport that answers every URL with `404` (no fixture at all)."""
     transport = FakeTransport([])
     return Edges(transport=transport, fetcher=FakeFetcher(), runner=FakeRunner()), transport
-
-
-def get(store: Path, edges: Edges, *argv: str, tag: str = "anthropic"):
-    return run_cli(
-        ["get", *argv], env={"LOREKEEP_STORE": str(store), "LOREKEEP_TAG": tag}, edges=edges
-    )
-
-
-def checks_rows(store: Path) -> list[dict[str, str]]:
-    path = store / "checks.csv"
-    if not path.exists():
-        return []
-    with path.open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
 
 
 def stored_anthropic_twin(store: Path, *, days: float) -> Path:
@@ -84,7 +62,7 @@ def test_a_version_inside_the_window_is_returned_without_a_request(tmp_path: Pat
     assert transport.requests == []
     assert json.loads(result.stdout)["path"] == str(version)
     assert json.loads(result.stdout)["outcome"] == "fresh"
-    assert checks_rows(store) == []
+    assert rows(store, "checks.csv") == []
 
 
 def test_max_age_below_the_age_sends_one_conditional_request(tmp_path: Path) -> None:
@@ -99,15 +77,15 @@ def test_max_age_below_the_age_sends_one_conditional_request(tmp_path: Path) -> 
     assert str(request.url) == ANTHROPIC_TWIN
     assert request.headers["if-none-match"] == '"a1-twin"'
     assert [path.name for path in store.glob("*.md")] == [version.name]
-    rows = checks_rows(store)
+    checks = rows(store, "checks.csv")
     head, _ = read_version(version)
-    assert [(row["url"], row["result"], row["status"], row["sha256"]) for row in rows] == [
+    assert [(row["url"], row["result"], row["status"], row["sha256"]) for row in checks] == [
         (ANTHROPIC_PAGE, "unchanged", "304", head["sha256"])
     ]
     printed = json.loads(result.stdout)
     assert printed["path"] == str(version)
     assert printed["outcome"] == "unchanged"
-    assert printed["verified_at"] == rows[0]["checked_at"]
+    assert printed["verified_at"] == checks[0]["checked_at"]
     assert result.stderr == ""
 
 
@@ -180,13 +158,13 @@ def _age_rows(store: Path, *, days: float) -> None:
 
 
 def _rewrite_rows(store: Path, **fields: str) -> None:
-    rows = checks_rows(store)
-    for row in rows:
+    checks = rows(store, "checks.csv")
+    for row in checks:
         row.update(fields)
     with (store / "checks.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
+        writer = csv.DictWriter(handle, fieldnames=list(checks[0]), lineterminator="\n")
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(checks)
 
 
 LESSON = "https://claude.termidy.com/learn/ccar-f/agentic-architecture/coordinator-and-subagents"
@@ -219,7 +197,7 @@ def test_the_same_bytes_again_are_unchanged_without_a_conversion(
     assert result.stdout.splitlines()[-1] == str(version)
     assert [path.name for path in store.glob("*.md")] == [version.name]
     head, _ = read_version(version)
-    assert [(row["result"], row["status"], row["sha256"]) for row in checks_rows(store)] == [
+    assert [(row["result"], row["status"], row["sha256"]) for row in rows(store, "checks.csv")] == [
         ("unchanged", "200", head["sha256"])
     ]
 
@@ -235,7 +213,9 @@ def test_noisy_html_with_the_same_markdown_is_unchanged(tmp_path: Path) -> None:
     assert result.stdout.splitlines()[-1] == str(version)
     assert [path.name for path in store.glob("*.md")] == [version.name]
     assert len(list(store.glob("*.orig.html"))) == 1
-    assert [(row["result"], row["status"]) for row in checks_rows(store)] == [("unchanged", "200")]
+    assert [(row["result"], row["status"]) for row in rows(store, "checks.csv")] == [
+        ("unchanged", "200")
+    ]
 
 
 def test_different_markdown_is_a_second_version_beside_the_old(tmp_path: Path) -> None:
@@ -264,7 +244,7 @@ def test_different_markdown_is_a_second_version_beside_the_old(tmp_path: Path) -
     assert len(originals) == 2
     assert old.read_bytes() == old_bytes
     assert old_original.read_bytes() == old_original_bytes
-    assert [(row["result"], row["status"], row["sha256"]) for row in checks_rows(store)] == [
+    assert [(row["result"], row["status"], row["sha256"]) for row in rows(store, "checks.csv")] == [
         ("changed", "200", new_head["sha256"])
     ]
     printed = json.loads(result.stdout)
@@ -286,7 +266,7 @@ def test_a_gone_page_keeps_the_stored_version_with_a_warning(tmp_path: Path) -> 
     assert "gone" in result.stderr and "404" in result.stderr
     assert result.stdout.splitlines()[-1] == str(version)
     head, _ = read_version(version)
-    assert [(row["result"], row["status"], row["sha256"]) for row in checks_rows(store)] == [
+    assert [(row["result"], row["status"], row["sha256"]) for row in rows(store, "checks.csv")] == [
         ("gone", "404", head["sha256"])
     ]
 
@@ -312,7 +292,9 @@ def test_a_twin_whose_md_address_is_gone_asks_nothing_else(tmp_path: Path) -> No
     assert result.exit_code == 0
     assert [str(request.url) for request in transport.requests] == [ANTHROPIC_TWIN]
     assert result.stdout.splitlines()[-1] == str(version)
-    assert [(row["result"], row["status"]) for row in checks_rows(store)] == [("gone", "404")]
+    assert [(row["result"], row["status"]) for row in rows(store, "checks.csv")] == [
+        ("gone", "404")
+    ]
 
 
 GOOGLE_PAGE = "https://cloud.google.com/vertex-ai/docs/generative-ai/learn/overview"
@@ -351,7 +333,9 @@ def test_a_twin_address_now_answering_html_is_an_error_and_nothing_is_stored(
     assert "text/html" in result.stderr
     assert [path.name for path in store.glob("*.md")] == [version.name]
     assert not list(store.glob("*.orig.*"))
-    assert [(row["result"], row["status"]) for row in checks_rows(store)] == [("error", "200")]
+    assert [(row["result"], row["status"]) for row in rows(store, "checks.csv")] == [
+        ("error", "200")
+    ]
 
 
 def test_an_html_version_whose_address_now_answers_a_pdf_is_an_error_and_nothing_is_stored(
@@ -384,7 +368,9 @@ def test_an_html_version_whose_address_now_answers_a_pdf_is_an_error_and_nothing
     assert json.loads(result.stdout)["outcome"] == "error"
     assert [path.name for path in store.glob("*.md")] == [version.name]
     assert not list(store.glob("*.orig.*"))
-    assert [(row["result"], row["status"]) for row in checks_rows(store)] == [("error", "200")]
+    assert [(row["result"], row["status"]) for row in rows(store, "checks.csv")] == [
+        ("error", "200")
+    ]
 
 
 def test_a_page_served_a_then_changed_then_a_again_has_two_files_and_a_current(
@@ -406,7 +392,7 @@ def test_a_page_served_a_then_changed_then_a_again_has_two_files_and_a_current(
     assert len(list(store.glob("*.orig.html"))) == 2
     a_head, _ = read_version(Path(a_path))
     b_head, _ = read_version(Path(b_path))
-    assert [(row["result"], row["sha256"]) for row in checks_rows(store)] == [
+    assert [(row["result"], row["sha256"]) for row in rows(store, "checks.csv")] == [
         ("changed", b_head["sha256"]),
         ("changed", a_head["sha256"]),
     ]
@@ -434,7 +420,7 @@ def test_a_refusal_on_a_stored_version_is_an_error_without_the_browser(
     assert str(status) in result.stderr
     assert result.stdout.splitlines()[-1] == str(version)
     assert [path.name for path in store.glob("*.md")] == [version.name]
-    assert [(row["result"], row["status"]) for row in checks_rows(store)] == [
+    assert [(row["result"], row["status"]) for row in rows(store, "checks.csv")] == [
         ("error", str(status))
     ]
 
@@ -458,7 +444,7 @@ def test_a_browser_version_is_never_rechecked(tmp_path: Path) -> None:
     assert "browser" in result.stderr
     assert json.loads(result.stdout)["path"] == str(version)
     assert json.loads(result.stdout)["outcome"] == "skipped"
-    assert checks_rows(store) == []
+    assert rows(store, "checks.csv") == []
 
 
 def test_a_timeout_on_a_stored_version_is_an_error_named_by_its_class(tmp_path: Path) -> None:
@@ -474,7 +460,7 @@ def test_a_timeout_on_a_stored_version_is_an_error_named_by_its_class(tmp_path: 
     assert len(transport.requests) == 1
     assert "ReadTimeout" in result.stderr
     assert result.stdout.splitlines()[-1] == str(version)
-    assert [(row["result"], row["status"]) for row in checks_rows(store)] == [
+    assert [(row["result"], row["status"]) for row in rows(store, "checks.csv")] == [
         ("error", "ReadTimeout")
     ]
 
@@ -492,9 +478,9 @@ def test_fresh_asks_now_like_max_age_zero(tmp_path: Path) -> None:
         '"a1-twin"',
         '"a1-twin"',
     ]
-    rows = checks_rows(store)
+    checks = rows(store, "checks.csv")
     # Two Rechecks, two rows, even within one second with the same answer.
-    assert [row["result"] for row in rows] == ["unchanged", "unchanged"]
+    assert [row["result"] for row in checks] == ["unchanged", "unchanged"]
 
 
 def recheck_in_child(store: str, worker: int) -> Result:
@@ -514,5 +500,5 @@ def test_concurrent_rechecks_keep_one_header_in_checks_csv(tmp_path: Path) -> No
     lines = (store / "checks.csv").read_text(encoding="utf-8").splitlines()
     assert lines[0] == "url,checked_at,result,status,sha256"
     assert lines.count(lines[0]) == 1
-    rows = checks_rows(store)
-    assert [row["result"] for row in rows] == ["unchanged"] * 6
+    checks = rows(store, "checks.csv")
+    assert [row["result"] for row in checks] == ["unchanged"] * 6

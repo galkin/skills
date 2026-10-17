@@ -8,7 +8,7 @@ from pathlib import Path
 import trafilatura
 
 from lorekeep.edges import Edges
-from tests.support import FakeFetcher, FakeRunner, FakeTransport, run_cli
+from tests.support import FakeFetcher, FakeRunner, FakeTransport, get, make_store
 from tests.test_helpers import read_version
 
 MILVUS = "https://milvus.io/docs/overview.md"
@@ -34,22 +34,10 @@ are what keep its latency low and its throughput high.</p>
 """
 
 
-def make_store(tmp_path: Path) -> Path:
-    path = tmp_path / "store"
-    path.mkdir(parents=True)
-    return path
-
-
 def rendered_page(tmp_path: Path, html: str = RENDERED) -> Path:
     path = tmp_path / "rendered.html"
     path.write_text(html, encoding="utf-8")
     return path
-
-
-def get(store: Path, edges: Edges, *argv: str, tag: str = "milvus"):
-    return run_cli(
-        ["get", *argv], env={"LOREKEEP_STORE": str(store), "LOREKEEP_TAG": tag}, edges=edges
-    )
 
 
 def test_a_403_to_the_plain_client_is_fetched_once_through_the_browser(tmp_path: Path) -> None:

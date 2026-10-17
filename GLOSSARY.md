@@ -17,6 +17,12 @@ One Source as it was at one moment, identified by the hash of its Markdown. A So
 upstream has several Versions side by side.
 _Avoid_: snapshot, revision, copy
 
+**Latest Version**:
+The Version that answers for a Source at a moment: the one its latest Recheck by then names, else
+the one fetched most recently by then. A Recheck can make an older file the Latest Version again.
+_Avoid_: current version (an Index is current; a Version is latest), newest version (that is
+`fetched_at` alone), head
+
 **Original**:
 The bytes a Version's Markdown was made from, exactly as received.
 _Avoid_: raw, source file, input

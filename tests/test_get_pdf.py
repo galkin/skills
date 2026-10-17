@@ -6,17 +6,10 @@ import hashlib
 from importlib import metadata
 from pathlib import Path
 
-from tests.support import FIXTURES, run_cli
-from tests.test_get_twin import edges_over, make_store
+from tests.support import FIXTURES, edges_over, get, make_store
 from tests.test_helpers import read_version
 
 EXAM_GUIDE = "https://example.test/exam/guide"
-
-
-def get(store: Path, edges, *argv: str):
-    return run_cli(
-        ["get", *argv], env={"LOREKEEP_STORE": str(store), "LOREKEEP_TAG": "anthropic"}, edges=edges
-    )
 
 
 def test_a_pdf_served_under_a_url_without_pdf_is_converted_by_markitdown(tmp_path: Path) -> None:

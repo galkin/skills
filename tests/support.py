@@ -1,11 +1,14 @@
 """The seam's edge for tests: run a command in-process with fakes, and build Store files.
 
-Every fake is built from paths and plain values, so a child process can construct its own.
+Every fake is built from paths and plain values, so a child process can construct its own. The
+spec's two Store helpers (`write_version`, `age_version`) live here with the harness every test
+file shares: `make_store`, `edges_over`, `lorekeep`, `get` and `rows`.
 """
 
 from __future__ import annotations
 
 import contextlib
+import csv
 import hashlib
 import io
 import json
@@ -169,6 +172,42 @@ def run_cli(
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
         code = run(list(argv), env=dict(env or {}), edges=edges or fake_edges())
     return Result(code, out.getvalue(), err.getvalue())
+
+
+def make_store(tmp_path: Path) -> Path:
+    """An empty Store under `tmp_path`, folders above it made on the way."""
+    path = tmp_path / "store"
+    path.mkdir(parents=True)
+    return path
+
+
+def edges_over(*fixtures: str) -> tuple[Edges, FakeTransport]:
+    """Fakes whose transport serves the named fixture folders (every folder when none is named),
+    and that transport, for its `requests` and `misses`."""
+    transport = FakeTransport.from_fixtures(*fixtures)
+    return Edges(transport=transport, fetcher=FakeFetcher(), runner=FakeRunner()), transport
+
+
+def lorekeep(store: Path, edges: Edges, *argv: str, tag: str | None = None) -> Result:
+    """Run one command against `store` with `edges`, under the Run's Tag when one is given."""
+    env = {"LOREKEEP_STORE": str(store)}
+    if tag is not None:
+        env["LOREKEEP_TAG"] = tag
+    return run_cli(list(argv), env=env, edges=edges)
+
+
+def get(store: Path, edges: Edges, *argv: str, tag: str = "anthropic") -> Result:
+    """`get` under a Tag: the command most tests drive."""
+    return lorekeep(store, edges, "get", *argv, tag=tag)
+
+
+def rows(store: Path, name: str) -> list[dict[str, str]]:
+    """The rows of one of the Store's growing CSV files, `[]` when it was never written."""
+    path = store / name
+    if not path.is_file():
+        return []
+    with path.open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
 
 
 def status_in_child(store: str) -> Result:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import json
 import time
@@ -12,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from lorekeep.store import RecheckRow, commit
-from tests.support import run_cli
+from tests.support import rows, run_cli
 from tests.test_helpers import read_version
 
 BODY = "# Research on prompt caching\n\nPasted from a chat.\n"
@@ -29,11 +28,6 @@ def store(tmp_path: Path) -> Path:
     path = tmp_path / "store"
     path.mkdir()
     return path
-
-
-def tags_rows(store_dir: Path) -> list[dict[str, str]]:
-    with (store_dir / "tags.csv").open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
 
 
 def test_add_of_a_text_file_creates_an_owner_version_with_one_tag_row(tmp_path: Path) -> None:
@@ -61,11 +55,11 @@ def test_add_of_a_text_file_creates_an_owner_version_with_one_tag_row(tmp_path: 
     mtime = datetime.fromtimestamp(file.stat().st_mtime, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     assert head["fetched_at"] == mtime
     assert "original" not in head
-    rows = tags_rows(store_dir)
-    assert [(row["url"], row["tag"]) for row in rows] == [
+    tags = rows(store_dir, "tags.csv")
+    assert [(row["url"], row["tag"]) for row in tags] == [
         ("owner:research-on-prompt-caching", "anthropic")
     ]
-    datetime.fromisoformat(rows[0]["added_at"])
+    datetime.fromisoformat(tags[0]["added_at"])
 
 
 def test_add_json_prints_one_object_with_the_path(tmp_path: Path) -> None:
@@ -115,7 +109,7 @@ def test_add_of_the_same_content_twice_creates_one_file_and_tags_once_per_tag(
     assert (first.exit_code, second.exit_code, third.exit_code) == (0, 0, 0)
     assert first.stdout == second.stdout == third.stdout
     assert sorted(p.name for p in store_dir.glob("*.md")) == [Path(first.stdout.strip()).name]
-    assert [(row["url"], row["tag"]) for row in tags_rows(store_dir)] == [
+    assert [(row["url"], row["tag"]) for row in rows(store_dir, "tags.csv")] == [
         ("owner:research", "anthropic"),
         ("owner:research", "nvidia"),
     ]
