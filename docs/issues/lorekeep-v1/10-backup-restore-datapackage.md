@@ -1,6 +1,6 @@
 # 10: `backup`, `restore` and the data package
 
-**What to build:** `backup` regenerates `datapackage.json` under the Store lock (a resource for each CSV that exists, with a typed schema, and a `sources` resource listing every Version with its frontmatter fields, `hash` and `bytes`), then runs through the command runner: one `gcloud storage rsync --recursive --no-clobber` of the Store excluding the five growing files, the Index with its journals, `.lorekeep.lock` and `.tmp-*` files, and one `gcloud storage cp` of the growing files that exist (`tags.csv`, `checks.csv`, `citations.csv`, `datapackage.json`, `lorekeep.toml`); `--dry-run` passes through; nothing deletes. `restore <name> [--generation N]` copies one object from the bucket and refuses to overwrite a local file.
+**What to build:** `backup` regenerates `datapackage.json` under the Store lock (a resource for each CSV that exists, with a typed schema, and a `sources` resource with inline `data`: one row per Version with its frontmatter fields, file name, `hash` = `sha256` and `bytes`), then runs through the command runner: one `gcloud storage rsync --recursive --no-clobber` of the Store excluding the five growing files, the Index with its journals, `.lorekeep.lock` and `.tmp-*` files, and one `gcloud storage cp` of the growing files that exist (`tags.csv`, `checks.csv`, `citations.csv`, `datapackage.json`, `lorekeep.toml`); `--dry-run` passes through; nothing deletes. `restore <name> [--generation N]` copies one object from the bucket and refuses to overwrite a local file.
 
 **Blocked by:** 02
 

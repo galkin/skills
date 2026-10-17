@@ -114,7 +114,7 @@ file is written once, and the Index can always be rebuilt from the files.
     then by Markdown otherwise, so that the question costs one request and no tokens, and a page
     whose HTML carries a per-request id is not recorded as changed every time.
 34. As the owner, I want every Recheck appended to `checks.csv` whatever the answer — unchanged,
-    changed, gone or error — so that "last verified on" is recorded even when nothing changed and a
+    changed, gone or error — and the Sources it cannot ask counted as skipped, so that "last verified on" is recorded even when nothing changed and a
     removed page is on record.
 35. As the owner, I want a changed page stored as a new Version beside the old, so that both the
     text a lesson was written from and the current text are kept.
@@ -175,12 +175,15 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 
 - A Python 3.12 package managed by `uv`, exposing one console script `lorekeep` with subcommands
   `get`, `add`, `search`, `index`, `recheck`, `backup`, `restore`, `tag`, `status`, `skill`. Commands print
-  human-readable text; `get`, `search` and `status` also take `--json`, and no other command does.
+  human-readable text; `get`, `add`, `search` and `status` also take `--json`, and no other
+  command does.
   In text mode `get` prints the Version's path on its last line so a shell can capture it; with
   `--json` it prints one object `{path, url, sha256, fetched_at, converter, publisher, authority,
-  verified_at, outcome}` (`outcome` one of `stored | fresh | unchanged | changed | gone | error`)
-  and nothing follows it. `search --json` prints `{results: [{file, line, heading, snippet, url,
-  tag[]}], other_tags: N}`; `status --json` prints the figures of ticket 11 as one object.
+  verified_at, outcome}` (`outcome` one of `stored | fresh | unchanged | changed | gone | error |
+  skipped`; `verified_at` the `checked_at` of the last `unchanged` row or else `fetched_at`) and
+  nothing follows it; `add --json` prints the same object with `outcome: stored`. `search --json` prints `{results: [{file, line, heading, snippet, url,
+  tag[]}], other_tags: N}`; `status --json` prints `{versions, sources, tags: {name: count}, oldest_fetched_at,
+  newest_fetched_at, checks: {unchanged, changed, gone, error}, unknown_hosts: [host], bytes}`.
   Warnings go to stderr in every mode.
 - A Store folder is never created by lorekeep: a `--store` that does not exist is an error.
 - The Store is `LOREKEEP_STORE` (an environment variable or `--store`), one flat folder. The Run's
@@ -254,6 +257,9 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 - A request that is itself a Twin URL under a host rule (`….md`, `?accept=text/markdown`) is
   reduced to the page URL first, so a brief that hands over the Twin's address finds the same
   Version.
+- What goes on the wire is the address as given (or the Twin address built from it by the host
+  rule), untouched; normalisation applies to what is stored, looked up and compared, never to
+  what is sent.
 - The stored `url` is the final one after HTTP redirects, after a Twin's `canonicalUrl`
   frontmatter or an HTML page's `<link rel="canonical">` when present, normalised, with the Twin
   suffix removed. The normalised URL as requested is kept in `requested` when it differs from
@@ -292,10 +298,13 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
   `unchanged`; different → new Version and a `changed` row. `404`/`410` on a Twin address → the
   cascade continues with the page URL: content → a new Version by that step and a `changed` row
   (the publisher dropped its Twin, which is real news); `404`/`410` there too, or on a page
-  address → `gone` row, a warning, the latest Version is returned. Any other status (`403`, `429`,
-  `5xx`) → `error` row with that status, a warning, the latest Version returned; a transport
-  exception → `error` row with the exception's class name, likewise. Without any stored Version
-  the same failures exit non-zero.
+  address → `gone` row, a warning, the latest Version is returned. `403`/`429` go to the browser
+  step like any first fetch, and become `error` with that status only when the browser is not
+  installed. Any other status (`5xx`) → `error` row with that status, a warning, the latest
+  Version returned; a transport exception → `error` row with the exception's class name, likewise.
+  Without any stored Version the same failures exit non-zero. A Version whose `converter` says
+  `via crawl4ai` is never rechecked by `get`: it is returned with a warning and `outcome:
+  skipped`, because rendered bytes differ on every visit.
 - The browser and the `gcloud` binary are reached through two small interfaces (a page fetcher and
   a command runner) that the command layer receives; production wires Crawl4AI and `subprocess`,
   tests wire fakes.
@@ -324,10 +333,14 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
   row per Version, every frontmatter field, file name), `tags`, `checks`, `citations`, `sections`
   (version, heading path, line of the heading in the file, body, order), and `sections_fts` —
   FTS5 external-content over `sections(heading, body)` with `tokenize = 'porter unicode61'`.
-- Staleness: a command that reads the Index takes the Store lock, compares the count of `.md`
-  files with the count of `versions` rows, and rebuilds on a mismatch or a missing file before
-  releasing it; because a commit holds the same lock from rename to notification, a reader never
-  sees a file without its row, and six workers finding no Index produce one rebuild, not six. `restore` and a hand-copied file
+- Staleness: a command that reads the Index first compares, without any lock, the count of
+  `.md` files with the `versions` rows and the size and mtime of `tags.csv`, `checks.csv` and
+  `citations.csv` with the values the Index recorded in its `meta` table at build time. Only on a
+  mismatch or a missing file does it take the Store lock, compare again, and rebuild if still
+  stale; so queries never wait, a commit (which holds the lock from rename to notification) is
+  never seen half-done, six workers finding no Index produce one rebuild, and a rewritten
+  `citations.csv` is picked up by the next `recheck --citations`. The lock is never taken twice by
+  one command: a lookup queries without it, a commit and a rebuild each take it alone. `restore` and a hand-copied file
   are therefore picked up on the next read.
 - Sections: split at Markdown headings; a Section over 4 KB is cut again at paragraph boundaries
   with the same heading path; code fences are never split.
@@ -345,11 +358,11 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 ### Recheck
 
 - Iterates the latest Version per Source in scope (`--tag` repeated, `--publisher`, `--prefix
-  <url-prefix>`; default the Run's Tag, everything when no Tag is set; `owner:` Sources are
-  skipped), performs the conditional request or full fetch through the same cascade as `get`,
-  browser step included — a Version whose `converter` says `via crawl4ai` is asked through the
-  fetcher — with the same four outcomes, appends to `checks.csv`, stores new Versions and prints
-  counts per outcome. `--citations` joins `citations.csv`
+  <url-prefix>`; default the Run's Tag, everything when no Tag is set), performs the conditional
+  request or full fetch through the same cascade as `get` with the same outcomes, appends to
+  `checks.csv`, stores new Versions and prints counts per outcome; `owner:` Sources and Versions
+  whose `converter` says `via crawl4ai` are counted as `skipped` and asked nothing. `--citations`
+  is a pure report, no request and no Tag needed: it joins `citations.csv`
   with `versions` and prints `work_id, url, old sha8 → new sha8` for every work whose cited Source
   has a Version newer than the one the work was written from: the Version current at the time in
   `citations.csv`'s optional third column `as_of`, or the oldest Version when `as_of` is absent.
@@ -365,8 +378,9 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
   refuses to overwrite an existing local file; the next Index read picks the file up. Bringing a
   whole Store back is a documented reverse `rsync` followed by `index`, in the README.
 - `datapackage.json` is regenerated by `backup` only, under the Store lock: a resource for each
-  CSV that exists, with a typed schema, and one `sources` resource listing every Version with its
-  frontmatter fields, `hash` and `bytes`.
+  CSV that exists, with a typed schema, and one `sources` resource whose `data` is inline — one
+  row per Version with its frontmatter fields, its file name, its `sha256` as `hash` and its size
+  as `bytes`.
 
 ### Concurrency
 
@@ -403,18 +417,22 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 - Two fakes at the seam's edge: an `httpx` mock transport serving recorded responses from
   `tests/fixtures/` (one folder per response: `response.json` with `url`, `status`, `headers`,
   optional `match_headers`, optional `error` naming an `httpx` exception to raise instead, and a
-  body file; URLs compare as `httpx.URL`, so percent-encoding does not matter; when several
+  body file; URLs compare after percent-decoding path and query and lower-casing the host (not as
+  `httpx.URL`, whose equality keeps `%2F` and `/` apart); when several
   fixtures match, the one with the most matching `match_headers` wins; any other URL is answered
   `404` and recorded as a miss), and fakes for the page fetcher (browser) and the command runner
-  (`gcloud`) that record their calls and return canned results. All three are built from paths
-  and plain values, so a child process can construct its own. There is no clock edge: a test that
-  needs a stored Version writes one with a helper that takes a fixture folder (so `original.sha256`
-  and the body match that response) and a `fetched_at`.
+  (`gcloud`) that record their calls and return canned results; the fetcher fake also has a "not
+  installed" mode. All three are built from paths and plain values, so a child process can
+  construct its own. There is no clock edge. Two test helpers: one writes a Version straight from
+  a fixture folder, body copied verbatim whatever its type, `original.sha256` and `original.url`
+  of that response, with a chosen `fetched_at` — for lookup and Index tests that need files, not
+  conversions; the other ages a Version already in a Store by rewriting `fetched_at` in its
+  frontmatter, which leaves the file name valid because `sha256` covers only the body.
 - Fixtures are committed already and described in `tests/fixtures/README.md`: the five measured
   pages (three termidy lessons, Anthropic and AWS `prompt-caching`, each as HTML and, for the two
   vendors, as Twin), the Microsoft Learn redirect chain ending in a Twin with `canonicalUrl`, the
   NVIDIA NIM meta-refresh stub with its target, and synthesised `403`, `304`, `.md`-answers-HTML,
-  JavaScript-only, timeout, noisy-HTML, changed-HTML and PDF responses. The live network is touched only by one manual smoke script
+  JavaScript-only, timeout, noisy-HTML, changed-HTML, canonical-alias and PDF responses. The live network is touched only by one manual smoke script
   outside `pytest`.
 - Concurrency is tested with a process pool calling `get` on the same URLs against one Store and
   asserting one file per Version, complete CSVs and a consistent Index.

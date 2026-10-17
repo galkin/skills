@@ -1,8 +1,8 @@
 # 11: `tag add` and a full `status`
 
-**What to build:** `tag add <tag> <url>` appends a Tag row for that Source, and `tag add <tag> --prefix <url-prefix>` for every Source whose URL starts with the prefix, skipping rows that exist, through the commit point so the Index follows. `status` reports from the Index: Versions, Sources, Tags with counts, oldest and newest `fetched_at`, Rechecks logged by outcome, unknown hosts seen (publisher equal to the host), and the Store's size on disk.
+**What to build:** `tag add <tag> <url>` appends a Tag row for that Source, and `tag add <tag> --prefix <url-prefix>` for every Source whose URL starts with the prefix, skipping rows that exist, through the commit point so the Index follows. `status` reports from the Index, in text and as the spec's `--json` object: Versions, Sources, Tags with counts, oldest and newest `fetched_at`, Rechecks logged by outcome, unknown hosts seen (publisher equal to the host), and the Store's size on disk.
 
-**Blocked by:** 08
+**Blocked by:** 14
 
 **Status:** ready-for-agent
 

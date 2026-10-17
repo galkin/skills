@@ -3,7 +3,7 @@
 A Source may carry any number of Tags, one per ecosystem (`anthropic`, `nvidia`, `aws`), recorded
 as append-only rows in `tags.csv` (`url, tag, added_at`). A Run declares its Tag once, in its
 environment (`LOREKEEP_TAG`); every `get` it makes adds that Tag, and a `get` of a Source another
-Run already fetched adds the Tag without fetching again. `get` refuses to run without a Tag, so no
+Run already fetched adds the Tag without fetching again. `get` and `add` refuse to run without a Tag, so no
 Source is ever untagged. A `tag add` command exists for the owner — to tag what a migration brings
 in — and is not part of any agent's brief.
 

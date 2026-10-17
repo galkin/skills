@@ -5,7 +5,8 @@ all of its Runs; the tool finds it through `LOREKEEP_STORE`, and the Project's c
 (`lorekeep.toml`: bucket, host table, freshness window) sits in the Store's root so it is backed up
 with the data. Its off-machine copy is a private, versioned GCS bucket.
 
-The backup is two `gcloud storage rsync` passes, because the Store has two kinds of file. Versions
+The backup is two `gcloud storage` passes — an `rsync` and a `cp` — because the Store has two kinds
+of file. Versions
 and Originals are written once, so they go with `--no-clobber`: an object already in the bucket is
 never replaced, and a local deletion never reaches it because
 `--delete-unmatched-destination-objects` is not given. The few files that grow — `tags.csv`,

@@ -10,7 +10,8 @@ a network failure appends `error`. lorekeep makes these requests itself from the
 `last_modified` in the frontmatter — an HTTP cache library in between (`hishel` was tried on paper)
 answers a conditional request from its own cache and hides the `304` that this log records. It
 runs when someone asks — typically when a new guide version starts — and there is no watcher
-service; `owner:` Sources have no publisher to ask and are skipped.
+service; `owner:` Sources have no publisher to ask, and Sources that only a browser could read
+have no answer a byte comparison can use, so both are counted as skipped.
 
 `get` performs the same request on its own when the latest Version is older than the Project's
 freshness window (`lorekeep.toml`, default 30 days, `--max-age <days>` for one call): younger, it

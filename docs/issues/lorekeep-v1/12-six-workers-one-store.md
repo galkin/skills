@@ -2,7 +2,7 @@
 
 **What to build:** A test drives a process pool of six workers calling `get` (fresh and repeated URLs, some forcing `--max-age 0`) and `add` against one Store, each worker building its own fake edges from the fixture paths, then asserts: one file per Version, no temporary files left, `tags.csv` and `checks.csv` intact with one header and no interleaved rows, and an Index whose counts equal a fresh `index` rebuild. Six workers starting against a Store with no Index produce one rebuild. Whatever the test exposes in the locking, atomic writes or SQLite busy handling is fixed here.
 
-**Blocked by:** 07, 08
+**Blocked by:** 07, 14
 
 **Status:** ready-for-agent
 
