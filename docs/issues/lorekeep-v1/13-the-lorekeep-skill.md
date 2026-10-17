@@ -4,9 +4,13 @@
 
 **Blocked by:** 09, 10, 11, 12
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `lorekeep skill` prints `SKILL.md`; the flag-comparison test passes and fails when a flag is added to the parser alone
-- [ ] `--install` creates `.agents/skills/lorekeep/` in a temporary repo and prints the lock reminder; a second install exits non-zero and changes nothing; `--force` replaces the folder
-- [ ] the README covers install with `uv` and the `browser` extra, `LOREKEEP_STORE` and `LOREKEEP_TAG`, `lorekeep.toml` and the default host table, the first Store's values, how to restore one deleted Version, and the reverse `rsync` plus `index` that brings a whole Store back onto an empty disk
-- [ ] the smoke script fetches one Twin, one static page and one browser page live and prints their converters, and runs `restore --generation` against the real bucket for one object
+- [x] `lorekeep skill` prints `SKILL.md`; the flag-comparison test passes and fails when a flag is added to the parser alone
+- [x] `--install` creates `.agents/skills/lorekeep/` in a temporary repo and prints the lock reminder; a second install exits non-zero and changes nothing; `--force` replaces the folder
+- [x] the README covers install with `uv` and the `browser` extra, `LOREKEEP_STORE` and `LOREKEEP_TAG`, `lorekeep.toml` and the default host table, the first Store's values, how to restore one deleted Version, and the reverse `rsync` plus `index` that brings a whole Store back onto an empty disk
+- [x] the smoke script fetches one Twin, one static page and one browser page live and prints their converters, and runs `restore --generation` against the real bucket for one object
+
+## Comments
+
+2026-10-17 — Decisions made while building this ticket. (1) The skill folder is `src/lorekeep/skill/` (`SKILL.md` and `references/store.md`), read through `importlib.resources`, so the wheel carries it (checked with `uv build`). (2) A command section of `SKILL.md` is headed ``## `lorekeep <command>` `` (``## `lorekeep tag add` `` for the nested one) and documents each flag as a bullet starting with the flag in backticks; `tests/test_skill.py` walks the parser's `--help` recursively and reports, both ways, a flag or a command present on one side only, so a new subcommand without a section also fails. The comparison covers flags, not positionals. (3) `skill` needs no Store and no Tag. `--install REPO` copies into a staging folder beside the target and renames it into place; an existing folder without `--force` exits `1` and is left untouched; a missing `REPO` exits `2`; `--force` without `--install` exits `2`. The reminder names any `*skill*lock*` file in the repo root (the owner's repos keep `skills-lock.json`, whose `computedHash` lorekeep cannot compute faithfully) and never edits it. (4) The smoke script is `scripts/smoke.py --bucket B [--object NAME]`; it uses two temporary Stores (pages, restores) so a fetched page never blocks the restore, picks the first `.md` object and its first listed generation, and only reads the bucket. It was not run here (no network, no `gcloud`). `scripts/` joins pyright's `include`. (5) `tests/test_readme.py` checks the README keeps naming what the third checkbox lists and every default host rule. (6) `index` printed `aliass`; it now prints `aliases`, as `SKILL.md` documents it.

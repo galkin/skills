@@ -491,3 +491,10 @@ def test_an_empty_query_is_a_one_line_error(tmp_path: Path) -> None:
 
     assert result.exit_code == 2
     assert result.stderr.count("\n") == 1 and "query" in result.stderr
+
+
+def test_index_counts_aliases_in_plain_english(tmp_path: Path) -> None:
+    result = run_cli(["index", "--store", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "0 aliases" in result.stdout

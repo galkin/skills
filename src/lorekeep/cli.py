@@ -16,6 +16,7 @@ from lorekeep.commands import get as get_command
 from lorekeep.commands import index as index_command
 from lorekeep.commands import recheck as recheck_command
 from lorekeep.commands import search as search_command
+from lorekeep.commands import skill as skill_command
 from lorekeep.commands import status as status_command
 from lorekeep.commands import tag as tag_command
 from lorekeep.edges import Edges
@@ -209,8 +210,8 @@ def run(
     except SystemExit as exit_:
         return exit_.code if isinstance(exit_.code, int) else 1
     if args.command == "skill":
-        print("lorekeep skill: not implemented yet", file=sys.stderr)
-        return 1
+        # The skill belongs to the package, not to a Store: it needs neither Store nor Tag.
+        return skill_command.run(args)
     try:
         store = resolve_store(args, env)
         if args.command in NEEDS_TAG:
