@@ -5,3 +5,7 @@ __pycache__/
 .ruff_cache/
 .pyright/
 dist/
+
+# A skill install into this repo itself (workers try it); the skill lives in src/lorekeep/skill
+.agents/
+.claude/skills/lorekeep
