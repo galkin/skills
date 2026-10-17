@@ -1,7 +1,7 @@
 """The cascade `get` runs: an ordered list of steps, the first that yields Markdown wins.
 
 Ticket 03 has the Twin step; the page step fetches the page once and converts it by its media
-type (05: PDF; 04 adds static HTML), and 06 appends the browser. A step either
+type (04: static HTML, 05: PDF), and 06 appends the browser. A step either
 returns what it `Fetched` or a `Fallthrough` saying why it declined, and the next step runs.
 """
 

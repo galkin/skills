@@ -46,6 +46,7 @@ are lower-case. `match_headers` is optional.
 | `google-md-answers-html`               | a `.md` URL that answers `200` with HTML (must not be accepted as a Twin)                   |
 | `google-overview.html`                 | the page behind that `.md` URL, served as HTML                                             |
 | `js-only.html`                         | a body with no text after extraction (browser step)                                        |
+| `relative-links.html`                  | a page with `rel.html`, `../`, `/` and `//` links (resolved as a browser would)            |
 | `exam-guide.pdf`                       | a one-page PDF served as `application/pdf` under a URL without `.pdf`                      |
 | `exam-guide.html-as-pdf`               | HTML served as `text/html` under a URL ending in `.pdf` (never handed to MarkItDown)       |
 | `exam-guide.zip`                       | a body served as `application/zip`, a media type no step takes                             |
@@ -54,5 +55,5 @@ are lower-case. `match_headers` is optional.
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and
 NVIDIA responses carry the headers as received. The `403`, `304`, `google-md-answers-html`,
-`js-only.html`, `.noisy`, `.changed`, `.alias`, `google-overview.html`, `timeout`, the PDF and its three `exam-guide.*` variants are synthesised. A ticket may add further synthesised folders in the
+`js-only.html`, `.noisy`, `.changed`, `.alias`, `google-overview.html`, `timeout`, `relative-links.html`, the PDF and its three `exam-guide.*` variants are synthesised. A ticket may add further synthesised folders in the
 same format; keep this table current.

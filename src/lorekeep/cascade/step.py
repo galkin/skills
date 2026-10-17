@@ -45,12 +45,14 @@ class Fetched:
 
 @dataclass(frozen=True)
 class Converted:
-    """What a converter of the page step made of the received bytes."""
+    """What a converter of the page step made of the received bytes; `canonical` is the address
+    the document names as its own (`<link rel="canonical">`), absolute, when it names one."""
 
     markdown: bytes
     converter: str
     original_ext: str
     title: str | None = None
+    canonical: str | None = None
 
 
 @dataclass(frozen=True)

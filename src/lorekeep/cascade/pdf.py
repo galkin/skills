@@ -14,7 +14,7 @@ from lorekeep.cascade.step import Converted, Fallthrough
 _MAGIC = b"%PDF-"
 
 
-def convert_pdf(received: bytes) -> Converted | Fallthrough:
+def convert_pdf(received: bytes, url: str, charset: str | None) -> Converted | Fallthrough:
     """The PDF's text as Markdown; bytes that are not a PDF are refused, never guessed at.
 
     MarkItDown falls back to its HTML or plain-text converter when a stream labelled PDF is not

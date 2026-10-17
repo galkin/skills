@@ -41,6 +41,24 @@ def twin_url(url: str, rule: HostRule) -> str:
     return urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, ""))
 
 
+def page_url(url: str, rule: HostRule | None) -> str:
+    """The page's address from a Twin address as given (the reverse of `twin_url`); any other
+    address is returned as is."""
+    if rule is None:
+        return url
+    parts = urlsplit(url)
+    if rule.twin == "md-suffix" and parts.path.endswith(".md"):
+        path = parts.path.removesuffix(".md") + (rule.page_suffix or "")
+        return urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
+    if rule.twin == "accept-header":
+        pieces = [piece for piece in parts.query.split("&") if piece]
+        kept = [piece for piece in pieces if unquote(piece) != "accept=text/markdown"]
+        if len(kept) != len(pieces):
+            query = "&".join(kept)
+            return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
+    return url
+
+
 def accepts(mediatype: str, rule: HostRule) -> bool:
     """A Twin is `text/markdown`, or plain text from a raw file host."""
     return mediatype == "text/markdown" or (rule.twin == "raw" and mediatype == "text/plain")
