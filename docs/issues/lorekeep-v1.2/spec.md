@@ -69,12 +69,16 @@ column) and the commands' flags do not change.
 
 ### Browser (ticket 03)
 
-- The browser step waits for the network to be idle and for a host rule's `wait_for` selector
-  when the rule has one (`CrawlerRunConfig(wait_until="networkidle", wait_for=…)`), with a
-  10-second cap, then converts.
-- The thin check runs on browser output too; a rendered page that is still thin is an error
-  `lorekeep: error: nothing stored for <url>: the browser rendered a shell (N characters)`, not a
-  Version. Nothing is stored, as for every exit 1.
+- The browser step needs no per-host setting (owner's decision: no configuration, the tool
+  escalates on its own). It renders in up to three attempts with Crawl4AI's documented
+  `CrawlerRunConfig` parameters (`docs.crawl4ai.com/api/parameters/` › Page Navigation & Timing):
+  1. `wait_until="networkidle"` (today: the default `domcontentloaded`, which snaps the page
+     before its scripts have loaded the content);
+  2. if the Markdown is thin, `delay_before_return_html=3.0` as well;
+  3. if still thin, a `wait_for` `js:` condition that the main element's text has grown past the
+     thin threshold, `wait_for_timeout=15000`.
+- A page thin after the last attempt is an error `lorekeep: error: nothing stored for <url>: the
+  browser rendered a shell (N characters after 3 attempts)`, not a Version.
 - `scripts/smoke.py` stops expecting `milvus.io` to need the browser (it answers a plain client
   now); it proves the browser with a temporary `browser = true` rule instead.
 
@@ -107,8 +111,7 @@ how a relaxed answer looks (after 01: the note line); an example of the exit-1 l
 third-party verdict until 02); a Twin has no Original file (`original.stored: false`), its Markdown
 is the text received; the `get --json` example is captured from a fixture that really has no host
 rule (not the synthesised helm redirect); "the Original is `<stem>.orig.<ext>` beside the Version".
-`store.md`: the `asked` field, the `warnings` field, `relaxed` (after 01–02). `owner.md`: `browser`
-and `wait_for` on a rule; the issuer rule for laws — a law's text on its official journal
+`store.md`: the `asked` field, the `warnings` field, `relaxed` (after 01–02). `owner.md`: `browser` on a rule; the issuer rule for laws — a law's text on its official journal
 (EUR-Lex, the Federal Register, nist.gov for NIST) is `primary`; an institution's reproduction
 (the Commission's AI Act Service Desk) is `official`, and a Run cites the journal.
 
@@ -127,7 +130,7 @@ keep every flag honest.
   without `latest/`): a guide-side choice.
 - The `tags.csv` rows left behind when a Version is removed by hand (three in the first Store):
   `status` counts rows, not Versions; a `tag` cleanup command is not planned.
-- A `wait_for` default per host beyond the rule key.
+- A `wait_for` host-rule key: the browser escalates on its own (owner, 2026-10-17).
 
 ## Further Notes
 
