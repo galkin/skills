@@ -1,9 +1,10 @@
 # Fetching is a cascade, and the browser is the last resort
 
 `get` tries, in order: the publisher's Twin over plain HTTP (`<page>.md`, `?accept=text/markdown`,
-`raw.githubusercontent.com`); the page's static HTML over plain HTTP through Trafilatura, with links
-made absolute; MarkItDown for PDF and Office files, Docling for PDFs whose layout matters; and
-Crawl4AI only for pages that need a browser, with a per-site configuration of what to cut. The
+or a raw file host answering plain text); the page's static HTML over plain HTTP through
+Trafilatura, with links made absolute; MarkItDown for PDF; and Crawl4AI only for pages that need a
+browser, with a per-site configuration of what to cut — the browser returns rendered HTML and
+Trafilatura converts it, because Crawl4AI's own Markdown measured larger. The
 Converter that succeeded is recorded, and the response's media type — never the URL's extension —
 decides which step converts. HTTP is plain `httpx` with no cache library: the Store is the cache,
 and the conditional requests are lorekeep's own (ADR 0007). The Twin rules and the publisher of

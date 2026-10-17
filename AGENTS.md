@@ -30,8 +30,9 @@ Run all three before reporting work complete.
 
 - **A store lives outside this repository.** The tool reads its location from one setting
   (`LOREKEEP_STORE`); no path to a store is ever hardcoded, and no store content is committed here.
-- **Files in a store are never rewritten.** A changed page is a new file beside the old one; the
-  index is always rebuildable from the files.
+- **A Version or an Original in a store is never rewritten.** A changed page is a new file beside
+  the old one; the few files that grow (`tags.csv`, `checks.csv`, `datapackage.json`) are appended
+  or regenerated, and the index is always rebuildable from the files.
 - **The tool never changes the machine it runs on** beyond the store it was pointed at — no
   installs, no profiles, no services. Anything else is shown to the owner as a command to run.
 

@@ -5,7 +5,7 @@ from its own worktree. So: a Version and its Original are written to a temporary
 into place, and the name is the content hash, so two workers fetching one page produce one file
 and the second rename is harmless; `tags.csv` and `checks.csv` are appended under a file lock;
 `sources.db` runs in WAL mode so readers never wait for a writer; `datapackage.json` is regenerated
-under the same lock. The HTTP cache is per machine, outside the Store.
+under the same lock.
 
 The previous tool had a lock around its index and still produced duplicate pages under two names,
 because the name was chosen by the worker; naming by hash removes the race rather than guarding it.

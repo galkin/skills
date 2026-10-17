@@ -12,7 +12,7 @@ search: for `prompt caching`, eight of the top ten pages were AWS Bedrock, which
 for an author writing about Anthropic. Scoping by Tag restores what per-Run caches used to give for
 free. The Tag is deliberately a label and not a corpus: it says only "a Run of this ecosystem read
 this", never "this is everything the ecosystem documents", and the `+N matches under other tags`
-line in every search (ADR 0005) keeps the rest visible.
+line in every scoped search (ADR 0005) keeps the rest visible.
 
 ## Considered Options
 

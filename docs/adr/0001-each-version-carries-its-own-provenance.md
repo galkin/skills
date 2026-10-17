@@ -4,8 +4,9 @@ A Version is a Markdown file whose YAML frontmatter holds its Provenance — `ur
 a reader would open), `fetched_at`, `sha256` of the Markdown body, `publisher`, `authority`,
 `converter` with its version (`trafilatura 2.3.1`), and `etag` / `last_modified` when the server
 sent them; optionally `title`, `modified` (the publisher's own date),
-`original {url, mediatype, sha256, stored}`, `extracted_from` and `origin`
-(`web` or `owner`). A file that is not Markdown gets the same fields in a `<file>.meta.yml` sidecar.
+`original {url, mediatype, sha256, stored}` (`stored` is a boolean; the Original's name follows
+from the Version's) and `origin`
+(`web` or `owner`).
 The Store's `datapackage.json` (Frictionless Data Package) is generated from those files and never
 edited by hand.
 

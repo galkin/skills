@@ -8,10 +8,10 @@ without headings still yields Sections — answered with `bm25` ranking and `sni
 identifier (`--exact`) is a substring match over the Sections' text rather than an FTS query,
 because the tokenizer splits `cache_control` in two and "as written" has to mean that. Anything the Index reports that is not in a file is a
 bug; so Tags are `tags.csv`, the log of Rechecks is `checks.csv`, and Citations are a
-`citations.csv` (`work_id, url`) that the consuming Project generates from its own documents —
+`citations.csv` (`work_id, url[, as_of]`) that the consuming Project generates from its own documents —
 lorekeep never parses a Project's Markdown, which keeps the tool free of any one consumer's format.
 
-A search is scoped to the Run's Tag by default and always ends with one line,
+A search is scoped to the Run's Tag by default and, whenever it is scoped, ends with one line,
 `+N matches under other tags (--all)`, so a page another Run fetched is never silently invisible;
 `--all`, `--tag`, `--authority` and `--publisher` widen or narrow the scope.
 

@@ -1,9 +1,13 @@
 # Recorded responses
 
-Every folder is one HTTP response the fake transport serves instead of the network. The fake loads
-all folders, keys them by `url`, and answers a request with the fixture whose `url` equals the
-request URL and whose `match_headers` (when present) are all sent by the request; otherwise it
-answers `404` and records the miss, so a test sees exactly which URLs a command asked for.
+Every folder is one HTTP response the fake transport serves instead of the network. A test builds
+the fake from a list of folders (all of them by default, or a chosen subset when two fixtures share
+a URL, as the `.noisy` variant does). The fake answers a request with the fixture whose `url`
+equals the request URL (compared as `httpx.URL`, so `%2F` and `/` are the same) and whose
+`match_headers`, when present, are all sent by the request; when several match, the one with the
+most matching `match_headers` wins, so a conditional request gets the `304` and a plain one the
+page. A fixture with `error` raises that `httpx` exception instead of answering. Any other URL is
+answered `404` and recorded as a miss, so a test sees exactly which URLs a command asked for.
 
 `response.json`:
 
@@ -17,6 +21,8 @@ answers `404` and records the miss, so a test sees exactly which URLs a command 
 }
 ```
 
+or, for a failure, `{ "url": "https://host/path", "error": "ReadTimeout" }`.
+
 `body` names the file beside it with the response bytes, absent for an empty body. Header names
 are lower-case. `match_headers` is optional.
 
@@ -29,6 +35,8 @@ are lower-case. `match_headers` is optional.
 | `anthropic-prompt-caching.304`         | `304` to a conditional request with the Twin's ETag                                        |
 | `aws-prompt-caching.twin` / `.html`    | AWS Bedrock page as Twin and HTML; the HTML carries cookie banners                         |
 | `termidy-*.html`                       | three lessons of a site reused under permission; no Twin exists                            |
+| `termidy-coordinator-and-subagents.noisy` | the same lesson with a per-request nonce in a `<script>`: different bytes, same Markdown |
+| `timeout`                              | a URL whose request raises `ReadTimeout`                                                   |
 | `ms-foundry.redirect-1`, `-2`, `.twin` | Microsoft Learn: two `301`s, then a Twin whose own frontmatter has a `canonicalUrl`        |
 | `nim-introduction.stub`                | NVIDIA NIM 98-byte `<meta http-equiv="Refresh">` page                                      |
 | `nim-overview.html`                    | the page that stub points at                                                               |
@@ -40,5 +48,5 @@ are lower-case. `match_headers` is optional.
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and
 NVIDIA responses carry the headers as received. The `403`, `304`, `google-md-answers-html`,
-`js-only.html` and the PDF are synthesised. A ticket may add further synthesised folders in the
+`js-only.html`, `.noisy`, `timeout` and the PDF are synthesised. A ticket may add further synthesised folders in the
 same format; keep this table current.

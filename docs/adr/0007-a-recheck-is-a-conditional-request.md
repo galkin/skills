@@ -1,6 +1,7 @@
 # A Recheck is a conditional request, run on demand
 
-`recheck` asks each Source's publisher whether it changed: a request with `If-None-Match` /
+`recheck` asks each Source's publisher whether it changed, through the same cascade `get` uses (so
+a page only a browser can see is asked through the browser): a request with `If-None-Match` /
 `If-Modified-Since` from the latest Version, or, when the server offers neither, a full fetch
 compared as ADR 0001 says — received bytes first, then the Markdown. A `304` or an equal comparison
 appends an `unchanged` row to `checks.csv`; a real change stores a new Version and appends
@@ -13,7 +14,9 @@ service; `owner:` Sources have no publisher to ask and are skipped.
 
 `get` performs the same request on its own when the latest Version is older than the Project's
 freshness window (`lorekeep.toml`, default 30 days, `--max-age <days>` for one call): younger, it
-returns what is stored; older, one conditional request decides, and `--fresh` forces it. When that
+returns what is stored; older, one conditional request decides, and `--fresh` forces it. The age
+is counted from the later of the Version's `fetched_at` and its last `unchanged` row in
+`checks.csv`, because the file is immutable and an `unchanged` answer is what moves the clock. When that
 request fails or the page is gone, `get` still returns the stored Version, with a warning, because
 a stale page the Run knows about beats no page. Without the window a Run months after the last one
 would read stale pages without knowing.
