@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from lorekeep import cascade, recheck
+from lorekeep import cascade, readings, recheck
 from lorekeep.commands import version_json
 from lorekeep.http import make_client
 from lorekeep.project import HostRule
@@ -116,16 +116,20 @@ def say_trust(url: str, rules: Sequence[HostRule]) -> Trust:
 
 
 def report(args: argparse.Namespace, ctx: Context, path: Path, outcome: str) -> int:
-    """The Version's `warnings`, then the path on the last line, or one JSON object with
-    `--json`, read from the file itself, with `asked` the address as given and `requested_url`
-    it normalised."""
+    """The Version's `warnings` and its Reading's, then the path of the Reading (built when
+    missing or stale), else of the Version, on the last line, or one JSON object with `--json`,
+    read from the file itself, with `asked` the address as given and `requested_url` it
+    normalised."""
     head = read_head(path)
-    for warning in head.get("warnings") or ():
+    reading = readings.ensure(ctx.store, path, ctx.project.readings)
+    for warning in (*(head.get("warnings") or ()), *reading.warnings):
         print(f"lorekeep: warning: {head['url']}: {warning}", file=sys.stderr)
     if not args.json:
-        print(path)
+        print(reading.path or path)
         return 0
     requested = normalise(args.url, ctx.project.hosts)
-    printed = version_json(ctx.store, path, outcome, asked=args.url, requested_url=requested)
+    printed = version_json(
+        ctx.store, path, outcome, asked=args.url, requested_url=requested, reading=reading.path
+    )
     print(json.dumps(printed))
     return 0

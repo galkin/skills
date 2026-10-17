@@ -86,6 +86,18 @@ def _kinds(texts: list[str]) -> list[_Kind | None]:
     return kinds
 
 
+def code_lines(texts: list[str]) -> list[bool]:
+    """Which of `texts` (lines without their line breaks) are code: a fence's opener, the lines
+    inside it and its closer."""
+    return [kind is not None for kind in _kinds(texts)]
+
+
+def heading_text(line: str) -> str | None:
+    """The text of a Markdown heading line, `None` when the line is not a heading."""
+    match = _HEADING.match(line)
+    return match.group(2) if match else None
+
+
 def headings(text: str) -> int:
     """How many lines of `text` are Markdown headings; a `#` line inside a code fence is code."""
     texts = text.splitlines()

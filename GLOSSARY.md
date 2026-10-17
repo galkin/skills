@@ -37,6 +37,19 @@ A Markdown rendition the publisher serves beside a page, read instead of the pag
 same text without the page around it.
 _Avoid_: mirror, markdown version
 
+**Reading**:
+A Version's Markdown after the Project's reading rules, built by the tool and kept in the Store's
+`.cache/`: what a Run reads, while the Version stays the evidence and what is cited and rechecked.
+A Version no rule changes has no Reading.
+_Avoid_: clean copy, cleaned version, rendition
+
+**Reading rule**:
+One operation that makes a Reading from a Version — drop a leading or trailing block, drop lines
+by pattern, cut a suffix from the title, insert a heading before lines by pattern — for the
+Versions under a prefix or made by one engine. It never rewrites a kept line, never touches a code
+fence or a table line, and records the share of lines it removed when it was accepted.
+_Avoid_: filter, cleanup, post-processing rule
+
 ### Trust
 
 **Publisher**:
