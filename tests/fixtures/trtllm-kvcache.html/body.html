@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8">
+    
+
+    <title>KV Cache System — TensorRT LLM</title>
+  
+  
+  
+  
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  
+  
+  <!-- Loaded before other Sphinx assets -->
+  
+
+
+    
+    
+    
+    
+    
+    
+    
+  
+  <!-- So that users can add custom icons -->
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  
+
+
+
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+    
+    
+
+
+  
+  
+  
+  
+  
+    
+    
+    
+    
+  
+
+
+  </head>
+
+  <body>
+
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center" action="../search.html" method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search" class="form-control" name="q" placeholder="Search the docs ..." aria-label="Search the docs ..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  
+</div>
+
+  
+    
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="kv-cache-system">
+<h1>KV Cache System<a class="headerlink" href="#kv-cache-system" title="Link to this heading">#</a></h1>
+<p>The KV cache stores previously computed key-value pairs for reuse during generation in order to avoid redundant calculations. The TensorRT LLM KV cache system also supports reuse across requests and uses a suite of tools like offloading and prioritized eviction to increase reuse. It supports variable attention window sizes and Multi-Head Attention (MHA) optimization techniques such as MQA and GQA.</p>
+<section id="the-basics">
+<h2>The Basics<a class="headerlink" href="#the-basics" title="Link to this heading">#</a></h2>
+<p>The KV cache is a pool of blocks that can hold KV state for a fixed number of tokens. Multiple layers are packed within a single block, which requires all the layers to have the same number of heads and the same attention window size. A separate pool is created for each combination of attention window size and number of heads to support variable attention window size and optimization techniques like GQA.</p>
+<p>The number of tokens that can be stored in a single block can be set by user when the model engine is created. It must be a power of two greater than 1. Blocks are assigned to requests as needed. Blocks are stored in a search structure as they are filled by requests, this allows later requests to reuse KV state if they have a matching prefix.</p>
+<p>If more than one pool is created, available memory is divided among the pools. The fraction to assign to each pool is determined during initialization and is static. This is not optimal and we are working on providing a better solution.</p>
+</section>
+<section id="reuse-across-requests">
+<h2>Reuse Across Requests<a class="headerlink" href="#reuse-across-requests" title="Link to this heading">#</a></h2>
+<p>Blocks containing KV state computed for previous requests are stored in a radix search tree as soon as they are filled. A search is performed when a new request is added, and matched blocks are reused instead of calculated. Blocks that are reused can be shared among multiple requests, so reuse saves memory as well as computations.</p>
+<p>Blocks remain reusable until they are evicted from the search tree. Eviction happens when a new (blank) block is needed. The core eviction scheme is prioritized LRU. All blocks are assigned a priority between 0 and 100 (100 being most important). All blocks of the lowest priority must be evicted before any blocks of the next priority can be evicted. If all blocks have the same priority, the least recently used block is evicted.</p>
+<p>When a block is evicted from primary memory, its KV state is copied to a block in secondary memory. The secondary memory block remains in the search tree, so the block remains reusable until it is evicted from secondary memory. Eviction from secondary memory happens when a new block in secondary memory is needed to offload a primary block. The eviction scheme is the same for primary and secondary blocks.</p>
+<p>One caveat in the current code is that only leaf blocks can be evicted (leaves are blocks with no descendants in the radix tree). This design works well for full attention layers, but not for limited attention layers. This will be fixed in a future version.</p>
+<section id="retention-policy">
+<h3>Retention Policy<a class="headerlink" href="#retention-policy" title="Link to this heading">#</a></h3>
+<p>Blocks are assigned priority in line with the <a class="reference external" href="https://nvidia.github.io/TensorRT-LLM/llm-api/reference.html#tensorrt_llm.llmapi.KvCacheRetentionConfig">retention policy</a> of the request. Blocks with lower priority scores will be freed preferentially to blocks with higher priority. The retention policy is a list of <a class="reference external" href="https://nvidia.github.io/TensorRT-LLM/llm-api/reference.html#tensorrt_llm.llmapi.KvCacheRetentionConfig.TokenRangeRetentionConfig">TokenRangeRetentionConfig</a> objects, each specifying priority for a given range of tokens, such as “assign priority X to tokens 10 through 61”. You can also assign a duration in milliseconds for this to remain in effect. Priority reverts to the default of 35 after a period of <code class="docutils literal notranslate"><span class="pre">duration_ms</span></code> has elapsed from the first time the block was made available for reuse. TokenRangeRetentionConfig only applies to input (prompt) tokens. The property <code class="docutils literal notranslate"><span class="pre">decode_retention_policy</span></code> specifies what priority to assign to blocks with generated (decoded) tokens and <code class="docutils literal notranslate"><span class="pre">decode_duration_ms</span></code> specifies how long this should remain in effect. Priority reverts to the default after expiration. Any property that expects a duration can be set to None. This indicates that particular part of the retention policy never expires.</p>
+<p>Not in use: <code class="docutils literal notranslate"><span class="pre">transfer_mode</span></code> is a debug option and should not be used.</p>
+<p>See <a class="reference internal" href="../examples/kvcacheretentionconfig.html"><span class="std std-doc">this example</span></a> for an example of how to change block priorities of specific requests by altering their retention policy.</p>
+</section>
+<section id="speculative-decoding">
+<h3>Speculative Decoding<a class="headerlink" href="#speculative-decoding" title="Link to this heading">#</a></h3>
+<p>Reuse across requests is supported by all speculative decoding models. Please see <a class="reference internal" href="speculative-decoding.html"><span class="std std-doc">speculative decoding</span></a> for more details.</p>
+</section>
+</section>
+<section id="limited-attention-window-size">
+<h2>Limited Attention Window Size<a class="headerlink" href="#limited-attention-window-size" title="Link to this heading">#</a></h2>
+<p>TensorRT LLM takes advantage of layers with limited attention window size in order to reduce computations and memory usage. Blocks that leave the attention window are freed and placed on the radix search tree so they can be reused.</p>
+</section>
+<section id="mqa-gqa">
+<h2>MQA / GQA<a class="headerlink" href="#mqa-gqa" title="Link to this heading">#</a></h2>
+<p>TensorRT LLM takes advantage of grouped query attention in order to save memory. KV cache will create blocks with only enough space to store state for the discrete query head groups. For MHA, there is one group per head, for MQA there is a single group for all the heads. GQA strikes a balance between these two.</p>
+</section>
+<section id="controlling-kv-cache-behavior">
+<h2>Controlling KV Cache Behavior<a class="headerlink" href="#controlling-kv-cache-behavior" title="Link to this heading">#</a></h2>
+<p>Many of the features in the KV cache system are optional or have user defined properties that alter how they work. Users can control KV cache features through class <a class="reference external" href="https://nvidia.github.io/TensorRT-LLM/llm-api/reference.html#tensorrt_llm.llmapi.KvCacheConfig">KVCacheConfig</a>. The remainder of this section describes how to change the most important behaviors of the KV cache system.</p>
+<p>See <a class="reference internal" href="../examples/kvcacheconfig.html"><span class="std std-doc">this example</span></a> for an example of how to use KvCacheConfig to control KV cache behavior.</p>
+<section id="datatype">
+<h3>Datatype<a class="headerlink" href="#datatype" title="Link to this heading">#</a></h3>
+<p>Perhaps the most important property is <code class="docutils literal notranslate"><span class="pre">dtype</span></code> which specifies what data type is held in KV cache. The default ‘auto’ specifies that data type should be inferred from model config.</p>
+</section>
+<section id="how-much-memory-is-allocated-to-kv-cache">
+<h3>How Much Memory is Allocated to KV Cache<a class="headerlink" href="#how-much-memory-is-allocated-to-kv-cache" title="Link to this heading">#</a></h3>
+<p>Property <code class="docutils literal notranslate"><span class="pre">free_gpu_memory_fraction</span></code> is a ratio &gt; 0 and &lt; 1 that specifies how much of free GPU memory should be allocated to KV cache. The default is 90% (ratio of 0.9). If <code class="docutils literal notranslate"><span class="pre">max_tokens</span></code> is also set, KV cache will determine how much memory is needed to hold <code class="docutils literal notranslate"><span class="pre">max_tokens</span></code> and will allocate the lesser of <code class="docutils literal notranslate"><span class="pre">max_tokens</span></code> and <code class="docutils literal notranslate"><span class="pre">free_gpu_memory_fraction</span></code>.</p>
+</section>
+<section id="enable-disable-cross-request-reuse">
+<h3>Enable/Disable Cross Request Reuse<a class="headerlink" href="#enable-disable-cross-request-reuse" title="Link to this heading">#</a></h3>
+<p>Block reuse across requests is enabled by default, but can be disabled by setting <code class="docutils literal notranslate"><span class="pre">enable_block_reuse</span></code> to False.</p>
+<p><code class="docutils literal notranslate"><span class="pre">scheduler_config.enable_prefix_aware_scheduling</span></code> controls only scheduler-side use of prefix-reuse estimates. When it is
+<code class="docutils literal notranslate"><span class="pre">True</span></code> (the default), schedulers can use estimated reusable KV tokens to defer duplicate first-chunk context requests and
+to reduce token-budget accounting for requests that are expected to reuse cached prefix blocks. When it is <code class="docutils literal notranslate"><span class="pre">False</span></code>,
+these scheduler estimates are disabled and reusable-token estimates remain zero, but actual KV block reuse is still
+controlled by <code class="docutils literal notranslate"><span class="pre">kv_cache_config.enable_block_reuse</span></code>.</p>
+<p>For example, this keeps runtime KV block reuse enabled while disabling prefix-aware scheduler admission and token-budget
+credit:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">kv_cache_config</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enable_block_reuse</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="nt">scheduler_config</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enable_prefix_aware_scheduling</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+</pre></div>
+</div>
+</section>
+<section id="selecting-the-kv-cache-manager">
+<h3>Selecting the KV Cache Manager<a class="headerlink" href="#selecting-the-kv-cache-manager" title="Link to this heading">#</a></h3>
+<p>TensorRT LLM ships two KV cache manager implementations. <code class="docutils literal notranslate"><span class="pre">use_kv_cache_manager_v2</span></code>
+selects between them and defaults to <code class="docutils literal notranslate"><span class="pre">auto</span></code>, which adopts the model’s own
+preference and falls back to the V1 C++ manager for models that do not declare
+one. Set it to <code class="docutils literal notranslate"><span class="pre">true</span></code> or <code class="docutils literal notranslate"><span class="pre">false</span></code> to override the model default.</p>
+<p>Models that select the V2 manager by default:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Model</p></th>
+<th class="head"><p>Reason</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Hybrid Mamba (NemotronH and its multimodal models, Qwen3-Next)</p></td>
+<td><p>Attention KV and Mamba state pools must be sized together</p></td>
+</tr>
+<tr class="row-odd"><td><p>DeepSeek-V4</p></td>
+<td><p>Sparse attention attaches auxiliary per-layer buffers</p></td>
+</tr>
+<tr class="row-even"><td><p>GPT-OSS</p></td>
+<td><p>Sliding window on every other layer (VSWA), so the sliding-window and full-attention pools are sized independently</p></td>
+</tr>
+<tr class="row-odd"><td><p>Gemma3 / Gemma4 (text and multimodal)</p></td>
+<td><p>Alternating sliding-window and full-attention layers (VSWA); same independent pool sizing</p></td>
+</tr>
+<tr class="row-even"><td><p>Llama / Llama4</p></td>
+<td><p>Uniform KV pool layout; chunked attention does not partition the pools</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Separately, Gemma4 hybrid attention and sparse-attention models are routed to
+V2 unconditionally: their per-layer buffer layouts cannot be represented by V1’s
+unified pool, so <code class="docutils literal notranslate"><span class="pre">use_kv_cache_manager_v2</span></code> does not apply to them.</p>
+<p>For a model whose <code class="docutils literal notranslate"><span class="pre">layer_types</span></code> mixes sliding-window and full-attention layers
+and that publishes a single <code class="docutils literal notranslate"><span class="pre">sliding_window</span></code> (GPT-OSS, Gemma3), the V2 manager
+derives one attention window per layer from <code class="docutils literal notranslate"><span class="pre">layer_types</span></code> when
+<code class="docutils literal notranslate"><span class="pre">max_attention_window</span></code> is not set: sliding layers get <code class="docutils literal notranslate"><span class="pre">sliding_window</span></code>, full
+layers get <code class="docutils literal notranslate"><span class="pre">max_seq_len</span></code>, and the two window sizes form two layer groups whose
+pools are sized independently. The derived list is logged at startup. Set
+<code class="docutils literal notranslate"><span class="pre">max_attention_window</span></code> explicitly to override the derivation; a single entry
+restores one full-context pool for every layer. With derived windows,
+<code class="docutils literal notranslate"><span class="pre">pool_ratio</span></code> must carry one entry per layer group (two for such a model). If a
+configured <code class="docutils literal notranslate"><span class="pre">pool_ratio</span></code> does not match the derived group count, the manager
+logs a warning and keeps the single-window default, so existing configurations
+continue to run.</p>
+<p>The C++ implementation of V2 supports beam search for dense-attention models,
+including context-first disaggregated serving with the Python transceiver
+(<code class="docutils literal notranslate"><span class="pre">cache_transceiver_config.transceiver_runtime:</span> <span class="pre">PYTHON</span></code>, <code class="docutils literal notranslate"><span class="pre">backend:</span> <span class="pre">NIXL</span></code>).
+Select V2 on both workers and configure their <code class="docutils literal notranslate"><span class="pre">max_beam_width</span></code> for the requested
+beam width. The transceiver transfers the shared prompt KV once; the generation
+worker expands the beams after the transfer completes. Block reuse remains
+supported. The Python implementation selected by
+<code class="docutils literal notranslate"><span class="pre">TLLM_KV_CACHE_MANAGER_V2_BACKEND=python</span></code> is separate from the Python transceiver
+and does not support beam search. Hybrid Mamba, sparse attention, KV connectors,
+and pipelined KV transfer remain unsupported with V2 beam search.</p>
+<p>For the native V2 cold-storage representation and codec extension contract, see
+<a class="reference internal" href="../developer-guide/kv-cache-cold-page-codec.html"><span class="std std-doc">KVCacheManagerV2 Cold-Page Codec Design</span></a>.</p>
+</section>
+<section id="swa-endpoint-retention">
+<h3>SWA Endpoint Retention<a class="headerlink" href="#swa-endpoint-retention" title="Link to this heading">#</a></h3>
+<p>To prefer cached sliding-window attention (SWA) blocks near a prompt’s endpoint
+under cache pressure, opt in with the prototype
+<code class="docutils literal notranslate"><span class="pre">kv_cache_config.block_reuse_config.swa_endpoint_rewind_tokens</span></code> option:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">kv_cache_config</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enable_block_reuse</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">use_kv_cache_manager_v2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">block_reuse_config</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">policy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">all_reusable</span>
+<span class="w">    </span><span class="nt">swa_endpoint_rewind_tokens</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1024</span>
+</pre></div>
+</div>
+<p>For newly created pages, positive values assign priority <code class="docutils literal notranslate"><span class="pre">70</span></code> to sink blocks
+and SWA blocks overlapping the final <code class="docutils literal notranslate"><span class="pre">window_size</span> <span class="pre">+</span> <span class="pre">swa_endpoint_rewind_tokens</span></code>
+tokens of the reusable prompt prefix, excluding the final prompt token that is
+recomputed. Other SWA pages receive priority <code class="docutils literal notranslate"><span class="pre">0</span></code>; full-attention and other
+life cycles retain the default priority <code class="docutils literal notranslate"><span class="pre">35</span></code>. Blocks remain reusable until
+evicted. Within each eviction pool, lower priorities are evicted first, with
+LRU ordering among pages of equal priority.</p>
+<p>The endpoint is fixed for each request. Existing reused pages retain their
+assigned priorities: advancing the conversation does not automatically promote
+or demote them, and decoding does not advance the callback’s endpoint.
+This preference does not guarantee residency or change attention windows or
+prefix matching. It excludes dummy and draft requests. The default, <code class="docutils literal notranslate"><span class="pre">0</span></code>, disables
+the entire endpoint-priority callback, including its preference for the final window.
+This option requires V2, block reuse, and the <code class="docutils literal notranslate"><span class="pre">all_reusable</span></code> policy.</p>
+</section>
+<section id="mamba-snapshot-boundaries">
+<h3>Mamba Snapshot Boundaries<a class="headerlink" href="#mamba-snapshot-boundaries" title="Link to this heading">#</a></h3>
+<p>Hybrid Mamba models must retain the recurrent Mamba state together with the
+attention KV prefix. Snapshot policy is grouped under
+<code class="docutils literal notranslate"><span class="pre">kv_cache_config.mamba_state_config</span></code>. <code class="docutils literal notranslate"><span class="pre">periodic_snapshot_interval</span></code> controls
+periodic boundaries. They are disabled by default; set the interval to a
+positive value to enable them. The deprecated
+<code class="docutils literal notranslate"><span class="pre">kv_cache_config.mamba_state_cache_interval</span></code> alias remains accepted for
+compatibility and is copied to the nested field during validation. New code and
+configuration files should use the nested field. The prototype
+<code class="docutils literal notranslate"><span class="pre">additional_snapshot_offsets_from_start</span></code> and
+<code class="docutils literal notranslate"><span class="pre">additional_snapshot_offsets_from_end</span></code> options add fixed boundaries. Start
+offsets count tokens from the beginning of the prompt. End offsets count
+backward from the prompt end, and an end offset of <code class="docutils literal notranslate"><span class="pre">0</span></code> selects the final
+prompt boundary. The <code class="docutils literal notranslate"><span class="pre">per_conversation</span></code> block reuse policy disables periodic
+Mamba snapshots, so configure one or more explicit stable boundaries (usually
+an end offset of <code class="docutils literal notranslate"><span class="pre">0</span></code>) when using it with a hybrid Mamba model. For example:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">kv_cache_config</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enable_block_reuse</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">use_kv_cache_manager_v2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">avg_seq_len</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2048</span>
+<span class="w">  </span><span class="nt">block_reuse_config</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">policy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">per_conversation</span>
+<span class="w">    </span><span class="nt">max_num_turns</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+<span class="w">  </span><span class="nt">mamba_state_config</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">periodic_snapshot_interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">    </span><span class="nt">additional_snapshot_offsets_from_start</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">128</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">additional_snapshot_offsets_from_end</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">32</span><span class="p p-Indicator">]</span>
+</pre></div>
+</div>
+<p>This retains snapshots after the first 128 tokens, at the end of the prompt,
+and before the final 32 prompt tokens. Positions outside a particular prompt
+are ignored. Set <code class="docutils literal notranslate"><span class="pre">avg_seq_len</span></code> to the workload’s average total sequence length
+so V2 can size the attention KV and Mamba state pools in the right proportion.
+<code class="docutils literal notranslate"><span class="pre">pool_ratio</span></code> contains one positive, normalized cache-tier quota weight per
+layer group in layer-group ID order.
+If neither <code class="docutils literal notranslate"><span class="pre">avg_seq_len</span></code> nor an explicit <code class="docutils literal notranslate"><span class="pre">pool_ratio</span></code> is configured, hybrid
+Mamba models warn and fall back to half of <code class="docutils literal notranslate"><span class="pre">max_seq_len</span></code>, which can produce a
+suboptimal pool split. Exact explicit boundaries currently require
+<code class="docutils literal notranslate"><span class="pre">MambaHybridCacheManagerV2</span></code> and <code class="docutils literal notranslate"><span class="pre">max_beam_width=1</span></code>. Hybrid
+Mamba models select V2 by default (see
+<a class="reference internal" href="#selecting-the-kv-cache-manager">Selecting the KV Cache Manager</a>); set
+<code class="docutils literal notranslate"><span class="pre">use_kv_cache_manager_v2</span></code> to <code class="docutils literal notranslate"><span class="pre">false</span></code> to select the V1 C++
+compatibility manager. In disaggregated serving, V2 Mamba requires the Python
+NIXL transceiver (<code class="docutils literal notranslate"><span class="pre">transceiver_runtime:</span> <span class="pre">PYTHON</span></code>); V1 routes support periodic
+snapshots only.</p>
+</section>
+<section id="kv-cache-salting-for-secure-reuse">
+<h3>KV Cache Salting for Secure Reuse<a class="headerlink" href="#kv-cache-salting-for-secure-reuse" title="Link to this heading">#</a></h3>
+<p>KV cache salting provides a security mechanism to control which requests can reuse cached KV states. When a <code class="docutils literal notranslate"><span class="pre">cache_salt</span></code> parameter is provided with a request, the KV cache system will only allow reuse of cached blocks given the same cache salt value. This prevents potential security issues such as prompt theft attacks, where malicious users might try to infer information from cached states of other users’ requests.</p>
+<p>To use cache salting, specify the <code class="docutils literal notranslate"><span class="pre">cache_salt</span></code> parameter as a string when creating requests. Only requests with matching cache salt values can share cached KV blocks. The salt value can be any non-empty string, such as a user ID, tenant ID, or hash string.</p>
+<p>This isolation is enforced entirely by the block-key hash: the salt is mixed into the hashed input and prefix matching is decided by digest equality alone (blocks are not re-compared token-by-token). The block-key hash is therefore required to be a cryptographic hash with strong collision resistance and a 256-bit digest (SHA-256 provides ~128-bit collision resistance, which is ample here); substituting a non-cryptographic hash would allow crafted collisions to bypass salt isolation and must not be done.</p>
+</section>
+<section id="multimodal-uuid-support-for-cache-identification">
+<h3>Multimodal UUID Support for Cache Identification<a class="headerlink" href="#multimodal-uuid-support-for-cache-identification" title="Link to this heading">#</a></h3>
+<p>When working with multimodal models (e.g., vision-language models), the KV cache system needs to identify which cached blocks correspond to which multimodal inputs (images, videos, etc.). By default, the system uses content-based hashing to generate unique identifiers for each multimodal input. However, this approach has limitations for cache management across sessions, as the same content must be re-processed to generate the same hash.</p>
+<p>You can provide custom UUID strings for your multimodal data using the <code class="docutils literal notranslate"><span class="pre">multi_modal_uuids</span></code> parameter when creating requests. Both cache managers compute the item digest from <strong>both</strong> the UUID and content together for correctness. V1 returns the original UUID in the KV cache event’s <code class="docutils literal notranslate"><span class="pre">mm_keys[].hash</span></code> field when one is supplied. V2 returns the item digest as a hexadecimal string, including for items with UUIDs.</p>
+<p><strong>Usage Example:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">tensorrt_llm.inputs</span><span class="w"> </span><span class="kn">import</span> <span class="n">TextPrompt</span>
+
+<span class="c1"># Provide custom UUIDs for your images</span>
+<span class="n">prompt</span> <span class="o">=</span> <span class="n">TextPrompt</span><span class="p">(</span>
+    <span class="n">prompt</span><span class="o">=</span><span class="s2">"Describe these images."</span><span class="p">,</span>
+    <span class="n">multi_modal_data</span><span class="o">=</span><span class="p">{</span><span class="s2">"image"</span><span class="p">:</span> <span class="p">[</span><span class="n">image1</span><span class="p">,</span> <span class="n">image2</span><span class="p">]},</span>
+    <span class="n">multi_modal_uuids</span><span class="o">=</span><span class="p">{</span><span class="s2">"image"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"image-uuid-001"</span><span class="p">,</span> <span class="s2">"image-uuid-002"</span><span class="p">]}</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Key Features:</strong></p>
+<ul class="simple">
+<li><p><strong>Cache Correctness</strong>: When a UUID is provided, the cache key is computed from both the UUID and content together using <code class="docutils literal notranslate"><span class="pre">BLAKE3(UUID</span> <span class="pre">||</span> <span class="pre">Content)</span></code>. This ensures different content always produces different cache entries, even with the same UUID.</p></li>
+<li><p><strong>User Isolation</strong>: Same content with different UUIDs produces different cache entries, enabling per-user or per-session cache isolation.</p></li>
+<li><p><strong>Stable Event Identifiers</strong>: <code class="docutils literal notranslate"><span class="pre">get_kv_cache_events()</span></code> returns the original UUID for V1, or the item digest for V2. V2 consumers can use the same digest that appears in its cache-key token sequence.</p></li>
+<li><p><strong>Partial UUID Support</strong>: You can provide UUIDs for some items and use <code class="docutils literal notranslate"><span class="pre">None</span></code> for others to fall back to content-only hashing.</p></li>
+<li><p><strong>Cross-Modality Support</strong>: Different modalities (images, videos) can each have their own UUIDs.</p></li>
+</ul>
+<p><strong>UUID Format:</strong></p>
+<ul class="simple">
+<li><p>Can be any string (e.g., “image-123”, “user-session-img-a”, database keys)</p></li>
+<li><p>Original UUID strings are preserved in request metadata and returned in V1 KV cache events</p></li>
+</ul>
+<p>V2 derives <code class="docutils literal notranslate"><span class="pre">mm_keys</span></code> directly from the cached token sequence. Each entry identifies a continuous multimodal segment within that block: <code class="docutils literal notranslate"><span class="pre">hash</span></code> is the item’s digest, and <code class="docutils literal notranslate"><span class="pre">start_offset</span></code> is the segment’s first token offset within the item. An item spanning multiple blocks retains the same digest with increasing offsets. Text may separate segments of the same item. Items are processed in prompt order; one item cannot resume after another item has started. The item digest is distinct from <code class="docutils literal notranslate"><span class="pre">block_hash</span></code>, which also depends on the preceding token sequence.</p>
+</section>
+<section id="enable-offloading-to-host-memory">
+<h3>Enable Offloading to Host Memory<a class="headerlink" href="#enable-offloading-to-host-memory" title="Link to this heading">#</a></h3>
+<p>Before a block is evicted from GPU memory, it can optionally be offloaded to host (CPU) memory. The block remains reusable until it is evicted from host memory. When an offloaded block is reused, it is first copied back into GPU memory. Offloading is controlled with property <code class="docutils literal notranslate"><span class="pre">host_cache_size</span></code> which specifies how much host memory (in bytes) should be allocated for offloading. The default is 0.</p>
+<p>When offloading is enabled, the client can prevent specific blocks from being offloaded by toggling block priority. Blocks with lower priority than a certain threshold are not offloaded; they are evicted directly from GPU memory to reduce traffic between GPU and host. This priority is set with <code class="docutils literal notranslate"><span class="pre">secondary_offload_min_priority</span></code>. Default value is 35, meaning any block with lower priority than 35 will not be offloaded.</p>
+<p>Here is an <a class="reference download internal" download="" href="../_downloads/289baa7eb9a76c4944f3e2800f51f4c4/llm_kv_cache_offloading.py"><span class="xref download myst">example</span></a> to show how to enable host offloading.</p>
+<p>KV cache compression can reduce the storage and transfer cost of offloaded
+Pages, or reduce the amount of KV retained by an algorithm. Compression is
+configured separately from <code class="docutils literal notranslate"><span class="pre">KvCacheConfig</span></code>; see
+<a class="reference internal" href="kv-cache-compression.html"><span class="std std-doc">KV Cache Compression</span></a> for the available methods and
+their activation points.</p>
+</section>
+<section id="partial-reuse">
+<h3>Partial Reuse<a class="headerlink" href="#partial-reuse" title="Link to this heading">#</a></h3>
+<p>Partial reuse of a block can happen when some but not all tokens are matched. It is enabled by default, but can be disabled by setting <code class="docutils literal notranslate"><span class="pre">enable_partial_reuse</span></code> to False.</p>
+<p>The property <code class="docutils literal notranslate"><span class="pre">copy_on_partial_reuse</span></code> specifies whether a block should be copied or not in order to allow partial reuse. If copying is disabled, a partially matched block can only be reused if no other request is using it. If copying is enabled, partially matched blocks are not reused directly, instead a new block is created and the matched tokens are copied into the new block. This allows multiple requests to partially reuse a block.</p>
+</section>
+<section id="attention-window-size">
+<h3>Attention Window Size<a class="headerlink" href="#attention-window-size" title="Link to this heading">#</a></h3>
+<p>Property <code class="docutils literal notranslate"><span class="pre">max_attention_window</span></code> specifies the maximum attention window size for each layer in the model as a list of integer values. If the length of this list is less than number of layers, the list is repeated as many times as necessary. For instance, if the model has only full attention layers and maximum sequence length is 4096, you can specify this as <code class="docutils literal notranslate"><span class="pre">max_attention_window</span> <span class="pre">=</span> <span class="pre">[4096]</span></code>. If the first layer is full attention, the second layer is limited attention with window size 256 and then this repeats for the remaining layers, you specify this as <code class="docutils literal notranslate"><span class="pre">max_attention_window</span> <span class="pre">=</span> <span class="pre">[4096,256]</span></code>. This means first layer is full attention, second layer is limited attention, third layer is full attention, fourth layer is limited attention and so on.</p>
+</section>
+<section id="debugging-aids">
+<h3>Debugging Aids<a class="headerlink" href="#debugging-aids" title="Link to this heading">#</a></h3>
+<p>Two opt-in environment variables help when a result looks like it came from KV
+pages the request does not own – a stale page handed over by a previous owner,
+or a page-table slot the attention mask was supposed to cover. Both are off
+unless set, and when unset nothing about allocation, page contents or reported
+block counts changes. Both are diagnostic only: they cost extra work and are
+not meant for production serving. They apply to <code class="docutils literal notranslate"><span class="pre">KVCacheManagerV2</span></code>.</p>
+<p>Each accepts the same fill value: <code class="docutils literal notranslate"><span class="pre">1</span></code>, <code class="docutils literal notranslate"><span class="pre">on</span></code>, <code class="docutils literal notranslate"><span class="pre">true</span></code> or <code class="docutils literal notranslate"><span class="pre">zero</span></code> for zeros, <code class="docutils literal notranslate"><span class="pre">nan</span></code>
+for NaN (any uncovered read then fails immediately and visibly rather than
+producing a plausible number), or any number for that constant.</p>
+<blockquote>
+<div><p><strong>Packed NVFP4 (e2m1) limitation.</strong> A packed sub-byte pool cannot store an
+arbitrary sentinel: every non-zero fill value collapses to the byte pattern
+<code class="docutils literal notranslate"><span class="pre">0x7f</span></code>. For most packed formats <code class="docutils literal notranslate"><span class="pre">0x7f</span></code> is non-finite, so a <code class="docutils literal notranslate"><span class="pre">nan</span></code>/<code class="docutils literal notranslate"><span class="pre">inf</span></code>
+sentinel still poisons the page. Packed NVFP4 (e2m1) has no NaN/Inf encoding,
+so <code class="docutils literal notranslate"><span class="pre">0x7f</span></code> decodes to <code class="docutils literal notranslate"><span class="pre">+6.0</span></code> (the largest finite magnitude) instead. On such a
+pool the sentinel lands as <code class="docutils literal notranslate"><span class="pre">6.0</span></code> – still a recognisable out-of-band pattern,
+but not one that an <code class="docutils literal notranslate"><span class="pre">isnan</span></code>/<code class="docutils literal notranslate"><span class="pre">isinf</span></code> check will flag. Only zero fills carry
+over exactly for packed e2m1.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">TRTLLM_KV_GUARD_PAGE</span></code> reserves one page that no request can be given, fills
+it with the chosen pattern, and publishes its per-layer index. Attention
+backends that have to keep masked-out page-table entries in range park them
+on this page instead of on page 0, which is a live page belonging to whatever
+request holds it. The mask still decides the result; what changes is that a
+masking bug reads a recognisable pattern instead of a stranger’s keys and
+values. Costs one page and one index-mapper slot.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">TRTLLM_KV_FRESH_PAGE_FILL</span></code> writes the pattern into pages as a request is
+given them, so a read past what the request itself wrote returns the pattern
+rather than the previous owner’s data. Pages covering the reused/committed
+prefix are never overwritten. Costs one fill per layer per new allocation
+plus a device synchronization.</p></li>
+</ul>
+<p>Both announce themselves once at warning level when they take effect, so a log
+shows whether the switch actually did anything.</p>
+</section>
+<section id="kv-cache-events">
+<h3>KV Cache Events<a class="headerlink" href="#kv-cache-events" title="Link to this heading">#</a></h3>
+<p>KV cache events let an external KV-cache-aware router (for example NVIDIA Dynamo) route a
+request to the engine that already holds its prefix. The buffered path reports block <strong>stored</strong>,
+<strong>removed</strong>, <strong>created</strong> and <strong>updated</strong> operations. The streaming path exposes the narrower
+router-facing contract described below.</p>
+<section id="buffered-path-default">
+<h4>Buffered path (default)<a class="headerlink" href="#buffered-path-default" title="Link to this heading">#</a></h4>
+<p>Set <code class="docutils literal notranslate"><span class="pre">event_buffer_max_size</span></code> to a positive integer and <code class="docutils literal notranslate"><span class="pre">enable_block_reuse</span></code> to True.
+Events are buffered per rank, gathered onto rank 0 under attention data parallelism, and
+exposed through <code class="docutils literal notranslate"><span class="pre">LLM.get_kv_cache_events()</span></code> / <code class="docutils literal notranslate"><span class="pre">LLM.get_kv_cache_events_async()</span></code>, or over the
+<code class="docutils literal notranslate"><span class="pre">/kv_cache_events</span></code> endpoint of <code class="docutils literal notranslate"><span class="pre">trtllm-serve</span></code>.</p>
+</section>
+<section id="streaming-path-prototype">
+<h4>Streaming path (prototype)<a class="headerlink" href="#streaming-path-prototype" title="Link to this heading">#</a></h4>
+<p>Configured with <code class="docutils literal notranslate"><span class="pre">kv_cache_config.kv_events_config</span></code>. Streaming is intended to reduce event
+publishing overhead under attention data parallelism: each emitting rank publishes its own
+events over a ZeroMQ <code class="docutils literal notranslate"><span class="pre">PUB</span></code> socket, removing the rank-0 gather and the consumer pull through the
+LLM API. Each emitting rank still drains its local native event source, converts the events to
+wire structs and enqueues one batch at the iteration boundary. A background thread performs
+msgpack encoding and socket I/O.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">tensorrt_llm.llmapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">KvCacheConfig</span><span class="p">,</span> <span class="n">KVEventsConfig</span>
+
+<span class="n">kv_cache_config</span> <span class="o">=</span> <span class="n">KvCacheConfig</span><span class="p">(</span>
+    <span class="n">enable_block_reuse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">kv_events_config</span><span class="o">=</span><span class="n">KVEventsConfig</span><span class="p">(</span>
+        <span class="n">enable_kv_cache_events</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">endpoint</span><span class="o">=</span><span class="s2">"tcp://*:5557"</span><span class="p">,</span>
+        <span class="n">replay_endpoint</span><span class="o">=</span><span class="s2">"tcp://*:5657"</span><span class="p">,</span>
+    <span class="p">),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Limitations.</strong> Pipeline and context parallelism are unsupported. Buffered polling returns
+no events while streaming is enabled. Draft models and KV-cache-size estimation do not publish
+events. Use buffered mode for cache-tier, priority, and other lifecycle updates.</p>
+<p>Streaming exposes only the full-block residency information external routers need, using the
+attention lifecycle with the largest window. Conversion to <code class="docutils literal notranslate"><span class="pre">BlockStored</span></code>/<code class="docutils literal notranslate"><span class="pre">BlockRemoved</span></code> is
+centralized at the once-per-iteration publisher boundary, keeping internal lifecycle details
+contained and avoiding Python callbacks from native cache operations.</p>
+<p><strong>Multimodal payloads.</strong> <code class="docutils literal notranslate"><span class="pre">token_ids</span></code> can contain integers and hexadecimal digest strings;
+integer-only consumers are incompatible. Each <code class="docutils literal notranslate"><span class="pre">mm_keys[i]</span></code> describes the multimodal segments
+in <code class="docutils literal notranslate"><span class="pre">block_hashes[i]</span></code>, using the <code class="docutils literal notranslate"><span class="pre">hash</span></code> and <code class="docutils literal notranslate"><span class="pre">start_offset</span></code> fields defined above. This payload
+support does not establish end-to-end multimodal-aware routing compatibility. The final
+identity and normalization contract will be revisited separately after
+<a class="reference external" href="https://github.com/ai-dynamo/dynamo/pull/15095">Dynamo #15095</a> and
+<a class="reference external" href="https://github.com/NVIDIA/TensorRT-LLM/pull/19529">TensorRT-LLM #19529</a> merge.</p>
+<p><strong>Endpoint convention.</strong> Every attention-DP rank binds <code class="docutils literal notranslate"><span class="pre">base_port</span> <span class="pre">+</span> <span class="pre">rank</span></code> using its
+<strong>global</strong> rank, so <code class="docutils literal notranslate"><span class="pre">N</span></code> ranks occupy <code class="docutils literal notranslate"><span class="pre">[base_port,</span> <span class="pre">base_port</span> <span class="pre">+</span> <span class="pre">N</span> <span class="pre">-</span> <span class="pre">1]</span></code> cluster-wide and
+each rank’s port is distinct — on a multi-node deployment, rank 8 binds <code class="docutils literal notranslate"><span class="pre">base_port</span> <span class="pre">+</span> <span class="pre">8</span></code>
+whichever node it runs on. Co-located engines — for example disaggregated prefill and
+decode on one host — must use base ports at least <code class="docutils literal notranslate"><span class="pre">N</span></code> apart.</p>
+<p><code class="docutils literal notranslate"><span class="pre">replay_endpoint</span></code> follows the same convention. Because only ranks co-located on one
+host actually contend for a port, and a host holds a contiguous run of ranks, its base
+port must be at least <em>ranks-per-host</em> away from <code class="docutils literal notranslate"><span class="pre">endpoint</span></code>’s rather than <code class="docutils literal notranslate"><span class="pre">N</span></code> away.
+Overlapping ranges are rejected at startup. For <code class="docutils literal notranslate"><span class="pre">ipc://</span></code> and <code class="docutils literal notranslate"><span class="pre">inproc://</span></code> endpoints, which
+have no port, each rank appends a <code class="docutils literal notranslate"><span class="pre">_dp&lt;rank&gt;</span></code> suffix instead.</p>
+<p><strong>Wire format.</strong> Each batch is sent as three ZeroMQ frames: the subscription <code class="docutils literal notranslate"><span class="pre">topic</span></code>,
+an 8-byte big-endian sequence number, and a msgpack payload
+<code class="docutils literal notranslate"><span class="pre">[timestamp,</span> <span class="pre">[events],</span> <span class="pre">data_parallel_rank]</span></code>. Each event is a map tagged with a <code class="docutils literal notranslate"><span class="pre">type</span></code> key —
+<code class="docutils literal notranslate"><span class="pre">BlockStored</span></code> or <code class="docutils literal notranslate"><span class="pre">BlockRemoved</span></code> — carrying int64 block hashes derived from the V2 radix block
+keys. This is the format documented for custom router backends; it differs from vLLM’s
+positional-array encoding of the individual events, though the batch envelope is positional in
+both.</p>
+<p><strong>Delivery guarantees.</strong> Delivery is best effort, and batch loss is observable. Every accepted
+batch reserves a sequence number up front, so a batch dropped by a full publisher queue
+(<code class="docutils literal notranslate"><span class="pre">max_queue_size</span></code>) or by a failed send leaves a hole in the sequence. Subscribers must
+treat any gap as lost KV-cache state and resynchronize rather than assuming continuity. A
+producer-side safety-cap drop is reported in the producer’s logs and counters but does not
+create a sequence gap.</p>
+<p><strong>Replay.</strong> If <code class="docutils literal notranslate"><span class="pre">replay_endpoint</span></code> is set, the publisher also binds a <code class="docutils literal notranslate"><span class="pre">ROUTER</span></code> socket. A
+subscriber sends an empty delimiter frame plus an 8-byte big-endian start sequence, and
+receives each retained batch as <code class="docutils literal notranslate"><span class="pre">[delimiter,</span> <span class="pre">topic,</span> <span class="pre">seq,</span> <span class="pre">payload]</span></code>, terminated by a sentinel
+with an empty payload. Only the last <code class="docutils literal notranslate"><span class="pre">buffer_steps</span></code> batches are retained, so a replay
+can legitimately start above the requested sequence — that too is a gap.</p>
+</section>
+</section>
+<section id="deprecated-properties">
+<h3>Deprecated Properties<a class="headerlink" href="#deprecated-properties" title="Link to this heading">#</a></h3>
+<p>Property <code class="docutils literal notranslate"><span class="pre">use_uvm</span></code> has been deprecated and will be removed in a future release.</p>
+<p>Property <code class="docutils literal notranslate"><span class="pre">sink_token_length</span></code> is deprecated and silently ignored on the PyTorch backend.
+The PyTorch attention kernels do not support StreamingLLM, so any non-<code class="docutils literal notranslate"><span class="pre">None</span></code> value is
+dropped before reaching the executor.</p>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                
+              
+            </div>
+            
+            
+
+
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                
+              
+            
+
+          </div>
+          
+        
+      </main>
+    </div>
+  </div>
+  
+
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  
+
+
+
+  
+  </body>
+</html>

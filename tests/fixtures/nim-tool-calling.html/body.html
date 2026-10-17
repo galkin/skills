@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8">
+    
+
+    <title>Tool Calling and MCP Integration — NVIDIA NIM for LLM and VLM</title>
+  
+  
+  
+  
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  
+  
+  <!-- Loaded before other Sphinx assets -->
+  
+
+
+    
+    
+    
+    
+    
+  
+  <!-- So that users can add custom icons -->
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  
+
+
+
+
+
+
+
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+
+    
+
+    
+    
+    
+    
+
+
+
+
+  
+  
+  
+    
+  
+    
+    
+    
+    
+  
+
+
+  </head>
+
+  <body>
+
+
+
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center" action="../search.html" method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search" class="form-control" name="q" placeholder="Search the docs ..." aria-label="Search the docs ..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  
+</div>
+
+  
+    
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+
+</div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+<div class="header-article-item">
+  <div class="d-flex justify-content-end w-100">
+    <a href="https://surveys.hotjar.com/4904bf71-6484-47a7-83ff-4715cceabdb5" id="openPopupButton">Is this page helpful?</a>
+  </div>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="tool-calling-and-mcp-integration">
+<span id="tool-calling-and-mcp"></span><h1>Tool Calling and MCP Integration<a class="headerlink" href="#tool-calling-and-mcp-integration" title="Link to this heading">#</a></h1>
+<p>NIM LLM and VLM supports OpenAI-compatible tool calling through <a class="reference external" href="https://docs.vllm.ai/en/stable/features/tool_calling.html" rel="noreferer noopener" target="_blank">vLLM’s tool calling engine</a>. Tool calling lets models invoke external functions by returning structured tool calls instead of text responses, enabling integration with <a class="reference external" href="https://modelcontextprotocol.io/" rel="noreferer noopener" target="_blank">Model Context Protocol (MCP)</a> servers and any client library that uses the OpenAI tools format.</p>
+<section id="prerequisites">
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">#</a></h2>
+<p>Before you start, complete the following prerequisites:</p>
+<ol class="arabic simple">
+<li><p>Deploy a chat-capable NIM LLM and VLM container. For deployment instructions, refer to the <a class="reference internal" href="../get-started/quickstart.html#quickstart"><span class="std std-ref">Quickstart</span></a>.</p></li>
+<li><p>Identify the built-in <code class="docutils literal notranslate"><span class="pre">--tool-call-parser</span></code> name that matches your model, or plan to supply a custom plugin. For the built-in parser list and plugin path rules, refer to <a class="reference internal" href="custom-parsers-and-templates.html#custom-parsers-and-templates"><span class="std std-ref">Custom Parsers and Chat Templates</span></a>.</p></li>
+</ol>
+</section>
+<section id="enable-tool-calling">
+<h2>Enable Tool Calling<a class="headerlink" href="#enable-tool-calling" title="Link to this heading">#</a></h2>
+<p>Tool calling requires two vLLM engine arguments: <code class="docutils literal notranslate"><span class="pre">--enable-auto-tool-choice</span></code> and a <code class="docutils literal notranslate"><span class="pre">--tool-call-parser</span></code> that matches your model.</p>
+<p>To enable tool calling, complete the following steps:</p>
+<ol class="arabic">
+<li><p>Pass both arguments as CLI arguments to <code class="docutils literal notranslate"><span class="pre">nim-serve</span></code>.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span><span class="nv">NIM_MODEL_PATH</span><span class="o">=</span>hf://meta-llama/Llama-3.1-8B-Instruct<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-p<span class="w"> </span><span class="m">8000</span>:8000<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="si">${</span><span class="nv">NIM_LLM_MODEL_FREE_IMAGE</span><span class="si">}</span>:2.0.13<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>nim-serve<span class="w"> </span>--enable-auto-tool-choice<span class="w"> </span>--tool-call-parser<span class="w"> </span>llama3_json
+</pre></div>
+</div>
+</li>
+<li><p>Optional: For a Kubernetes workload, pass the same arguments through the container
+<code class="docutils literal notranslate"><span class="pre">args</span></code> field.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">containers</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nim</span>
+<span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;nim_llm_image&gt;</span>
+<span class="w">    </span><span class="nt">args</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"--enable-auto-tool-choice"</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"--tool-call-parser"</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"llama3_json"</span>
+</pre></div>
+</div>
+<p>The following table describes the tool-calling arguments:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Argument</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--enable-auto-tool-choice</span></code></p></td>
+<td><p>Allows the model to choose between generating text or calling a tool. Required for tool calling.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--tool-call-parser</span> <span class="pre">&lt;parser&gt;</span></code></p></td>
+<td><p>Built-in parser name for extracting tool calls from model output. Must match the model’s tool calling format (for example, <code class="docutils literal notranslate"><span class="pre">llama3_json</span></code> for Llama 3.1 and 3.3).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--tool-parser-plugin</span> <span class="pre">&lt;path&gt;</span></code></p></td>
+<td><p>Path to a custom tool-call parser file. Accepts an absolute path or a path relative to the model checkpoint directory (the path is used as-is, with no basename stripping). Required only when no built-in parser fits your model.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Both <code class="docutils literal notranslate"><span class="pre">--enable-auto-tool-choice</span></code> and <code class="docutils literal notranslate"><span class="pre">--tool-call-parser</span></code> are required together. For the full list of built-in parsers, the supported models, and how to provide a custom plugin file, refer to <a class="reference internal" href="custom-parsers-and-templates.html#custom-parsers-and-templates"><span class="std std-ref">Custom Parsers and Chat Templates</span></a>. For request and response format and schema details, refer to the <a class="reference external" href="https://docs.vllm.ai/en/stable/features/tool_calling.html" rel="noreferer noopener" target="_blank">vLLM tool calling documentation</a>. For more information on container arguments, the <code class="docutils literal notranslate"><span class="pre">NIM_PASSTHROUGH_ARGS</span></code> fallback, and configuration precedence, refer to <a class="reference internal" href="../reference/advanced-configuration.html#advanced-configuration"><span class="std std-ref">Advanced Configuration</span></a>.</p>
+</li>
+<li><p>After you enable tool calling, send tool definitions on the <code class="docutils literal notranslate"><span class="pre">/v1/chat/completions</span></code> endpoint with the <code class="docutils literal notranslate"><span class="pre">tools</span></code> parameter and receive tool calls.</p>
+<p>For request and response format, examples, and the tool result loop, refer to the <a class="reference external" href="https://docs.vllm.ai/en/stable/features/tool_calling.html" rel="noreferer noopener" target="_blank">vLLM tool calling documentation</a>.</p>
+</li>
+</ol>
+</section>
+<section id="use-mcp-tools-with-nim">
+<h2>Use MCP Tools with NIM<a class="headerlink" href="#use-mcp-tools-with-nim" title="Link to this heading">#</a></h2>
+<p>NIM LLM and VLM does not connect to MCP servers directly. Your client application connects to MCP servers, converts tool definitions to the <a class="reference external" href="https://platform.openai.com/docs/guides/function-calling" rel="noreferer noopener" target="_blank">OpenAI tools format</a>, and sends them in the <code class="docutils literal notranslate"><span class="pre">tools</span></code> array of a Chat Completions request.</p>
+<p>To use MCP tools with NIM, complete the following steps:</p>
+<ol class="arabic simple">
+<li><p>Connect your client application to the MCP servers that expose the tools you need.</p></li>
+<li><p>Convert those MCP tool definitions to the OpenAI tools format.</p></li>
+<li><p>Send the converted definitions in the <code class="docutils literal notranslate"><span class="pre">tools</span></code> array of a Chat Completions request.</p></li>
+<li><p>Execute the tool calls from the model response against the MCP server, then return the results to the model.</p></li>
+</ol>
+<p>MCP tool schemas converted to OpenAI format can include extra fields such as <code class="docutils literal notranslate"><span class="pre">strict</span></code> or <code class="docutils literal notranslate"><span class="pre">additionalProperties</span></code> that are not part of the core function definition schema. vLLM accepts these fields without error. For details on schema handling, refer to the <a class="reference external" href="https://docs.vllm.ai/en/stable/features/tool_calling.html" rel="noreferer noopener" target="_blank">vLLM tool calling documentation</a>.</p>
+</section>
+<section id="integrate-langchain-and-langgraph">
+<h2>Integrate LangChain and LangGraph<a class="headerlink" href="#integrate-langchain-and-langgraph" title="Link to this heading">#</a></h2>
+<p>When building agentic applications with <a class="reference external" href="https://python.langchain.com/" rel="noreferer noopener" target="_blank">LangChain</a> and <a class="reference external" href="https://langchain-ai.github.io/langgraph/" rel="noreferer noopener" target="_blank">LangGraph</a>, use <code class="docutils literal notranslate"><span class="pre">create_agent</span></code> from <code class="docutils literal notranslate"><span class="pre">langchain.agents</span></code> to implement tool calling with NIM LLM and VLM. This agent correctly executes the full tool-calling loop: generating a tool call, executing the tool, feeding the result back to the model, and producing a final response.</p>
+<p>To integrate LangChain and LangGraph, complete the following steps:</p>
+<ol class="arabic">
+<li><p>Launch the container with <code class="docutils literal notranslate"><span class="pre">--enable-auto-tool-choice</span></code> and
+<code class="docutils literal notranslate"><span class="pre">--tool-call-parser</span> <span class="pre">&lt;applicable-parser&gt;</span></code> as container arguments.</p>
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p>Without these flags the server rejects <code class="docutils literal notranslate"><span class="pre">"tool_choice":</span> <span class="pre">"auto"</span></code> with a 400 error, and
+<code class="docutils literal notranslate"><span class="pre">create_agent</span></code> cannot invoke the tool.</p>
+</div>
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p>Do not pass a <code class="docutils literal notranslate"><span class="pre">ProviderStrategy</span></code> to <code class="docutils literal notranslate"><span class="pre">create_agent</span></code> for tool calling. That
+pattern bypasses the tool execution loop and causes the model to describe
+intended tool calls instead of executing them. Constructing <code class="docutils literal notranslate"><span class="pre">create_agent</span></code>
+with <code class="docutils literal notranslate"><span class="pre">(llm,</span> <span class="pre">tools=[...])</span></code> and no strategy uses the correct execution loop.</p>
+</div>
+</li>
+<li><p>Install the required packages inside an isolated Python environment.</p>
+<p>On Ubuntu 23.04+, Debian 12+, and other distributions that ship with a PEP 668
+“externally managed” system Python, running <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span></code> directly against
+the system interpreter fails with an <code class="docutils literal notranslate"><span class="pre">error:</span> <span class="pre">externally-managed-environment</span></code>
+message. Create a virtual environment first, then install:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv
+<span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+
+pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span>pip
+pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"langchain-nvidia-ai-endpoints&gt;=0.3.0"</span><span class="w"> </span><span class="s2">"langchain&gt;=1.0.0"</span><span class="w"> </span><span class="s2">"langchain-core&gt;=1.0.0"</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">create_react_agent</span></code> from <code class="docutils literal notranslate"><span class="pre">langgraph.prebuilt</span></code> is deprecated in LangGraph
+1.0 and scheduled for removal in LangGraph 2.0. Use <code class="docutils literal notranslate"><span class="pre">create_agent</span></code> from
+<code class="docutils literal notranslate"><span class="pre">langchain.agents</span></code> for new code. Existing code using
+<code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">langgraph.prebuilt</span> <span class="pre">import</span> <span class="pre">create_react_agent</span></code> still works with a
+<code class="docutils literal notranslate"><span class="pre">LangGraphDeprecatedSinceV10</span></code> warning; migrate by swapping the import.</p>
+</li>
+<li><p>Define a tool with the <code class="docutils literal notranslate"><span class="pre">@tool</span></code> decorator so <code class="docutils literal notranslate"><span class="pre">create_agent</span></code> can bind it,
+then create the agent and invoke it end-to-end.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">langchain_core.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">tool</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">langchain_nvidia_ai_endpoints</span><span class="w"> </span><span class="kn">import</span> <span class="n">ChatNVIDIA</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">langchain.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_agent</span>
+
+
+<span class="nd">@tool</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_weather</span><span class="p">(</span><span class="n">location</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the current weather for a location."""</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"The weather in </span><span class="si">{</span><span class="n">location</span><span class="si">}</span><span class="s2"> is 72F and sunny."</span>
+
+
+<span class="n">llm</span> <span class="o">=</span> <span class="n">ChatNVIDIA</span><span class="p">(</span><span class="n">base_url</span><span class="o">=</span><span class="s2">"http://localhost:8000/v1"</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="s2">"your-model-name"</span><span class="p">)</span>
+<span class="n">agent</span> <span class="o">=</span> <span class="n">create_agent</span><span class="p">(</span><span class="n">llm</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">get_weather</span><span class="p">])</span>
+
+<span class="n">response</span> <span class="o">=</span> <span class="n">agent</span><span class="o">.</span><span class="n">invoke</span><span class="p">(</span>
+    <span class="p">{</span><span class="s2">"messages"</span><span class="p">:</span> <span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="s2">"What is the weather in Santa Clara, CA?"</span><span class="p">}]}</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">[</span><span class="s2">"messages"</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">content</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The snippet above pins the LangChain package versions to the API surface it
+uses: <code class="docutils literal notranslate"><span class="pre">create_agent</span></code> accepts the model as its first positional argument,
+tools are <code class="docutils literal notranslate"><span class="pre">@tool</span></code>-decorated callables, and the response is a dict with a
+<code class="docutils literal notranslate"><span class="pre">messages</span></code> list where the final entry is the agent’s answer. For more
+information on defining tools and building agents, refer to the
+<a class="reference external" href="https://docs.langchain.com/oss/python/langchain/agents" rel="noreferer noopener" target="_blank">LangChain agents documentation</a>.</p>
+</li>
+</ol>
+</section>
+<section id="troubleshooting">
+<h2>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading">#</a></h2>
+<p>Use the following topics when the model does not return tool calls or the server rejects <code class="docutils literal notranslate"><span class="pre">"tool_choice":</span> <span class="pre">"auto"</span></code>.</p>
+<section id="tool-calls-not-generated">
+<h3>Tool Calls Not Generated<a class="headerlink" href="#tool-calls-not-generated" title="Link to this heading">#</a></h3>
+<p>If the model returns text instead of a tool call, do the following:</p>
+<ul class="simple">
+<li><p>Verify that <code class="docutils literal notranslate"><span class="pre">--enable-auto-tool-choice</span></code> is set.</p></li>
+<li><p>Verify that <code class="docutils literal notranslate"><span class="pre">--tool-call-parser</span></code> is set to the correct parser for your model.</p></li>
+<li><p>Check that the <code class="docutils literal notranslate"><span class="pre">tools</span></code> array is included in the request.</p></li>
+</ul>
+</section>
+<section id="error-auto-tool-choice-requires-configuration">
+<h3>Error: “auto” Tool Choice Requires Configuration<a class="headerlink" href="#error-auto-tool-choice-requires-configuration" title="Link to this heading">#</a></h3>
+<p>If you see <code class="docutils literal notranslate"><span class="pre">"auto"</span> <span class="pre">tool</span> <span class="pre">choice</span> <span class="pre">requires</span> <span class="pre">--enable-auto-tool-choice</span> <span class="pre">and</span> <span class="pre">--tool-call-parser</span> <span class="pre">to</span> <span class="pre">be</span> <span class="pre">set</span></code>, both arguments must be provided when launching the container.</p>
+</section>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading">#</a></h2>
+<p>After tool calling is enabled, continue with the following topics:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="custom-parsers-and-templates.html#custom-parsers-and-templates"><span class="std std-ref">Custom Parsers and Chat Templates</span></a> to choose a built-in parser or supply a plugin.</p></li>
+<li><p><a class="reference internal" href="../reference/advanced-configuration.html#advanced-configuration"><span class="std std-ref">Advanced Configuration</span></a> for container arguments and <code class="docutils literal notranslate"><span class="pre">NIM_PASSTHROUGH_ARGS</span></code>.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                
+              
+            </div>
+            
+            
+
+
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                
+              
+            
+
+          </div>
+          
+        
+      </main>
+    </div>
+  </div>
+  
+
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  
+
+
+
+
+
+  
+  </body>
+</html>

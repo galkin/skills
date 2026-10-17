@@ -54,6 +54,8 @@ class BrowserStep:
             original=original,
             original_ext="html",
             canonical=converted.canonical,
+            title=converted.title,
+            warnings=converted.warnings,
         )
 
     def reread(

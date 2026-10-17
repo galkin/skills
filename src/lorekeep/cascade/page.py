@@ -94,20 +94,27 @@ class PageStep:
         if hashlib.sha256(response.content).hexdigest() == unchanged:
             return Same()
         fetched = convert_response(response, mediatype)
-        if isinstance(fetched, Fallthrough):
+        if isinstance(fetched, Fallthrough) and not fetched.final:
             return Fallthrough(f"{address}: {fetched.reason}")
         return fetched
 
 
 def convert_response(response: httpx.Response, mediatype: str) -> Fetched | Fallthrough:
     """A `200` page converted by the converter its media type names; a media type no converter
-    takes is unsupported."""
+    takes is unsupported, and a converter that raises ends the cascade with that error."""
     convert = CONVERTERS.get(mediatype)
     if convert is None:
         return Fallthrough(f"unsupported media type {mediatype or '(none)'}")
     received = response.content
     final_url = str(response.url)
-    converted = convert(received, final_url, response.charset_encoding)
+    try:
+        converted = convert(received, final_url, response.charset_encoding)
+    except Exception as error:  # a converter's bug, whatever its kind, is one error line
+        return Fallthrough(
+            f"{final_url}: could not convert {mediatype} ({type(error).__name__}: {error}); "
+            "report it to the owner",
+            final=True,
+        )
     if isinstance(converted, Fallthrough):
         return converted
     return Fetched(
@@ -123,4 +130,5 @@ def convert_response(response: httpx.Response, mediatype: str) -> Fetched | Fall
         last_modified=response.headers.get("last-modified"),
         title=converted.title,
         canonical=converted.canonical,
+        warnings=converted.warnings,
     )

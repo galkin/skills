@@ -46,18 +46,21 @@ class Fetched:
     title: str | None = None
     modified: str | None = None
     canonical: str | None = None
+    warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class Converted:
     """What a converter of the page step made of the received bytes; `canonical` is the address
-    the document names as its own (`<link rel="canonical">`), absolute, when it names one."""
+    the document names as its own (`<link rel="canonical">`), absolute, when it names one;
+    `warnings` say what the conversion knowingly lost, one line each, without `lorekeep:`."""
 
     markdown: bytes
     converter: str
     original_ext: str
     title: str | None = None
     canonical: str | None = None
+    warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -68,10 +71,13 @@ class Same:
 @dataclass(frozen=True)
 class Fallthrough:
     """Why a step declined; the next step runs. `needs_browser` says the page may still be read
-    by the browser: the plain client was refused (`403`/`429`) or the HTML yielded no text."""
+    by the browser: the plain client was refused (`403`/`429`) or the HTML yielded no text or
+    too little of it. `final` stops the cascade: the page was received and its converter failed,
+    so no other step may stand in for it, and `reason` is the whole error line."""
 
     reason: str
     needs_browser: bool = False
+    final: bool = False
 
 
 class Step(Protocol):
