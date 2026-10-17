@@ -10,9 +10,9 @@
 - [x] a page that is a shell on all three renders (fixture: `build.nvidia.com/nvidia/nvidia-nemotron-nano-9b-v2/modelcard` as the browser returned it this round, 785 bytes of Markdown from a 77 KB document) exits 1 with the shell error, stores nothing, and the third call carried a `js:` `wait_for` and `wait_for_timeout=15000`
 - [x] the same model card with its loaded content (second fixture, cut from the live page) stores `via crawl4ai` with the card's description text in the Markdown
 - [x] a page that is short for real (rendered document and Markdown both small, ratio under the threshold) is stored on the first attempt, as today
-- [ ] `get` of such a page live (the orchestrator runs it on `build.nvidia.com/nvidia/nvidia-nemotron-nano-9b-v2/modelcard` with the `browser = true` rule of the first Store) stores the card, not the menu; the Comment records which attempt won and the wall time
+- [x] `get` of such a page live (the orchestrator runs it on `build.nvidia.com/nvidia/nvidia-nemotron-nano-9b-v2/modelcard` with the `browser = true` rule of the first Store) stores the card, not the menu; the Comment records which attempt won and the wall time
 - [x] `owner.md`'s `browser` key paragraph says the browser retries on its own and names the three attempts in one sentence; `SKILL.md`'s `thin content` bullet says the browser is tried with longer waits before the error; the flag test passes
-- [ ] `scripts/smoke.py --bucket <empty bucket>` run live by the orchestrator reports the browser step `ok` with no stale `milvus` expectation
+- [x] `scripts/smoke.py --bucket <empty bucket>` run live by the orchestrator reports the browser step `ok` with no stale `milvus` expectation
 
 **2026-10-17 — implemented (branch `galkin/lorekeep-v12-03`).**
 
@@ -86,3 +86,24 @@ Where the ticket or spec was wrong or could not be met as written:
 - Seen on the way, not acted on: the static model card names a Markdown rendition,
   `<link rel="alternate" type="text/markdown" href="https://build.nvidia.com/nvidia/nvidia-nemotron-nano-9b-v2.md">`;
   if `build.nvidia.com` serves Twins, a `twin` on its rule would spare the browser entirely.
+
+**2026-10-17 — accepted (orchestrator), live criteria 5 and 7.**
+
+- Live `get` with the first Store's `browser = true` rule, from the merged tree: the removed
+  `nvidia-nemotron-nano-9b-v2/modelcard` ends in `the browser rendered a shell (42 characters
+  after 3 attempts)` in 48 s; the existing `llama-3_3-nemotron-super-49b-v1_5/modelcard` ends the
+  same way in 39 s. The 42 characters are "404 Error Even AI can't find this page!": headless
+  Chromium gets a client-side not-found from `build.nvidia.com` for every card, so no wait helps
+  on that host. The escalation itself behaves as built (three renders, nothing stored).
+- Smoke (`scripts/smoke.py --bucket agentic-system-design-sources`): Twin ok, static ok,
+  browser page `trafilatura 2.3.1 via crawl4ai 0.9.5` ok under the temporary rule; `restore`
+  FAILs only because the bucket is still empty (first backup pending).
+- **The implementer's aside is the real fix.** `build.nvidia.com/nvidia/<model>.md` answers
+  `text/markdown` with the whole model card (frontmatter, `# <model>`, Model Overview …), and the
+  "removed" nano-9b-v2 card is there in full (55 KB). A rule `twin = "md-suffix"`,
+  `page_suffix = "/modelcard"` stores all three guide pages and
+  `llama-3_3-nemotron-super-49b-v1_5/modelcard` as `md-twin` in a second each, no browser. The
+  first Store's rule is changed to that. One wrinkle: a page without `/modelcard`
+  (`nvidia/safety-for-agentic-ai`) is stored under `url` `…/safety-for-agentic-ai/modelcard`,
+  because the Twin reduction appends `page_suffix` to the Twin's address; both addresses exist on
+  the site, and the guide cites the shorter one, so `recheck --citations` must be checked for it.

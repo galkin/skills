@@ -99,9 +99,8 @@ On exit `1` nothing was stored:
   (`answered 503`).
 - Otherwise, or when the retry fails too, report the URL and the error line to the owner and move
   on: never fetch the page another way (`curl`, a web tool, a browser) and never `add` a page.
-- A `thin content` error (Markdown under 600 characters or 40 words, from a page with five times
-  as much text) means the page needs the browser: the owner installs `lorekeep[browser]`; with it,
-  the browser is tried with longer waits before the error `the browser rendered a shell`.
+- `thin content` (Markdown under 600 characters or 40 words from a page with five times as much
+  text) needs the browser (`lorekeep[browser]`), which waits longer before `rendered a shell`.
 - `unsupported media type` and `could not convert` errors are the owner's to fix.
 
 ```text
