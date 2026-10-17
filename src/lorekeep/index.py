@@ -8,20 +8,26 @@ under the Store lock; a lookup reads it without the lock and only when it is cur
 
 from __future__ import annotations
 
+import csv
 import re
 import sqlite3
+import sys
 from collections.abc import Iterator, Sequence
 from dataclasses import astuple, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from lorekeep import frontmatter
 from lorekeep import store as store_module
+from lorekeep.project import load_project
+from lorekeep.urls import normalise
 
 if TYPE_CHECKING:
     from lorekeep.store import AliasRow, CheckRow, TagRow, VersionInfo
 
 INDEX_FILE = "sources.db"
+CITATIONS_FILE = "citations.csv"
 SECTION_BYTES = 4096
 WATCHED_FILES = ("tags.csv", "checks.csv", "aliases.csv", "citations.csv")
 
@@ -98,11 +104,16 @@ def exists(store: Path) -> bool:
 
 @dataclass(frozen=True)
 class Counts:
+    """What a rebuild put into the Index, and what it had to leave out (one warning per
+    malformed `citations.csv` row, with its line number)."""
+
     versions: int
     sections: int
     tags: int
     checks: int
     aliases: int
+    citations: int = 0
+    warnings: tuple[str, ...] = ()
 
 
 def rebuild(store: Path) -> Counts:
@@ -111,14 +122,37 @@ def rebuild(store: Path) -> Counts:
         return _rebuild_locked(store)
 
 
-def ensure(store: Path) -> None:
-    """Build the Index when its file is missing; check again under the lock, so six readers
-    finding none produce one build."""
-    if exists(store):
-        return
+def ensure(store: Path) -> Counts | None:
+    """Bring the Index up to date before a reader queries it: compare `meta` with the files
+    without any lock; only when the file is missing or stale take the Store lock, compare again
+    and rebuild in place. Returns the rebuild's counts, or `None` when the Index was current, so
+    six readers finding none produce one build and a query on a current Index never waits."""
+    if _looks_current(store):
+        return None
     with store_module.lock(store):
-        if not exists(store):
-            _rebuild_locked(store)
+        if _looks_current(store):
+            return None
+        return _rebuild_locked(store)
+
+
+def report(counts: Counts | None) -> None:
+    """Print a rebuild's warnings to stderr; nothing when there was no rebuild."""
+    if counts is not None:
+        for warning in counts.warnings:
+            print(warning, file=sys.stderr)
+
+
+def _looks_current(store: Path) -> bool:
+    if not exists(store):
+        return False
+    try:
+        con = sqlite3.connect(store / INDEX_FILE, timeout=30.0, isolation_level=None)
+    except sqlite3.Error:
+        return False
+    try:
+        return is_current(store, con)
+    finally:
+        con.close()
 
 
 def _rebuild_locked(store: Path) -> Counts:
@@ -127,7 +161,8 @@ def _rebuild_locked(store: Path) -> Counts:
         con.executescript(SCHEMA)
         con.execute("BEGIN IMMEDIATE")
         try:
-            for table in ("versions", "tags", "checks", "aliases", "sections", "meta"):
+            tables = ("versions", "tags", "checks", "aliases", "citations", "sections", "meta")
+            for table in tables:
                 con.execute(f"DELETE FROM {table}")
             con.execute("INSERT INTO sections_fts(sections_fts) VALUES('delete-all')")
             versions = sections = 0
@@ -154,6 +189,8 @@ def _rebuild_locked(store: Path) -> Counts:
             aliases = _insert_rows(
                 con, "aliases", store_module.read_rows(store, store_module.AliasRow)
             )
+            cited, warnings = read_citations(store)
+            con.executemany("INSERT INTO citations VALUES(?, ?, ?)", cited)
             con.execute("INSERT INTO sections_fts(sections_fts) VALUES('rebuild')")
             con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", fingerprint(store))
             con.execute("COMMIT")
@@ -162,7 +199,60 @@ def _rebuild_locked(store: Path) -> Counts:
             raise
     finally:
         con.close()
-    return Counts(versions, sections, tags, checks, aliases)
+    return Counts(versions, sections, tags, checks, aliases, len(cited), tuple(warnings))
+
+
+def read_citations(store: Path) -> tuple[list[tuple[str, str, str | None]], list[str]]:
+    """The rows of `citations.csv` (`work_id, url[, as_of]`), written by the consuming Project:
+    `url` normalised and Twin-reduced like a request, `as_of` an ISO 8601 date or timestamp
+    brought to UTC `YYYY-MM-DDTHH:MM:SSZ` (a bare date means the end of that day, so a work
+    written that day is measured against the Version current then) or `None` when absent. A
+    row that cannot be read is left out and named with its line number in the warnings."""
+    path = store / CITATIONS_FILE
+    if not path.is_file():
+        return [], []
+    rules = load_project(store).hosts
+    rows: list[tuple[str, str, str | None]] = []
+    warnings: list[str] = []
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.reader(handle)
+        header = next(reader, None)
+        if header is None:
+            return [], []
+        if [column.strip() for column in header[:2]] != ["work_id", "url"]:
+            return [], [f"warning: {CITATIONS_FILE} line 1: the header is not work_id,url[,as_of]"]
+        for row in reader:
+            line = reader.line_num
+            cells = [cell.strip() for cell in row]
+            if not any(cells):
+                continue
+            if len(cells) < 2 or not cells[0] or not cells[1]:
+                warnings.append(
+                    f"warning: {CITATIONS_FILE} line {line}: expected work_id,url[,as_of]"
+                )
+                continue
+            as_of = cells[2] if len(cells) > 2 and cells[2] else None
+            try:
+                when = _as_of(as_of)
+            except ValueError:
+                warnings.append(
+                    f"warning: {CITATIONS_FILE} line {line}: as_of {as_of!r} is not an ISO 8601 "
+                    "date or timestamp"
+                )
+                continue
+            rows.append((cells[0], normalise(cells[1], rules), when))
+    return rows, warnings
+
+
+def _as_of(text: str | None) -> str | None:
+    if text is None:
+        return None
+    parsed = datetime.fromisoformat(text)
+    if len(text) == 10:
+        parsed = parsed.replace(hour=23, minute=59, second=59)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _insert_version(con: sqlite3.Connection, file: str, head: dict[str, object]) -> None:
@@ -368,7 +458,113 @@ def notify(
     checks: Sequence[CheckRow],
     aliases: Sequence[AliasRow],
 ) -> None:
-    """Tell the Index what a commit wrote; called under the Store lock (ticket 14 fills this in)."""
+    """Tell the Index what a commit wrote, in one small transaction, under the Store lock.
+
+    A missing Index is left missing (a commit never builds one). The Version and the rows not
+    already in the Index are inserted; then, when every table agrees with the files the commit
+    touched and no file it did not touch has changed, `meta` is brought up to date in the same
+    transaction, so the commit never looks like staleness. Otherwise `meta` is left as it was and
+    the Index stays stale for the next reader to rebuild.
+    """
+    if not exists(store):
+        return
+    try:
+        con = connect(store)
+    except sqlite3.Error:
+        return
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        try:
+            if version is not None:
+                _index_version(con, store, version)
+            touched = {
+                "tags.csv": _notify_rows(con, "tags", tags),
+                "checks.csv": _notify_rows(con, "checks", checks),
+                "aliases.csv": _notify_rows(con, "aliases", aliases),
+            }
+            if _agrees(con, store, touched):
+                con.execute("DELETE FROM meta")
+                con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", fingerprint(store))
+            con.execute("COMMIT")
+        except BaseException:
+            con.execute("ROLLBACK")
+            raise
+    except sqlite3.Error:
+        return
+    finally:
+        con.close()
+
+
+def _index_version(con: sqlite3.Connection, store: Path, path: Path) -> None:
+    """Insert one Version and its Sections when the Index has no row for its file."""
+    if con.execute("SELECT 1 FROM versions WHERE file = ?", (path.name,)).fetchone():
+        return
+    data = path.read_bytes()
+    head, body = frontmatter.parse(data)
+    _insert_version(con, path.name, head)
+    first_line = data[: len(data) - len(body)].count(b"\n") + 1
+    for order, section in enumerate(
+        split_sections(body.decode("utf-8", errors="replace"), first_line)
+    ):
+        cursor = con.execute(
+            "INSERT INTO sections(file, heading, line, body, ord) VALUES(?, ?, ?, ?, ?)",
+            (path.name, section.heading, section.line, section.body, order),
+        )
+        con.execute(
+            "INSERT INTO sections_fts(rowid, heading, body) VALUES(?, ?, ?)",
+            (cursor.lastrowid, section.heading, section.body),
+        )
+
+
+def _notify_rows(
+    con: sqlite3.Connection, table: str, rows: Sequence[TagRow | CheckRow | AliasRow]
+) -> bool:
+    """Insert the rows the Index lacks; whether the commit touched this table at all."""
+    for row in rows:
+        values = astuple(row)
+        key = {"tags": ("url", "tag"), "aliases": ("alias", "url")}.get(table)
+        columns = _COLUMNS_OF[table]
+        wanted = columns if key is None else key
+        where = " AND ".join(f"{column} = ?" for column in wanted)
+        args = [values[columns.index(column)] for column in wanted]
+        if con.execute(f"SELECT 1 FROM {table} WHERE {where}", args).fetchone():
+            continue
+        con.execute(f"INSERT INTO {table} VALUES({', '.join('?' * len(values))})", values)
+    return bool(rows)
+
+
+_COLUMNS_OF = {
+    "tags": ("url", "tag", "added_at"),
+    "checks": ("url", "checked_at", "result", "status", "sha256"),
+    "aliases": ("alias", "url", "added_at"),
+}
+
+
+def _agrees(con: sqlite3.Connection, store: Path, touched: dict[str, bool]) -> bool:
+    """Whether the Index, after this commit's inserts, describes the Store: every table the
+    commit touched has as many rows as its file, `versions` as many as there are `.md` files,
+    and every watched file the commit did not touch is as `meta` recorded it."""
+    recorded = dict(con.execute("SELECT key, value FROM meta").fetchall())
+    if not recorded:
+        return False
+    current = dict(fingerprint(store))
+    md_files = con.execute("SELECT count(*) FROM versions").fetchone()[0]
+    if current["md_files"] != str(md_files):
+        return False
+    for name in WATCHED_FILES:
+        if touched.get(name):
+            row_type = {
+                "tags.csv": store_module.TagRow,
+                "checks.csv": store_module.CheckRow,
+                "aliases.csv": store_module.AliasRow,
+            }[name]
+            rows = len(store_module.read_rows(store, row_type))
+            table = name.removesuffix(".csv")
+            if con.execute(f"SELECT count(*) FROM {table}").fetchone()[0] != rows:
+                return False
+        elif any(recorded.get(f"{name}:{k}") != current[f"{name}:{k}"] for k in ("size", "mtime")):
+            return False
+    return True
 
 
 # Search ------------------------------------------------------------------------------------------

@@ -4,10 +4,14 @@
 
 **Blocked by:** 08
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] after `add`, the new Version is searchable without running `index`, and the next `search` performs no rebuild (`meta` matched); the commit function's only change is the notification
-- [ ] a file copied into the Store by hand is searchable after the next `search`; the rebuild takes `.lorekeep.lock`; a `search` on a current Index takes no lock (a test holds the lock and runs `search`)
-- [ ] rewriting `citations.csv` makes the next `search` or `recheck --citations` rebuild and see the new rows; a row citing the `.md` Twin address joins the Version stored under the page URL; `as_of` with and without a time part is accepted; a malformed row is reported with its line number
-- [ ] a Version file copied into the Store by hand is found by `get` without any request
-- [ ] `index` rebuilt from the files reports the same counts as the incrementally updated Index after a sequence of `add`, `tag add` and aged `get`s
+- [x] after `add`, the new Version is searchable without running `index`, and the next `search` performs no rebuild (`meta` matched); the commit function's only change is the notification
+- [x] a file copied into the Store by hand is searchable after the next `search`; the rebuild takes `.lorekeep.lock`; a `search` on a current Index takes no lock (a test holds the lock and runs `search`)
+- [x] rewriting `citations.csv` makes the next `search` or `recheck --citations` rebuild and see the new rows; a row citing the `.md` Twin address joins the Version stored under the page URL; `as_of` with and without a time part is accepted; a malformed row is reported with its line number
+- [x] a Version file copied into the Store by hand is found by `get` without any request
+- [x] `index` rebuilt from the files reports the same counts as the incrementally updated Index after a sequence of `add`, `tag add` and aged `get`s
+
+## Comments
+
+2026-10-17 — Decisions made while building this ticket. (1) `index.notify` runs under the lock the commit holds: it inserts the Version with its Sections when `versions` has no row for the file, and each Tag, Recheck and alias row the Index lacks (same keys as the CSVs); then `meta` is rewritten in the same transaction only when the Index agrees with the files — `versions` counts the `.md` files, every CSV the commit touched has as many rows as its table, and every watched file it did not touch is as `meta` recorded it. Otherwise `meta` is left alone, so a commit against an already stale Index (a file copied in by hand) never makes it look current; a missing Index stays missing. (2) `index.ensure(store)` is the readers' staleness check: `is_current` without the lock, then the lock, the check again and `_rebuild_locked`; it returns the rebuild's `Counts` (with its warnings) or `None` when nothing was rebuilt — the hook ticket 12 can log one rebuild from. `search` calls it; ticket 09's `recheck` and ticket 11's `status` should too. (3) `citations.csv` is read at build by `index.read_citations`: a header `work_id,url[,as_of]`, `url` through `urls.normalise` with the Project's rules, `as_of` through `datetime.fromisoformat`, stored as UTC `YYYY-MM-DDTHH:MM:SSZ`; a bare date is stored as the end of that day (`23:59:59Z`), so a work written that day is measured against the Version current then — ticket 09 compares that column with `fetched_at` as strings. A row with fewer than two cells, an empty `work_id` or `url`, or an unparsable `as_of` is skipped and reported on stderr as `warning: citations.csv line N: …` by whichever command rebuilt; `index` also prints the Citation count. (4) The last checkbox is tested with `add`, two real `get`s and `commit` calls carrying what `tag add` (ticket 11) and an aged `get` (ticket 07) will pass, since neither command is on this branch yet. (5) The hand-copied `get` checkbox passed as ticket 08 left it (a stale Index makes the lookup scan); the test is kept as a regression and also checks that the Tag row `get` commits does not hide the staleness.

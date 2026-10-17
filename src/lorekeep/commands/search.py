@@ -26,7 +26,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     if not args.query.strip():
         print("lorekeep: error: the search query is empty", file=sys.stderr)
         return 2
-    index.ensure(ctx.store)
+    index.report(index.ensure(ctx.store))
     scope = index.Scope(
         tags=scope_tags(args, ctx), publisher=args.publisher, authority=args.authority
     )
