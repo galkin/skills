@@ -2464,9 +2464,7 @@ The following code snippets showcase various prompt caching patterns. These exam
                   "description": "Search through the knowledge base",
                   "input_schema": {
                       "type": "object",
-                      "properties": {
-                          "query": {"type": "string", "description": "Search query"}
-                      },
+                      "properties": {"query": {"type": "string", "description": "Search query"}},
                       "required": ["query"],
                   },
               },
@@ -2475,9 +2473,7 @@ The following code snippets showcase various prompt caching patterns. These exam
                   "description": "Retrieve a specific document by ID",
                   "input_schema": {
                       "type": "object",
-                      "properties": {
-                          "doc_id": {"type": "string", "description": "Document ID"}
-                      },
+                      "properties": {"doc_id": {"type": "string", "description": "Document ID"}},
                       "required": ["doc_id"],
                   },
                   "cache_control": {"type": "ephemeral"},

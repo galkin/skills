@@ -1,0 +1,48 @@
+# The package's default host table: every host probed so far, with its Twin rule, publisher and
+# authority. A Project's `lorekeep.toml` extends it, and replaces a rule with the same prefix.
+
+[[hosts]]
+prefix = "platform.claude.com/"
+publisher = "anthropic"
+authority = "primary"
+twin = "md-suffix"
+
+[[hosts]]
+prefix = "docs.aws.amazon.com/"
+publisher = "aws"
+authority = "primary"
+twin = "md-suffix"
+page_suffix = ".html"
+
+[[hosts]]
+prefix = "learn.microsoft.com/"
+publisher = "microsoft"
+authority = "primary"
+twin = "accept-header"
+
+[[hosts]]
+prefix = "docs.nvidia.com/"
+publisher = "nvidia"
+authority = "primary"
+
+[[hosts]]
+prefix = "cloud.google.com/"
+publisher = "google"
+authority = "primary"
+
+# No `browser` flag: the 403 Milvus answers a plain client is what sends `get` to the browser.
+[[hosts]]
+prefix = "milvus.io/"
+publisher = "milvus"
+authority = "primary"
+
+[[hosts]]
+prefix = "claude.termidy.com/"
+publisher = "termidy"
+authority = "third-party"
+
+[[hosts]]
+prefix = "raw.githubusercontent.com/"
+publisher = "github"
+authority = "third-party"
+twin = "raw"

@@ -4,19 +4,23 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `uv sync && uv run lorekeep --help` lists `get add search index recheck backup restore tag status skill`
-- [ ] `lorekeep status` on a new Store prints a summary with zero Versions and exits 0
-- [ ] a missing `LOREKEEP_STORE`/`--store` is an error with a one-line message; a missing Tag is an error only for `get` and `add`
-- [ ] `lorekeep.toml` is parsed in the spec's `[[hosts]]` shape; absent keys take the spec's defaults; a malformed file names the key that failed; the merged rule list has a `lorekeep.toml` rule in place of the default rule with the same prefix
-- [ ] frontmatter is loaded with `yaml.BaseLoader`: a publisher value such as `2026-08-13T00:00:00.0000000Z` is read as a string, never a `datetime`; a written ETag keeps its quotes
-- [ ] every flag is declared on its subcommand, none on the root parser; `--tag` is single on `get`/`add` and repeatable on `search`/`recheck`
-- [ ] `cssselect` is a runtime dependency (`lxml`'s `.cssselect()` works after `uv sync` without extras)
-- [ ] the default host table holds exactly the spec's eight rows with their publishers, authorities, Twin kinds and AWS's `page_suffix`; `milvus.io` has no `browser` flag
-- [ ] `status` with a `--store` that does not exist exits non-zero and creates nothing
-- [ ] a test can run a command with a fake transport, fake fetcher and fake runner and read its stdout, stderr and exit code
-- [ ] the fake transport answers `…?accept=text%2Fmarkdown` with the fixture recorded as `…?accept=text/markdown`, prefers the fixture with the most matching `match_headers`, raises `httpx.ReadTimeout` for the `timeout` fixture, answers `404` for an unknown URL and lists it in its misses
-- [ ] the fetcher fake in "not installed" mode reports that and records no call; both helpers exist and are used by one test each
-- [ ] `uv sync` does not install Crawl4AI; `uv sync --extra browser` does
-- [ ] `uv run pytest`, `uv run ruff check`, `uv run ruff format --check`, `uv run pyright` all pass
+- [x] `uv sync && uv run lorekeep --help` lists `get add search index recheck backup restore tag status skill`
+- [x] `lorekeep status` on a new Store prints a summary with zero Versions and exits 0
+- [x] a missing `LOREKEEP_STORE`/`--store` is an error with a one-line message; a missing Tag is an error only for `get` and `add`
+- [x] `lorekeep.toml` is parsed in the spec's `[[hosts]]` shape; absent keys take the spec's defaults; a malformed file names the key that failed; the merged rule list has a `lorekeep.toml` rule in place of the default rule with the same prefix
+- [x] frontmatter is loaded with `yaml.BaseLoader`: a publisher value such as `2026-08-13T00:00:00.0000000Z` is read as a string, never a `datetime`; a written ETag keeps its quotes
+- [x] every flag is declared on its subcommand, none on the root parser; `--tag` is single on `get`/`add` and repeatable on `search`/`recheck`
+- [x] `cssselect` is a runtime dependency (`lxml`'s `.cssselect()` works after `uv sync` without extras)
+- [x] the default host table holds exactly the spec's eight rows with their publishers, authorities, Twin kinds and AWS's `page_suffix`; `milvus.io` has no `browser` flag
+- [x] `status` with a `--store` that does not exist exits non-zero and creates nothing
+- [x] a test can run a command with a fake transport, fake fetcher and fake runner and read its stdout, stderr and exit code
+- [x] the fake transport answers `…?accept=text%2Fmarkdown` with the fixture recorded as `…?accept=text/markdown`, prefers the fixture with the most matching `match_headers`, raises `httpx.ReadTimeout` for the `timeout` fixture, answers `404` for an unknown URL and lists it in its misses
+- [x] the fetcher fake in "not installed" mode reports that and records no call; both helpers exist and are used by one test each
+- [x] `uv sync` does not install Crawl4AI; `uv sync --extra browser` does
+- [x] `uv run pytest`, `uv run ruff check`, `uv run ruff format --check`, `uv run pyright` all pass
+
+## Comments
+
+2026-10-17 — Decisions made while building this ticket. (1) The merged host table is observable at the seam through `status`'s text output, which prints the Store, the Version count, the bucket, the freshness window and every rule in merged order (defaults in package order, a `lorekeep.toml` rule in place of the default with the same prefix and marked `(lorekeep.toml)`, then the Project's other rules); `status --json` keeps the spec's shape and ticket 11 fills it. (2) `prefix` is required in every `[[hosts]]` row besides `publisher` and `authority` (the spec's "every key but publisher and authority is optional" cannot mean a rule without a prefix); unknown keys and a prefix given twice in one file are errors naming the key. (3) The default table ships as `src/lorekeep/hosts.toml` in the same shape and goes through the same parser. (4) `.python-version` says `3.13` because 3.12 is not installed on the owner's machine; `requires-python` stays `>=3.12`. (5) The command layer is `lorekeep.cli.run(argv, env=, edges=)`; `Edges(transport, fetcher, runner)` lives in `lorekeep.edges` with `RenderedPage`, `FetcherNotInstalled`, `PageFetchError` and `CommandResult`; tests use `tests.support.run_cli`, `FakeTransport`, `FakeFetcher`, `FakeRunner`, `write_version` and `age_version`. `write_version` names files with a simple `<host>--<path>--<sha8>.md` of its own; ticket 02 may switch it to the Store's naming. (6) Crawl4AI 0.9.5 installs on Python 3.13 with `uv sync --extra browser` and a plain `uv sync` removes it again. Note for ticket 06: Crawl4AI keeps state in `~/.crawl4ai` (it already exists on the owner's machine from the measurements); the production fetcher should point `CRAWL4_AI_BASE_DIRECTORY` somewhere acceptable or the owner should accept that folder.

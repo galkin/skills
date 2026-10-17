@@ -1,0 +1,50 @@
+[project]
+name = "lorekeep"
+version = "0.1.0"
+description = "Collects the Sources an LLM task reads, keeps them as Markdown with their Provenance, and makes them searchable."
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "cssselect",
+    "httpx",
+    "markitdown[pdf]",
+    "pyyaml",
+    "trafilatura",
+]
+
+[project.optional-dependencies]
+browser = ["crawl4ai"]
+
+[project.scripts]
+lorekeep = "lorekeep.cli:main"
+
+[dependency-groups]
+dev = [
+    "frictionless",
+    "packaging",
+    "pyright",
+    "pytest",
+    "ruff",
+    "types-pyyaml",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.12"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
