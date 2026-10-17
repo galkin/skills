@@ -93,6 +93,6 @@ Reading is headed `# Retry pattern` with `title: Retry pattern`. The guard held 
 back on 20 of the 55 banner Versions: a Fern banner is 11–31 lines whatever the page, so on a
 79-line Dynamo page it is 38% and twice `removes` is 8%. That is the spec's mistake, not the
 implementation's: `removes` for a block operation must be a count of lines. Amended in `spec.md`
-› Rules and carried by ticket 03. A second finding, filed as ticket 04: NVIDIA moved the
-Guardrails pages off `/latest/`, and the Twin at the old address answers `200` with a
-`# Page Not Found` body that `get` stored as a Version.
+› Rules and carried by ticket 03. A second finding, filed as ticket 04: `get` of a mistyped
+Guardrails address (the orchestrator's typo, not a move by NVIDIA, as ticket 04's worker found)
+read a Twin that answers `200` with a `# Page Not Found` body, and stored it as a Version.
