@@ -1,12 +1,21 @@
 # One Store per Project, outside any repository, backed up by a no-clobber rsync
 
 Each Project has one Store, a plain folder such as `~/orca/sources/agentic-system.design/`, shared by
-all of its Runs; the tool finds it through `SOURCES_ROOT`. Its off-machine copy is a private,
-versioned GCS bucket, filled by
-`gcloud storage rsync <store> gs://<bucket> --recursive --no-clobber --exclude='^sources\.db$'` after
-every command that wrote to the Store. Without `--delete-unmatched-destination-objects` a local
-deletion never reaches the bucket, and `--no-clobber` never replaces an object that is already
-there, which is the Store's own rule.
+all of its Runs; the tool finds it through `SOURCES_ROOT`, and the Project's configuration
+(`lorekeep.toml`: bucket, host table, freshness window) sits in the Store's root so it is backed up
+with the data. Its off-machine copy is a private, versioned GCS bucket.
+
+The backup is two `gcloud storage rsync` passes, because the Store has two kinds of file. Versions
+and Originals are written once, so they go with `--no-clobber`: an object already in the bucket is
+never replaced, and a local deletion never reaches it because
+`--delete-unmatched-destination-objects` is not given. The few files that grow — `tags.csv`,
+`checks.csv`, `datapackage.json`, `lorekeep.toml` — are copied plainly, and the bucket's own
+versioning keeps their history. `sources.db` and its `-wal` / `-shm` companions are excluded; the
+Index is rebuilt, not restored.
+
+`backup` is its own command, run by the pipeline at the end of a unit or on a timer — not after
+every `get`: six workers each listing a bucket of thousands of objects after every page would slow
+a Run for nothing.
 
 Sources are rarely shared between Projects — between vendors of one Project only four file names
 matched — so a Store per Project costs almost nothing and keeps each Project's material and backup

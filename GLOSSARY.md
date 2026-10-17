@@ -58,6 +58,11 @@ _Avoid_: cache, archive, corpus
 One pass of an LLM pipeline over a Project, which reads Sources from the Store and adds to it.
 _Avoid_: job, session, batch
 
+**Tag**:
+A label a Run leaves on every Source it reads, named for the ecosystem the Run serves. A Source may
+carry several; a Tag says a Run read the Source, never that the ecosystem has nothing else.
+_Avoid_: corpus, collection, category
+
 **Index**:
 The searchable view of a Store, rebuilt from its files whenever needed.
 _Avoid_: database (the Store is the record; the Index only reflects it)
@@ -72,10 +77,10 @@ _Avoid_: chunk, passage, fragment
 What turned an Original into Markdown — the publisher's Twin, or one named extraction tool.
 _Avoid_: parser, extractor
 
-**Check**:
+**Recheck**:
 Asking a Source's publisher whether it changed since its latest Version, recorded whatever the
 answer.
-_Avoid_: refresh, poll, sync
+_Avoid_: check (a quiz in the first consuming Project), refresh, poll, sync
 
 **Citation**:
 A link from a finished work to the Source it rests on, as the work states it.

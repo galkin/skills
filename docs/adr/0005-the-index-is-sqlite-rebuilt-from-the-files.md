@@ -1,11 +1,17 @@
 # The Index is SQLite, rebuilt from the files, with one full-text table over Sections
 
 `sources.db` sits in the Store and is derived from it entirely: it can be deleted and rebuilt at any
-time and is not backed up. It holds every Version's Provenance, every Check, every Citation of the
-consuming Project, and one FTS5 table (`porter unicode61`) over Sections — the text under each
-heading, with its heading path — answered with `bm25` ranking and `snippet()`. Anything the Index
-reports that is not in a file is a bug; so the log of Checks is an append-only `checks.csv` in the
-Store, not rows that live only in the database.
+time and is not backed up. It holds every Version's Provenance, every Tag, every Recheck, every
+Citation, and one FTS5 table (`porter unicode61`) over Sections — the text under each heading, with
+its heading path, cut again at about 4 KB so a page without headings still yields Sections —
+answered with `bm25` ranking and `snippet()`. Anything the Index reports that is not in a file is a
+bug; so Tags are `tags.csv`, the log of Rechecks is `checks.csv`, and Citations are a
+`citations.csv` (`work_id, url`) that the consuming Project generates from its own documents —
+lorekeep never parses a Project's Markdown, which keeps the tool free of any one consumer's format.
+
+A search is scoped to the Run's Tag by default and always ends with one line,
+`+N matches under other tags (--all)`, so a page another Run fetched is never silently invisible;
+`--all`, `--tag`, `--authority` and `--publisher` widen or narrow the scope.
 
 Measured on one Run's cache of 1,403 pages (2026-10-17): 32,339 Sections, a 93 MB index built in
 about 5 s; a question `grep` answered with roughly 210 KB of context, the Index answered with five
@@ -19,3 +25,5 @@ are cheap to refine, and `grep` stays for a file already known.
 - **Vector search** (sqlite-vec with local embeddings). Not now: the owner will ask for it when it is
   needed. When it is, measure it first on the Project's own Citations.
 - **DuckDB.** Rejected: SQLite's CLI is on every machine and FTS5 is built in.
+- **Parsing `## References` out of the Project's lessons inside lorekeep.** Rejected: it would bind a
+  general tool to one consumer's file format.
