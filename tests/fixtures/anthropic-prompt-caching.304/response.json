@@ -1,0 +1,10 @@
+{
+  "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching.md",
+  "status": 304,
+  "headers": {
+    "etag": "\"a1-twin\""
+  },
+  "match_headers": {
+    "if-none-match": "\"a1-twin\""
+  }
+}

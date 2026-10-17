@@ -3,8 +3,10 @@
 `sources.db` sits in the Store and is derived from it entirely: it can be deleted and rebuilt at any
 time and is not backed up. It holds every Version's Provenance, every Tag, every Recheck, every
 Citation, and one FTS5 table (`porter unicode61`) over Sections — the text under each heading, with
-its heading path, cut again at about 4 KB so a page without headings still yields Sections —
-answered with `bm25` ranking and `snippet()`. Anything the Index reports that is not in a file is a
+its heading path and the line its heading sits on in the file, cut again at about 4 KB so a page
+without headings still yields Sections — answered with `bm25` ranking and `snippet()`. An exact
+identifier (`--exact`) is a substring match over the Sections' text rather than an FTS query,
+because the tokenizer splits `cache_control` in two and "as written" has to mean that. Anything the Index reports that is not in a file is a
 bug; so Tags are `tags.csv`, the log of Rechecks is `checks.csv`, and Citations are a
 `citations.csv` (`work_id, url`) that the consuming Project generates from its own documents —
 lorekeep never parses a Project's Markdown, which keeps the tool free of any one consumer's format.

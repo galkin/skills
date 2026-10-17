@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- HEAD-META:START -->
+<title>Bias, fairness and transparency when Claude helps decide about people - CCAR-P study guide, lesson 5.5</title>
+<meta name="description" content="Where bias enters a Claude solution, how to test for it with counterfactual pairs and group breakdowns, which mitigations hold, and what people must be told.">
+<link rel="canonical" href="https://claude.termidy.com/learn/ccar-p/governance-safety-risk/ethical-ai/">
+<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
+<link rel="icon" type="image/png" href="../../../../assets/favicon.png">
+<link rel="apple-touch-icon" href="../../../../assets/logo.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="ClaudePrep">
+<meta property="og:url" content="https://claude.termidy.com/learn/ccar-p/governance-safety-risk/ethical-ai/">
+<meta property="og:title" content="Bias, fairness and transparency when Claude helps decide about people - CCAR-P study guide, lesson 5.5">
+<meta property="og:description" content="Where bias enters a Claude solution, how to test for it with counterfactual pairs and group breakdowns, which mitigations hold, and what people must be told.">
+<meta property="og:image" content="https://claude.termidy.com/assets/og-ccar-professional.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Claude Certified Architect - Professional study guide: Bias, fairness and transparency when Claude helps decide about people">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Bias, fairness and transparency when Claude helps decide about people - CCAR-P study guide, lesson 5.5">
+<meta name="twitter:description" content="Where bias enters a Claude solution, how to test for it with counterfactual pairs and group breakdowns, which mitigations hold, and what people must be told.">
+<meta name="twitter:image" content="https://claude.termidy.com/assets/og-ccar-professional.png">
+<meta name="twitter:image:alt" content="Claude Certified Architect - Professional study guide: Bias, fairness and transparency when Claude helps decide about people">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":["LearningResource","Article"],"headline":"Bias, fairness and transparency when Claude helps decide about people","name":"Bias, fairness and transparency when Claude helps decide about people","description":"Where bias enters a Claude solution, how to test for it with counterfactual pairs and group breakdowns, which mitigations hold, and what people must be told.","url":"https://claude.termidy.com/learn/ccar-p/governance-safety-risk/ethical-ai/","mainEntityOfPage":"https://claude.termidy.com/learn/ccar-p/governance-safety-risk/ethical-ai/","inLanguage":"en","isAccessibleForFree":true,"learningResourceType":"Lesson","educationalLevel":"Professional","teaches":["5.5 Address ethical AI considerations (bias, fairness, transparency)"],"timeRequired":"PT23M","wordCount":3982,"isPartOf":{"@type":"LearningResource","@id":"https://claude.termidy.com/learn/ccar-p/governance-safety-risk/"},"author":{"@type":"Person","name":"Anton Pavelko","url":"https://www.linkedin.com/in/anton-pavelko/"},"publisher":{"@type":"Organization","name":"ClaudePrep","url":"https://claude.termidy.com/"},"datePublished":"2026-09-30","dateModified":"2026-09-30"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://claude.termidy.com/"},{"@type":"ListItem","position":2,"name":"Study guides","item":"https://claude.termidy.com/learn/"},{"@type":"ListItem","position":3,"name":"CCAR-P","item":"https://claude.termidy.com/learn/ccar-p/"},{"@type":"ListItem","position":4,"name":"Domain 5","item":"https://claude.termidy.com/learn/ccar-p/governance-safety-risk/"},{"@type":"ListItem","position":5,"name":"Lesson 5.5","item":"https://claude.termidy.com/learn/ccar-p/governance-safety-risk/ethical-ai/"}]}</script>
+<!-- HEAD-META:END -->
+<!-- CSSLINK:START -->
+<link rel="stylesheet" href="../../../../assets/site.css">
+<script>/* Light/dark theme for the whole site - Moodle and the static pages alike.
+ * Inlined into <head> by tools/lib/site_chrome.php (static pages, at build time)
+ * and theme/claudeprep/classes/output/core_renderer.php (Moodle, per request).
+ * The contract: a "darkmode" cookie (dark|light) is the visitor's choice; without
+ * one, the site is dark - an owner decision, not the OS setting. In Moodle a
+ * logged-in user's saved preference (data-bs-theme from local_boost_dark) comes
+ * between the two. Output is data-bs-theme on <html>. */
+(function () {
+  var d = document.documentElement;
+  function chosen() {
+    var m = document.cookie.match(/(?:^|; )darkmode=(dark|light)(?:;|$)/);
+    return m ? m[1] : null;
+  }
+  function apply(t) {
+    d.setAttribute('data-bs-theme', t);
+    d.style.colorScheme = t;
+  }
+  var t = chosen() || d.getAttribute('data-bs-theme');
+  apply(t === 'light' ? 'light' : 'dark');
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('.cp-theme-toggle');
+    if (!b) { return; }
+    e.preventDefault();
+    var next = d.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+    apply(next);
+    document.cookie = 'darkmode=' + next + '; path=/; max-age=31536000; SameSite=Lax';
+    document.dispatchEvent(new CustomEvent('cp:themechange', {detail: next}));
+  });
+})();</script>
+<!-- CSSLINK:END -->
+<!-- JSLINK:START -->
+<script src="../../../../assets/site.js" defer></script>
+<!-- JSLINK:END -->
+<!-- APPBANNER:START -->
+<script src="../../../../assets/appbanner.js" defer></script>
+<!-- APPBANNER:END -->
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-S8ZBNKNCLF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-S8ZBNKNCLF');
+</script>
+</head>
+<body>
+
+<!-- SITENAV:START -->
+<nav class="sitenav" aria-label="Site">
+  <div class="shell">
+    <a class="brand" href="../../../../">ClaudePrep</a>
+    <input type="checkbox" id="nav-toggle" class="nav-toggle">
+    <a class="login" href="../../../../login/index.php">Log in</a>
+    <label for="nav-toggle" class="nav-burger" aria-label="Menu"><span></span><span></span><span></span></label>
+    <div class="nav-links">
+      <a href="../../../../">Home</a>
+      <a href="../../../../my/courses.php">Practice</a>
+      <a href="../../../../learn/" aria-current="page">Study guides</a>
+      <a href="../../../../claude-certifications/">Compare exams</a>
+      <a href="../../../../about/">About</a>
+    </div>
+    <button type="button" class="cp-theme-toggle" aria-label="Switch between light and dark theme" title="Light / dark theme"><svg class="cp-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.2A8.5 8.5 0 1 1 9.8 3.5a6.8 6.8 0 0 0 10.7 10.7z"/></svg><svg class="cp-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg></button>
+  </div>
+</nav>
+<!-- SITENAV:END -->
+
+<!-- PROGRAMBAR:START -->
+<div class="programbar">
+  <div class="shell">
+    <span>Claude Certification Program</span>
+    <span class="sep">&middot;</span>
+    <span>v1.0</span>
+    <span class="sep">&middot;</span>
+    <span>Effective July 2026</span>
+    <span class="sep">&middot;</span>
+    <span>All four tracks open</span>
+  </div>
+</div>
+<!-- PROGRAMBAR:END -->
+
+<!-- EXAMSWITCH:START -->
+<nav class="examswitch" aria-label="Claude certifications">
+  <ul class="shell">
+    <li><a href="../../../../learn/ccar-f/">CCAR-F</a></li>
+    <li><span class="here" aria-current="page">CCAR-P</span></li>
+    <li><a href="../../../../learn/ccao-f/">CCAO-F</a></li>
+    <li><a href="../../../../learn/ccdv-f/">CCDV-F</a></li>
+  </ul>
+</nav>
+<!-- EXAMSWITCH:END -->
+
+<div class="shell examgrid">
+
+<!-- SIDENAV:START -->
+<aside class="sidenav" aria-label="CCAR-P study guide navigation">
+  <div class="acts">
+    <a class="btn" href="../../../../course/view.php?idnumber=claude_ccar_p">Practise Domain 5</a>
+  </div>
+  <input type="checkbox" id="toc-toggle" class="toc-toggle">
+  <label for="toc-toggle" class="toc-label"><span>Contents</span><span class="chev" aria-hidden="true"></span></label>
+  <div class="sidenav-body">
+  <nav class="navtree" aria-label="CCAR-P course structure">
+    <a class="tree-root" href="../../"><span>CCAR-P study guide</span><span class="meta">7 domains &middot; 38 lessons</span></a>
+    <ul class="tree">
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 1</span> Solution Design &amp; Architecture</span><span class="meta">17%</span></summary>
+        <ul>
+          <li><a href="../../solution-design-architecture/"><span>Domain overview</span></a></li>
+          <li><a href="../../solution-design-architecture/business-problem-to-solution/"><span class="ln">1.1</span><span>Turning a business problem into a Claude solution</span></a></li>
+          <li><a href="../../solution-design-architecture/end-to-end-architecture/"><span class="ln">1.2</span><span>End-to-end architecture: input, processing, output and feedback loops</span></a></li>
+          <li><a href="../../solution-design-architecture/architectural-patterns/"><span class="ln">1.3</span><span>Augmented LLM, workflow or agent: choosing the pattern</span></a></li>
+          <li><a href="../../solution-design-architecture/multi-agent-systems/"><span class="ln">1.4</span><span>Multi-agent systems: when to split the work and how to orchestrate it</span></a></li>
+          <li><a href="../../solution-design-architecture/decomposition-techniques/"><span class="ln">1.5</span><span>Decomposition: cutting complex work into steps you can test</span></a></li>
+          <li><a href="../../solution-design-architecture/business-value-alignment/"><span class="ln">1.6</span><span>Aligning a Claude solution to business value pillars</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 2</span> Claude Models, Prompting &amp; Context Engineering</span><span class="meta">13%</span></summary>
+        <ul>
+          <li><a href="../../models-prompting-context/"><span>Domain overview</span></a></li>
+          <li><a href="../../models-prompting-context/model-selection/"><span class="ln">2.1</span><span>Selecting Claude models: trade-offs, constraints and the evidence to decide</span></a></li>
+          <li><a href="../../models-prompting-context/system-prompts-templates-guardrails/"><span class="ln">2.2</span><span>System prompts, templates and prompt guardrails</span></a></li>
+          <li><a href="../../models-prompting-context/prompting-techniques/"><span class="ln">2.3</span><span>Zero-shot, few-shot and chain-of-thought: choosing the technique per decision</span></a></li>
+          <li><a href="../../models-prompting-context/context-window-optimization/"><span class="ln">2.4</span><span>Optimising the context window: select, compact and measure tokens</span></a></li>
+          <li><a href="../../models-prompting-context/prompt-reuse/"><span class="ln">2.5</span><span>Prompt reuse: caching, modular prompts and Agent Skills</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 3</span> Integration</span><span class="meta">19%</span></summary>
+        <ul>
+          <li><a href="../../integration/"><span>Domain overview</span></a></li>
+          <li><a href="../../integration/capability-bloat/"><span class="ln">3.1</span><span>Capability bloat: auditing an agent&#039;s tools and permissions</span></a></li>
+          <li><a href="../../integration/authentication-authorization/"><span class="ln">3.2</span><span>Authentication and authorisation: whose identity does each tool call use?</span></a></li>
+          <li><a href="../../integration/accuracy-latency-tradeoffs/"><span class="ln">3.3</span><span>Accuracy versus latency: measure both, then justify the configuration</span></a></li>
+          <li><a href="../../integration/observability-at-scale/"><span class="ln">3.4</span><span>Observability at scale: tracing, sampling and scoring LLM traffic</span></a></li>
+          <li><a href="../../integration/rag-chunking-indexing/"><span class="ln">3.5</span><span>Designing a RAG pipeline: chunking, metadata and indexing</span></a></li>
+          <li><a href="../../integration/retrieval-strategies/"><span class="ln">3.6</span><span>Retrieval strategies matched to the data and the question</span></a></li>
+          <li><a href="../../integration/integration-protocols/"><span class="ln">3.7</span><span>MCP, API, CLI or agent-to-agent: choosing the integration mechanism</span></a></li>
+          <li><a href="../../integration/progressive-discovery/"><span class="ln">3.8</span><span>Progressive discovery or monolithic context: what an agent loads up front</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 4</span> Evaluation, Testing &amp; Optimization</span><span class="meta">16%</span></summary>
+        <ul>
+          <li><a href="../../evaluation-testing-optimization/"><span>Domain overview</span></a></li>
+          <li><a href="../../evaluation-testing-optimization/evaluation-metrics/"><span class="ln">4.1</span><span>Evaluation metrics: defining accuracy, latency, cost, safety and security</span></a></li>
+          <li><a href="../../evaluation-testing-optimization/evaluation-datasets/"><span class="ln">4.2</span><span>Evaluation datasets and test frameworks: mixed methods that hold up</span></a></li>
+          <li><a href="../../evaluation-testing-optimization/ab-testing-iteration/"><span class="ln">4.3</span><span>A/B testing and iterative improvement: proving a change on live traffic</span></a></li>
+          <li><a href="../../evaluation-testing-optimization/diagnosing-system-issues/"><span class="ln">4.4</span><span>Diagnosing system issues: prompt failures, hallucinations and model mismatch</span></a></li>
+          <li><a href="../../evaluation-testing-optimization/cost-performance-optimization/"><span class="ln">4.5</span><span>Optimising tokens, latency and cost without losing quality</span></a></li>
+          <li><a href="../../evaluation-testing-optimization/monitoring-logging/"><span class="ln">4.6</span><span>Monitoring a live Claude system: logs, dashboards, alerts and incidents</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain in-path">
+        <details open>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 5</span> Governance, Safety &amp; Risk Management</span><span class="meta">14%</span></summary>
+        <ul>
+          <li><a href="../../governance-safety-risk/"><span>Domain overview</span></a></li>
+          <li><a href="../../governance-safety-risk/guardrails-safety-controls/"><span class="ln">5.1</span><span>Guardrails in layers: input, model, output and action controls</span></a></li>
+          <li><a href="../../governance-safety-risk/risks-and-failure-modes/"><span class="ln">5.2</span><span>Risks, limitations and failure modes: from threat model to risk register</span></a></li>
+          <li><a href="../../governance-safety-risk/human-in-the-loop/"><span class="ln">5.3</span><span>Human-in-the-loop validation: putting review where the risk is</span></a></li>
+          <li><a href="../../governance-safety-risk/regulatory-compliance/"><span class="ln">5.4</span><span>Compliance by design: GDPR, HIPAA and FedRAMP on Claude</span></a></li>
+          <li><a href="#" aria-current="page"><span class="ln">5.5</span><span>Bias, fairness and transparency when Claude helps decide about people</span></a>
+          <ul class="tree-toc">
+            <li><a href="#why-a-consistent-shortlist-can-still-be-unfair">5.5.1 Why a consistent shortlist can still be unfair</a></li>
+            <li><a href="#where-bias-gets-in">5.5.2 Where bias gets in</a></li>
+            <li><a href="#testing-for-fairness-change-one-thing-then-count-by-group">5.5.3 Testing for fairness: change one thing, then count by group</a></li>
+            <li><a href="#mitigations-from-the-criteria-outwards">5.5.4 Mitigations, from the criteria outwards</a></li>
+            <li><a href="#transparency-and-what-anthropic-requires-for-high-risk-uses">5.5.5 Transparency, and what Anthropic requires for high-risk uses</a></li>
+            <li><a href="#the-exam-traps">5.5.6 The exam traps</a></li>
+            <li><a href="#put-it-together-test-a-screening-prompt-for-bias">5.5.7 Put it together: test a screening prompt for bias</a></li>
+            <li><a href="#key-takeaways">Key takeaways</a></li>
+            <li><a href="#check">Check your understanding</a></li>
+            <li><a href="#sources">Sources</a></li>
+          </ul>
+        </li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 6</span> Stakeholder Communication &amp; Lifecycle Management</span><span class="meta">14%</span></summary>
+        <ul>
+          <li><a href="../../stakeholder-communication-lifecycle/"><span>Domain overview</span></a></li>
+          <li><a href="../../stakeholder-communication-lifecycle/structured-discovery/"><span class="ln">6.1</span><span>Structured discovery: stakeholders, evidence and requirements design can use</span></a></li>
+          <li><a href="../../stakeholder-communication-lifecycle/communicating-decisions/"><span class="ln">6.2</span><span>Communicating architecture decisions: records, audiences and honest trade-offs</span></a></li>
+          <li><a href="../../stakeholder-communication-lifecycle/expectations-and-slas/"><span class="ln">6.3</span><span>Expectations, SLAs and feedback loops for an LLM system</span></a></li>
+          <li><a href="../../stakeholder-communication-lifecycle/architecture-documentation/"><span class="ln">6.4</span><span>Documenting the architecture and guiding the team that builds it</span></a></li>
+          <li><a href="../../stakeholder-communication-lifecycle/lifecycle-phases/"><span class="ln">6.5</span><span>Supporting the lifecycle: phase gates, handoff and owned iteration</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 7</span> Developer Productivity &amp; Operational Enablement</span><span class="meta">7%</span></summary>
+        <ul>
+          <li><a href="../../developer-productivity-enablement/"><span>Domain overview</span></a></li>
+          <li><a href="../../developer-productivity-enablement/team-tool-configuration/"><span class="ln">7.1</span><span>Configuring Claude Code for teams: layers, shared setup and policy</span></a></li>
+          <li><a href="../../developer-productivity-enablement/ai-assisted-workflows/"><span class="ln">7.2</span><span>Improving developer workflows with Claude Code, and measuring the effect</span></a></li>
+          <li><a href="../../developer-productivity-enablement/debugging-operations/"><span class="ln">7.3</span><span>Debugging and incidents with Claude: evidence first, read-only by design</span></a></li>
+        </ul>
+        </details>
+      </li>
+    </ul>
+  </nav>
+  <h2>Prepare</h2>
+  <ul>
+      <li><a href="../../../../course/view.php?idnumber=claude_ccar_p"><span>Full question bank</span><span class="meta">189</span></a></li>
+      <li><a href="../../../../ccar-p/"><span>CCAR-P exam guide</span></a></li>
+  </ul>
+  </div>
+</aside>
+<!-- SIDENAV:END -->
+
+<div class="content">
+
+<main>
+
+<p class="crumb"><a href="../../../../">Home</a> &rsaquo; <a href="../../../../learn/">Study guides</a> &rsaquo; <a href="../../">CCAR-P</a> &rsaquo; <a href="../">Domain 5</a> &rsaquo; Lesson 5.5</p>
+
+<p class="eyebrow">CCAR-P &middot; Domain 5 &middot; 14% of the exam &middot; Lesson 5.5 &middot; 23 min read</p>
+
+<h1>Bias, fairness and transparency when Claude helps decide about people</h1>
+
+<p class="lede">Where bias enters a Claude solution, how to test for it with counterfactual pairs and group breakdowns, which mitigations hold, and what people must be told.</p>
+
+<p class="independent">Written against objective 5.5 of the official CCAR-P exam guide (Version 1.0, effective July 2026). An independent resource, not affiliated with Anthropic; the practice questions are written from scratch.</p>
+
+<h2 id="why-a-consistent-shortlist-can-still-be-unfair"><span class="secnum">5.5.1</span> Why a consistent shortlist can still be unfair</h2>
+
+<p>Kestrelmoor Staffing fills warehouse and office jobs at about forty client sites: night-shift pickers, forklift drivers, receptionists and payroll clerks. Around 3,000 applications arrive each week, and eleven recruiters cannot read them all before the best candidates accept other offers. Nnamdi, the operations director, wants Claude to read each CV and the answers to the application questions, then hand recruiters a shortlist for every role. Pernille, the solution architect on the engagement, is confident that Claude can do the reading. What worries her is something else.</p>
+
+<p>Nobody at Kestrelmoor means to be unfair. The risk is that the system will be unfair anyway, quietly and at scale. A recruiter who marks down a CV for a two-year gap does it to a handful of people a week. A prompt that says "prefer continuous employment" does it to every parent, carer and person who has been ill, thousands of times, and every one of those decisions looks consistent. Consistency feels like fairness, but a system can apply the wrong rule perfectly.</p>
+
+<p>Let's fix three terms first. <strong>Bias</strong> here means a systematic difference in how a system treats people that comes from something other than what the decision is about. <strong>Fairness</strong> is the property you design and test for: comparable people get comparable outcomes, and the criteria themselves are about the job. <strong>Transparency</strong> is what people are told and what is written down: that AI is involved, what it decides, where its limits are and how to challenge a result. None of the three is a setting on the model, so none of them can be handed to it.</p>
+
+<aside class="callout idea">
+<p><strong>The one idea:</strong> Fairness is a property of the whole system, not of the model: bias enters through criteria, examples, data and tests as easily as through Claude. You design it in with job-related criteria, prove it with counterfactual and by-group tests, and keep a person and a plain explanation between Claude's output and the people it affects.</p>
+</aside>
+
+<h2 id="where-bias-gets-in"><span class="secnum">5.5.2</span> Where bias gets in</h2>
+
+<p>Here is the belief that trips people up: bias is something the model has, so the fix is a better model. Models can carry bias. Claude learned language from human writing, which is full of associations about which jobs suit which people and what a "professional" CV sounds like. But in a system like Kestrelmoor's, the model is only one of six places where bias gets in, and the architect's own pipeline supplies the other five.</p>
+
+<p>Think of a cake that comes out wrong: it might be the oven, but more often it is the recipe or the ingredients. Pernille walked Nnamdi's team through the design and found an example of each route.</p>
+
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Where it enters</th>
+  <th>How it gets in</th>
+  <th>What it looked like at Kestrelmoor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>The model</strong></td>
+  <td>Tendencies learned from human writing, such as reading polished prose as competence</td>
+  <td>Higher scores for fluent, idiomatic English on warehouse roles that need only basic reading</td>
+</tr>
+<tr>
+  <td><strong>The prompt and criteria</strong></td>
+  <td>A criterion unrelated to the job, or a vague one the model fills with its own assumptions</td>
+  <td>"Prefer continuous employment" and "a young, energetic team", copied from a client brief</td>
+</tr>
+<tr>
+  <td><strong>Few-shot examples</strong></td>
+  <td>Examples teach the pattern of who was chosen, not only the output format</td>
+  <td>Three "strong candidate" examples for forklift roles, all men in their twenties</td>
+</tr>
+<tr>
+  <td><strong>The retrieval corpus</strong></td>
+  <td>Retrieved text brings its authors' assumptions into the context</td>
+  <td>Old job adverts retrieved as role descriptions, one asking for "strong lads"</td>
+</tr>
+<tr>
+  <td><strong>Historical data</strong></td>
+  <td>Past decisions used as labels or targets repeat past preferences</td>
+  <td>A plan to "shortlist people like the placements clients kept"</td>
+</tr>
+<tr>
+  <td><strong>The evaluation set</strong></td>
+  <td>Labels copied from past decisions score the old bias as accuracy, and missing groups hide failures</td>
+  <td>Last year's recruiter picks as the answer key, with almost no applicants over 55</td>
+</tr>
+</tbody>
+</table></div>
+
+<p>Memorise the six routes; in a scenario, the symptom usually points to one of them. The last row deserves extra attention, because the evaluation set decides whether you ever see the other five. If your answer key is last year's shortlists, a system that copies last year's preferences scores well, and the test reports success.</p>
+
+<aside class="callout key">
+<p><strong>Key concept:</strong> Bias can enter a Claude solution through six routes: the model, the prompt and its criteria, few-shot examples, the retrieval corpus, historical data and the evaluation set. Five of them come from your own pipeline, so a fairness review starts with what you feed the model and how you test it, not with the choice of model.</p>
+</aside>
+
+<h2 id="testing-for-fairness-change-one-thing-then-count-by-group"><span class="secnum">5.5.3</span> Testing for fairness: change one thing, then count by group</h2>
+
+<p>How would Pernille know whether the shortlist is fair? Asking Claude is not a test: a model's account of its own reasoning is not a measurement of its behaviour. Anthropic's evaluation guide makes the point that even hazy qualities such as ethics and safety can be turned into measurable criteria. For fairness, three tests do the measuring, and each catches something the others miss.</p>
+
+<p>The first is the <strong>counterfactual test</strong>. Take a CV, make a copy that differs in exactly one attribute, run both through the same prompt, and compare the results. It works like a wine tasting with swapped labels: pour the same wine into two glasses, change only the label, and if the ratings differ, the label did it.</p>
+
+<p>The attribute can be a protected one, such as a name that signals gender or ethnicity. It can also be a <strong>proxy</strong>, a detail that stands in for a protected one, such as a graduation year for age or a career break for caring. Claude's outputs vary a little from run to run, so the test needs a <strong>no-change control</strong>, the identical CV run several times. A gap counts only when it is bigger than the control's spread.</p>
+
+<p>This is the method Anthropic used in its 2023 research on discrimination in model decisions. The researchers generated 70 decision scenarios, such as whether to offer a job or pay out an insurance claim, with slots for age, race and gender, and varied only those. With no mitigation, Claude 2.0 favoured some groups and disfavoured others in some settings. Plain-language instructions reduced both, and two nearly eliminated them in those scenarios: saying that discrimination is illegal, and asking the model to answer as if no demographic information had been given. Borrow the method, not the result. The study measured one model on its own scenarios; your criteria, your applicants and today's model are untested until you test them.</p>
+
+<p>In Pernille's harness, <code>MODEL</code> is the model Kestrelmoor plans to ship and <code>RUBRIC</code> is the scoring rubric. The call uses <strong>structured outputs</strong>: given a Pydantic class, <code>messages.parse</code> returns every reply as a valid score with its evidence, so no run is lost to a parsing error. Look at the control, which changes nothing, and the variant, which changes only the name.</p>
+
+<pre><code class="python">from pydantic import BaseModel
+import anthropic
+
+client = anthropic.Anthropic()
+
+class Assessment(BaseModel):
+    evidence: list[str]   # one quote per rubric criterion
+    score: int            # 0 to 12, from the rubric
+
+def score(cv: str) -&gt; int:
+    reply = client.messages.parse(model=MODEL, max_tokens=4000, system=RUBRIC,
+        messages=[{"role": "user", "content": cv}], output_format=Assessment)
+    return reply.parsed_output.score
+
+for cv in BASE_CVS:  # fictional CVs with a [NAME] slot
+    control = [score(cv.replace("[NAME]", NAME_A)) for _ in range(3)]  # nothing changes: the noise
+    variant = [score(cv.replace("[NAME]", NAME_B)) for _ in range(3)]  # ONLY the name changes
+    print(max(control) - min(control), sum(variant) / 3 - sum(control) / 3)  # spread, then gap
+</code></pre>
+
+<figure class="diagram diagram-columns" role="group" aria-label="One CV, three versions">
+<p class="dtitle">One CV, three versions</p>
+<div class="dcols">
+<div class="dcol" style="--i:0">
+<p class="dhead">Control <span class="ds">identical CV, three runs</span></p>
+<div class="dstack">
+<div class="dbox" style="--i:1"><span class="dl">Scores 9, 9, 6</span></div>
+</div>
+<p class="dfoot">spread of 3: the noise</p>
+</div>
+<div class="dcol accent" style="--i:2">
+<p class="dhead">Name swapped</p>
+<div class="dstack">
+<div class="dbox" style="--i:3"><span class="dl">Same CV, different name</span></div>
+<div class="dbox" style="--i:4"><span class="dl">Scores 9, 6, 9</span></div>
+</div>
+<p class="dfoot">gap of 0: inside the noise</p>
+</div>
+<div class="dcol bad" style="--i:5">
+<p class="dhead">Caring break added</p>
+<div class="dstack">
+<div class="dbox" style="--i:6"><span class="dl">Same CV plus &quot;2021 to 2023: caring for a parent&quot;</span></div>
+<div class="dbox" style="--i:7"><span class="dl">Scores 3, 6, 3</span></div>
+</div>
+<p class="dfoot">gap of 4: find the cause</p>
+</div>
+</div>
+<figcaption>The control shows how far scores move when nothing changes; only a gap larger than that spread is evidence of bias.</figcaption>
+</figure>
+
+<p>The second test runs on real traffic: <strong>results broken down by group</strong>. Pernille compares the shortlist rate, the average score and the rate of recruiter overrides for each group, using the answers applicants give on Kestrelmoor's voluntary equal-opportunities form. That data is held apart from the screening input: the model never sees it, and only the analysis job does. An aggregate hides groups, so 91% agreement with recruiters overall can be 95% for one group and 70% for another. Agree the gap that triggers an investigation with HR and legal before launch; how the group data may be collected and kept is a compliance question.</p>
+
+<p>The third test is a review of the criteria themselves. The first two check that the system applies its criteria consistently; neither can say whether a criterion belongs there at all. "Prefer continuous employment" passes a name swap perfectly and still excludes carers for a reason unrelated to the job. For each criterion, ask which job requirement it measures and whether someone who fails it could still do the work. Pernille's review struck out the continuity rule and limited English on warehouse roles to reading pick lists and safety signs. She put each struck rule to the client as a choice: name the job requirement it measures, or drop it.</p>
+
+<aside class="callout key">
+<p><strong>Key concept:</strong> A counterfactual test changes one attribute or proxy, holds everything else constant, and compares the gap with a no-change control, so run-to-run noise is not mistaken for bias. Break live outcomes down by group, using group data the model never sees, because an aggregate figure hides the group the system fails. Then review each criterion for job-relatedness, because a consistently applied criterion can still be unfair.</p>
+</aside>
+
+<h2 id="mitigations-from-the-criteria-outwards"><span class="secnum">5.5.4</span> Mitigations, from the criteria outwards</h2>
+
+<p>Once a test finds a gap, the tempting fix is one line in the prompt: "Do not discriminate." Keep the line, since Anthropic's research found that instructions like it can cut measured discrimination sharply. But an instruction is guidance you then have to verify, and it cannot repair a criterion that is unfair by design. The mitigations that hold are layered in the order a CV meets them: fix what goes in, constrain how the judgement is made, and control what happens after.</p>
+
+<figure class="diagram diagram-flow" role="group" aria-label="The controls in the order a CV meets them">
+<p class="dtitle">The controls in the order a CV meets them</p>
+<div class="dflow">
+<div class="dbox" style="--i:0"><span class="dl">CRITERIA</span><span class="ds">job-related, agreed per role</span></div>
+<span class="darrow" aria-hidden="true"></span>
+<div class="dbox" style="--i:1"><span class="dl">MASK</span><span class="ds">code removes name, age, photo, address</span></div>
+<span class="darrow" aria-hidden="true"></span>
+<div class="dbox" style="--i:2"><span class="dl">RUBRIC</span><span class="ds">every judgement tied to a quote</span></div>
+<span class="darrow" aria-hidden="true"></span>
+<div class="dbox" style="--i:3"><span class="dl">REVIEW</span><span class="ds">a recruiter decides, both ways</span></div>
+<span class="darrow" aria-hidden="true"></span>
+<div class="dbox ok" style="--i:4"><span class="dl">MONITOR</span><span class="ds">outcomes by group, monthly</span></div>
+</div>
+<figcaption>Preventive controls on the input and the judgement come first; the person and the monitoring catch what gets past them.</figcaption>
+</figure>
+
+<p>Pernille's pipeline masks in code, before the call. Telling Claude to "ignore the name" leaves the name in the context; removing it means there is nothing to ignore. Where a client has a real need behind an attribute, replace the attribute with the fact the job needs. A client that asks for postcodes because night shifts start after the last bus gets a field computed in code, "can reach site 14 by 22:00: yes or no", instead of an address. Masking does not remove proxies, which is why the tests stay.</p>
+
+<p>The rubric turns a vague judgement into a set of checks, each backed by evidence. Look at the last two lines of Pernille's rubric for one role: the do-not-use list, and the rule that Claude never outputs a rejection.</p>
+
+<pre><code class="text">Role: night-shift warehouse operative, client site 14. Mark each criterion Met, Not met or Not stated, and quote the words in the application that support it. Each Met scores 3 points.
+1. Shift pattern: available 22:00 to 06:00, four nights a week.
+2. Manual handling: experience of, or willingness to, lift loads up to 20 kg.
+3. Counterbalance forklift certificate: held, or booked before the start date.
+4. Reading: can read pick lists and safety signs in English; do not reward style, spelling or fluency beyond this.
+Do not use or infer: name, age, gender, ethnicity, nationality, religion, disability, family status, gaps in employment, address, photo, school names or hobbies. If something is not stated, record Not stated; never guess.
+Output the four results with their quotes, then Shortlist or Refer to recruiter. Never reject: a recruiter decides every application.
+</code></pre>
+
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Mitigation</th>
+  <th>When it wins</th>
+  <th>What it costs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Job-related criteria</strong>, agreed per role</td>
+  <td>Always; every other control depends on them</td>
+  <td>Client conversations, and some client requests refused</td>
+</tr>
+<tr>
+  <td><strong>Masking in code</strong> before the model call</td>
+  <td>The attribute is irrelevant and can be removed reliably</td>
+  <td>Proxies survive; recruiters need a way back to the person</td>
+</tr>
+<tr>
+  <td><strong>Evidence-based rubric</strong></td>
+  <td>Outcomes must be explained, audited and compared</td>
+  <td>Design time, longer outputs, less room for judgement calls</td>
+</tr>
+<tr>
+  <td><strong>Anti-bias instruction</strong> in the prompt</td>
+  <td>A cheap extra layer on any decision prompt</td>
+  <td>Proves nothing alone; test it like any other change</td>
+</tr>
+<tr>
+  <td><strong>Human review</strong> before the decision is final</td>
+  <td>Consequential decisions about people; required for high-risk uses</td>
+  <td>Recruiter time; a reviewer who sees only the shortlist becomes a rubber stamp</td>
+</tr>
+<tr>
+  <td><strong>Outcome monitoring</strong> by group</td>
+  <td>Every live system that decides about people</td>
+  <td>Group data held apart, a lawful basis for it, and an owner who acts</td>
+</tr>
+</tbody>
+</table></div>
+
+<p>Memorise the first column; the costs are what you argue about when someone wants to drop a layer. The review row hides the subtlest trap. If recruiters see only Claude's shortlist, they can turn down a weak candidate Claude liked, but they never notice the strong candidate Claude left out, and wrongful exclusion is where unfairness usually hides. So every application reaches a recruiter with the quotes that make review quick, and each assessment is stored with the rubric version and model id so any outcome can be traced later.</p>
+
+<aside class="callout key">
+<p><strong>Key concept:</strong> Layer the mitigations in the order a CV meets them: job-related criteria, attributes masked in code before the call, and a rubric that ties every judgement to quoted evidence. Then a qualified person decides every consequential outcome, in both directions, and outcomes are monitored by group. An instruction against bias in the prompt is a useful extra layer, never the control you rely on.</p>
+</aside>
+
+<h2 id="transparency-and-what-anthropic-requires-for-high-risk-uses"><span class="secnum">5.5.5</span> Transparency, and what Anthropic requires for high-risk uses</h2>
+
+<p>A candidate Kestrelmoor turns down has three fair questions: was a machine involved, what did it decide, and how can I challenge it? Transparency is the design that answers them, and it has four parts. <strong>Disclose</strong> that AI is involved, in plain words. <strong>Scope</strong> it: say what the AI does and what it does not decide. <strong>Document</strong> the system and its limits. And provide an <strong>appeal</strong> route to a person who can change the result.</p>
+
+<p>Anthropic's Usage Policy (the version in effect since 15 September 2025) turns part of this into requirements. It defines <strong>High-Risk Use Cases</strong> as consumer-facing uses in domains vital to public welfare and social equity. There are seven: legal; healthcare; insurance; finance; employment and housing; academic testing, accreditation and admissions; and media content generated and published automatically. The employment category names resume screening and hiring tools, so Pernille treats Kestrelmoor's shortlist as a high-risk use.</p>
+
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Requirement</th>
+  <th>What the Usage Policy says today</th>
+  <th>Kestrelmoor's design</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Human in the loop</strong> (high-risk uses)</td>
+  <td>For advice, recommendations or subjective decisions that directly affect people, a qualified professional in the field reviews the content or decision before it is disseminated or finalised</td>
+  <td>A recruiter confirms every shortlist and every referral</td>
+</tr>
+<tr>
+  <td><strong>Disclosure</strong> (high-risk uses)</td>
+  <td>When outputs are presented directly to people, tell them AI helped produce the advice, decision or recommendation, at least at the start of each session</td>
+  <td>The notice on the application form and in every outcome message</td>
+</tr>
+<tr>
+  <td><strong>Chatbots</strong> (any use)</td>
+  <td>A consumer-facing chatbot or external-facing agent tells users it is AI, not a human, at least at the start of each chat session</td>
+  <td>The candidate help chat opens by saying it is an AI assistant</td>
+</tr>
+<tr>
+  <td><strong>No discrimination</strong> (all users)</td>
+  <td>Promoting discriminatory practices against people on the basis of protected attributes is prohibited</td>
+  <td>The do-not-use list, and the tests that show it holds</td>
+</tr>
+</tbody>
+</table></div>
+
+<p>The human-in-the-loop requirement also makes the deploying organisation responsible for the accuracy and appropriateness of the advice or decision. And in its discrimination research, Anthropic states that it does not endorse or permit using language models to make automated decisions in the high-risk use cases it studied. For an architect, that settles the shape of the system: Claude recommends, a qualified person decides.</p>
+
+<p>Here is Pernille's notice for applicants. Look at how its four sentences cover disclosure, scope, documentation and appeal.</p>
+
+<pre><code class="text">We use an AI system, Claude, to compare your CV and answers with the published requirements for this role.
+It does not see your name, age, address or photo, and it does not make decisions: a Kestrelmoor recruiter reviews every application and decides who is shortlisted.
+We test the system regularly to check that it treats applicants alike, and we keep a written description of how it works and what it cannot do.
+If you think something in your application was missed or misread, use the "Ask for a review" link on your application page within 30 days, and a recruiter who did not handle it will look again.
+</code></pre>
+
+<p>Documentation is the part candidates never read and everyone else relies on. Anthropic's Transparency Hub publishes a model report for each recent Claude model, covering its acceptable uses, training data and testing results, and some of its safety summaries report bias measures such as political even-handedness. That describes the model, not your criteria or your applicants. So Kestrelmoor writes a system card of its own. It records the purpose, what the model sees and what is masked, the criteria per role and who approved them, the latest test results, known limits, the owner and the next review date. Track appeals too, because the rate at which appeals overturn outcomes, per group, is itself a fairness signal.</p>
+
+<aside class="callout key">
+<p><strong>Key concept:</strong> Transparency has four parts: disclose that AI is involved, say what it does and does not decide, document the system and its limits, and offer an appeal to someone who can change the result. For high-risk uses such as resume screening, Anthropic's Usage Policy requires review by a qualified professional before the decision is final, and disclosure whenever outputs reach people directly.</p>
+</aside>
+
+<h2 id="the-exam-traps"><span class="secnum">5.5.6</span> The exam traps</h2>
+
+<p>Every trap below makes a system look fair without measuring whether it is.</p>
+
+<ul>
+<li><strong>✗ Removing names, ages and photos, then declaring the system fair.</strong> ✓ Mask them in code, then test. Proxies such as a career gap, a school or a postcode survive masking, and only counterfactual and by-group tests show whether they still steer outcomes.</li>
+<li><strong>✗ Accepting a strong aggregate score as evidence of fairness.</strong> ✓ Break results down by group. A system at 91% overall can fail one group badly, and the aggregate will never show it.</li>
+<li><strong>✗ Treating "do not discriminate" in the prompt as the control.</strong> ✓ Keep the instruction, then prove its effect with a counterfactual test on your own cases and watch outcomes in production.</li>
+<li><strong>✗ Building criteria, examples or test labels from past decisions.</strong> ✓ Derive criteria from the job. Past decisions repeat past preferences, and a test set labelled with them scores the old bias as accuracy.</li>
+<li><strong>✗ Asking Claude whether it was biased, or showing its account of its own reasoning as the explanation.</strong> ✓ Explain each outcome with the criteria and the quoted evidence, and measure bias with tests. A self-assessment is not a measurement.</li>
+<li><strong>✗ Dropping the AI notice because a person approves each decision, or wording it vaguely.</strong> ✓ Say plainly that AI assists, what it does and does not decide, and how to ask for a human review.</li>
+</ul>
+
+<figure class="diagram diagram-verdict" role="group" aria-label="Four fixes that feel like fairness, one that is">
+<p class="dtitle">Four fixes that feel like fairness, one that is</p>
+<div class="dverdict">
+<div class="dbad">
+<div class="dbox bad bad" style="--i:0"><span class="dl">Delete the protected fields</span><span class="ds">proxies remain</span></div>
+<div class="dbox bad bad" style="--i:1"><span class="dl">&quot;Do not discriminate&quot;</span><span class="ds">an untested instruction</span></div>
+<div class="dbox bad bad" style="--i:2"><span class="dl">A bigger model</span><span class="ds">same criteria, same examples</span></div>
+<div class="dbox bad bad" style="--i:3"><span class="dl">Ask Claude if it was fair</span><span class="ds">not a measurement</span></div>
+</div>
+<span class="dconv" aria-hidden="true"></span>
+<div class="dbox ok dgood ok" style="--i:4"><span class="dl">Test, then fix the cause</span><span class="ds">counterfactual and by-group tests, job-related criteria, a person on the decision</span></div>
+</div>
+<figcaption>Each tempting fix changes how the system looks without measuring how it behaves; the real fix tests first, then changes the cause.</figcaption>
+</figure>
+
+<aside class="callout trap">
+<p><strong>Exam trap:</strong> A typical stem describes a Claude system that screens, ranks or recommends for people. Then it adds a symptom: complaints from one group, a fairness requirement from legal, or a cheaper model that matches on aggregate accuracy. The right option measures on representative data sliced by group, fixes the cause in the criteria, examples or inputs, and keeps review and disclosure in place. The distractors delete protected fields and stop there, add a prompt instruction, trust the aggregate, switch to a bigger model, ask the model to explain itself, or trim the disclosure and evidence to save tokens.</p>
+</aside>
+
+<h2 id="put-it-together-test-a-screening-prompt-for-bias"><span class="secnum">5.5.7</span> Put it together: test a screening prompt for bias</h2>
+
+<p>You now have the whole design: the six routes bias takes, the three tests that find it, the layered mitigations, and what people must be told. To make it stick, run a counterfactual test yourself, plant a biased criterion, and watch the test catch it.</p>
+
+<aside class="callout exercise">
+<p><strong>Build exercise:</strong> About 45 minutes with an API key and Python, using the <code>anthropic</code> and <code>pydantic</code> packages. Steps 3 to 5 call the API and cost credits: ten CVs, six calls each, three runs, about 180 short requests in all.</p>
+  
+  <ol>
+  <li>Pick a role you know, such as a night-shift warehouse operative. Write a rubric like Pernille's: four job-related criteria, each marked Met, Not met or Not stated with a quote, plus a do-not-use list and "never reject".</li>
+  <li>Write ten short fictional CVs with a [NAME] slot, some meeting the criteria and some not. Choose two first names that signal different genders or backgrounds.</li>
+  <li>Run the harness from this lesson with your rubric as <code>RUBRIC</code>. For each CV, note the control spread and the gap; most gaps should sit inside the spread.</li>
+  <li>Now break it on purpose. Add a fifth criterion, "5. Continuous employment: no gap longer than six months", and delete "gaps in employment" from the do-not-use list. Change the variant so it keeps the first name but adds the line "2022 to 2024: career break, caring for a parent". Run again and watch the variants lose points while the control stays steady.</li>
+  <li>Restore the rubric: delete criterion 5, put "gaps in employment" back on the do-not-use list, and run once more. The gap should fall back inside the control spread.</li>
+  <li>Write the two transparency artefacts: a four-sentence notice for applicants, and a one-page system card with the purpose, masked fields, criteria, your test results and one known limit.</li>
+  </ol>
+</aside>
+
+<p>Fairness work does not end at launch, and the next domain carries it on. Documentation (6.4) is where the system card lives once the engagement ends, and lifecycle support (6.5) turns the monthly by-group report and the appeal rate into standing reviews with an owner. Two neighbours own what this lesson only named: human-in-the-loop validation (5.3) designs the recruiter's review step, and regulatory compliance (5.4) settles which laws govern the group data, the notice and the records.</p>
+
+<aside class="callout exam">
+<p><strong>On the exam:</strong> Questions on this objective describe a Claude system that screens, ranks or advises people and ask for the best design, test or next step. Look for the option that measures on representative cases, fixes a cause in the criteria or inputs, and keeps a qualified person and a plain disclosure in place. Multiple-response items tend to pair two of these, such as a by-group evaluation with a disclosure that stays, or job-related criteria with a counterfactual test that proves them.</p>
+</aside>
+
+<h2 id="key-takeaways">Key takeaways</h2>
+
+<ul>
+<li>✓ Fairness belongs to the whole system: bias enters through the model, the prompt and criteria, few-shot examples, retrieved text, historical data and the evaluation set.</li>
+<li>✓ A counterfactual test changes one attribute or proxy and nothing else, with a no-change control to separate bias from run-to-run noise.</li>
+<li>✓ Break live outcomes down by group, using group data the model never sees, because an aggregate figure can hide a group the system fails.</li>
+<li>✓ Review the criteria themselves: a consistently applied criterion that is not about the job is still unfair.</li>
+<li>✓ Layer the mitigations: job-related criteria, masking in code, an evidence-based rubric, a person on every consequential decision in both directions, and monitoring by group; a prompt instruction against bias is an extra layer, not the control.</li>
+<li>✓ Tell people AI is involved and what it decides, document the system and its limits, and offer an appeal; for high-risk uses such as resume screening, Anthropic's Usage Policy requires qualified human review and disclosure.</li>
+</ul>
+
+<h2 id="check">Check your understanding</h2>
+
+<p class="note">4 questions written for this lesson, then one from the CCAR-P question bank on the same topic. Every answer option is explained, including the ones you did not pick. Nothing is stored.</p>
+
+<div class="quiz" id="quiz">
+  <p class="meta" id="meta"></p>
+  <p class="scenario" id="scenario"></p>
+  <p class="question" id="question"></p>
+  <div id="options"></div>
+  <div class="overall hidden" id="overall"></div>
+  <div class="quiznav">
+    <button id="prev" type="button">&#8592; Prev</button>
+    <button id="next" type="button">Next &#8594;</button>
+    <button id="reset" type="button">Reset answers</button>
+    <span class="score" id="score"></span>
+  </div>
+  <p class="score" id="progress" style="margin:.6rem 0 0"></p>
+</div>
+<script>
+const DATA = [{"id":"check-1","domain":"Lesson 5.5 check","scenario_full":"","question":"A software company's internal-mobility team uses Claude to recommend employees for a leadership programme. The prompt shows five past nominees as examples of strong candidates, and the team validated the system by checking that it matched last year's nominations 90% of the time. Recommendations now lean heavily towards one office and one gender. What is the best change?","options":[{"text":"Move to the most capable Claude model available, since larger models are generally far less prone to the kind of biased associations seen here.","correct":false,"explanation":"The examples and the answer key both come from past nominations, and a more capable model follows examples just as faithfully. This blames the model for what the pipeline fed it."},{"text":"Add \"Do not consider gender or office location\" to the prompt, and keep the examples and the validation test exactly as they are.","correct":false,"explanation":"The instruction may help a little, but the examples still teach who was picked before, and the 90% test still scores that pattern as success."},{"text":"Set criteria from the programme's requirements, replace the examples, relabel the test set against them, and check results by group.","correct":true,"explanation":"The bias entered through the examples and the evaluation set, both built from past decisions. Fixing the criteria, the examples and the answer key removes the cause, and the by-group check shows whether it worked."},{"text":"Remove gender and office from the employee records before Claude sees them, so that the model cannot use either attribute in its recommendations.","correct":false,"explanation":"Masking is worth doing, but the examples and the test labels still encode last year's preferences, and proxies such as team names or project history can carry office and gender."}],"overall":""},{"id":"check-2","domain":"Lesson 5.5 check","scenario_full":"","question":"A fostering agency uses Claude to pre-assess enquiries from people who want to become foster carers, so its social workers know whom to visit first. Citing Anthropic's research, the team has added \"Discrimination is illegal; answer as if no demographic information were present\" to the prompt and wants to launch next week. What should the architect require before launch?","options":[{"text":"A counterfactual test on the agency's own enquiries, varying protected attributes and proxies one at a time, with a no-change control.","correct":true,"explanation":"The research measured one model on its own scenarios. Only a test on this prompt, these enquiries and today's model shows whether the instruction works here, and the control separates bias from run-to-run noise."},{"text":"Nothing further, because the research showed that exactly this kind of instruction nearly eliminated discrimination in model decisions.","correct":false,"explanation":"The finding came from Anthropic's scenarios on Claude 2.0 in 2023. It is a good reason to keep the instruction, not proof that it works on this agency's criteria and applicants."},{"text":"A step in which Claude rates each of its own assessments for bias and flags any rating above a set threshold for a social worker.","correct":false,"explanation":"A model's view of its own fairness is not a measurement. Bias shows up as a difference between comparable cases, which only a comparison can reveal."},{"text":"An accuracy check against social workers' past decisions on 500 enquiries, approving launch if agreement with them stays above 90%.","correct":false,"explanation":"Past decisions may carry the very bias you are testing for, and one aggregate figure can hide a group the system fails."}],"overall":""},{"id":"check-3","domain":"Lesson 5.5 check","scenario_full":"","question":"A debt-advice charity uses Claude to rank incoming web requests so that advisers call the most urgent first, and advisers check every request Claude places in the urgent group. On the test set, Claude's ranking matches advisers' urgency ratings 93% of the time, above the 90% target. A case review then finds that people over 70 and people who wrote in a language other than English waited longest, some until after bailiffs had visited. What is the best next step?","options":[{"text":"Keep the system unchanged, since it beats its agreement target and some long waits are expected whenever demand outstrips adviser capacity.","correct":false,"explanation":"The target is an aggregate. The case review points at two groups, and 93% overall can hide much lower agreement for them."},{"text":"Add another 500 past requests to the test set, rerun the whole set, and confirm that overall agreement with advisers stays above the 90% target.","correct":false,"explanation":"A bigger aggregate is still an aggregate. It measures the same average that is hiding the problem."},{"text":"Ask the advisers to check the requests in the urgent group more carefully before they start each day's calls.","correct":false,"explanation":"The harm is in requests ranked too low. Reviewers who see only Claude's urgent picks cannot see who was left out."},{"text":"Break agreement down by age and language, test counterfactual pairs on both, and have advisers review low-ranked requests too.","correct":true,"explanation":"This measures the groups the case review points at, checks whether age or language moves the ranking, and puts an adviser on the decisions where the harm is happening."}],"overall":""},{"id":"check-4","domain":"Lesson 5.5 check","scenario_full":"","question":"A tenancy-referencing firm checks rental applicants for letting agents. Claude drafts each referencing decision from the applicant's documents, a referencing officer approves it, and the approved letter, written by Claude, is emailed to the applicant. The product owner asks what applicants should be told about AI. What is the best approach?","options":[{"text":"Nothing about AI, because a qualified referencing officer reviews and approves every decision before any letter is sent to the applicant.","correct":false,"explanation":"Review and disclosure are separate requirements. The letter is Claude's output presented directly to the applicant, and for housing decisions, a high-risk use, Anthropic's Usage Policy requires disclosure whenever that happens."},{"text":"Disclose that AI drafts and an officer decides, give the reasons against the published criteria, and say how to ask for a human review.","correct":true,"explanation":"This covers disclosure, what the AI does and does not decide, an explanation tied to the criteria the applicant was checked against, and an appeal route to a person."},{"text":"Add a short footer saying the letter \"may have been produced with the help of advanced technology\", keeping the wording neutral.","correct":false,"explanation":"Vague wording does not tell the applicant that AI was involved, who decided, or how to challenge the outcome."},{"text":"Attach Claude's own account of its reasoning to each letter, so that applicants can see exactly how their decision was reached.","correct":false,"explanation":"A model's account of its own reasoning is not a reliable explanation and can expose internal notes. Applicants need the reasons against the criteria and a route to a person."}],"overall":""},{"id":"ArchitectProSet2_63Q.csv#17","domain":"From the CCAR-P question bank: Governance, Safety & Risk Management","scenario_full":"","question":"An AI CoE is deploying a Claude-based developer assistant that recommends which pull requests need expert review and prioritizes remediation tasks across 200 repositories. Leaders want lower per-request latency and token cost, but security and HR require explainability and bias checks by team, language, repository type, and region. Which transparency design best balances cost, latency, fairness assessment, and accountability?","options":[{"text":"Track only overall acceptance rate, accuracy, and average latency, and use those aggregate metrics as evidence that the prioritization is fair.","explanation":"Aggregate metrics can mask uneven outcomes across teams, languages, repository types, roles, or regions. Fairness monitoring requires relevant subgroup analysis, not only system-wide performance averages.","correct":false},{"text":"Publish a documented decision rubric, return concise standardized reason codes with each recommendation, retain decision metadata, and monitor outcomes across relevant segments.","explanation":"This design keeps the criteria behind AI-assisted prioritization visible and auditable while minimizing token-heavy explanation payloads. Segment-level monitoring supports fairness assessment when aggregate metrics may hide disparities.","correct":true},{"text":"Show users full prompts, retrieved context, tool traces, and model internals for every recommendation, and treat that disclosure as the primary transparency mechanism.","explanation":"Transparency does not require exposing full prompts, private context, or model internals to end users. This approach increases cost and latency and may disclose sensitive implementation or business information.","correct":false},{"text":"Omit rationales and traces from responses and logs, keep only final priority labels, and disable subgroup reporting to reduce storage and latency.","explanation":"Removing rationales, traces, and subgroup reporting reduces the evidence needed to explain decisions or investigate bias. Cost savings achieved by eliminating accountability artifacts undermine ethical AI transparency.","correct":false}],"overall":"The best optimization preserves auditability and fairness evidence while reducing token and latency overhead. A documented rubric with concise reason codes gives affected stakeholders understandable criteria without generating long explanations for every response. Retaining segment-level outcome metrics enables bias investigation and accountability."}];
+let filtered = DATA, idx = 0;
+const answers = {};   // question id -> chosen option index
+
+const $ = id => document.getElementById(id);
+
+function render() {
+  if (!filtered.length) { $("question").textContent = "No questions."; return; }
+  const q = filtered[idx];
+  $("progress").textContent = filtered.length > 1 ? `Question ${idx + 1} of ${filtered.length}` : "";
+  $("meta").textContent = q.domain;
+  $("scenario").textContent = q.scenario_full;
+  $("scenario").style.display = q.scenario_full ? "" : "none";
+  $("question").textContent = q.question;
+  const chosen = answers[q.id];
+  const revealed = chosen !== undefined;
+  const box = $("options");
+  box.innerHTML = "";
+  q.options.forEach((opt, i) => {
+    const b = document.createElement("button");
+    b.className = "opt";
+    b.type = "button";
+    b.textContent = String.fromCharCode(65 + i) + ". " + opt.text;
+    b.disabled = revealed;
+    if (revealed && opt.correct) b.classList.add("correct");
+    if (revealed && i === chosen && !opt.correct) b.classList.add("wrong");
+    b.onclick = () => { answers[q.id] = i; render(); };
+    box.appendChild(b);
+    if (revealed && opt.explanation) {
+      const e = document.createElement("div");
+      e.className = "optexp";
+      e.textContent = opt.explanation;
+      box.appendChild(e);
+    }
+  });
+  $("overall").classList.toggle("hidden", !revealed);
+  $("overall").textContent = q.overall;
+  const done = filtered.filter(x => answers[x.id] !== undefined);
+  const ok = done.filter(x => x.options[answers[x.id]].correct);
+  $("score").textContent = done.length ? `Score: ${ok.length}/${done.length}` : "";
+  $("prev").disabled = idx === 0;
+  $("next").disabled = idx >= filtered.length - 1;
+}
+
+$("prev").onclick = () => { if (idx > 0) { idx--; render(); } };
+$("next").onclick = () => { if (idx < filtered.length - 1) { idx++; render(); } };
+$("reset").onclick = () => { for (const k in answers) delete answers[k]; render(); };
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft") $("prev").onclick();
+  if (e.key === "ArrowRight") $("next").onclick();
+});
+render();
+</script>
+
+<div class="cta">
+  <h2>27 CCAR-P questions on Domain 5, free</h2>
+  <p>Every question in the bank is tagged to a domain, so you can drill 27 questions on Governance, Safety &amp; Risk Management alone, or sit the full 63-question timed simulator.</p>
+  <p>
+    <a class="btn" href="../../../../course/view.php?idnumber=claude_ccar_p">Open the CCAR-P question bank &rarr;</a>
+    <a class="btn ghost" href="../">Back to Domain 5 &rarr;</a>
+  </p>
+  <p class="note" style="margin-bottom:0">
+    The question bank is free. It asks for an account only because the quiz engine has to store
+    answers to score them and show which domains are weak. The questions on this page need nothing.
+  </p>
+</div>
+
+<h2 id="sources">Sources</h2>
+<ul>
+  <li><a href="https://www.anthropic.com/legal/aup" rel="noopener">Usage Policy</a></li>
+  <li><a href="https://www.anthropic.com/research/evaluating-and-mitigating-discrimination-in-language-model-decisions" rel="noopener">Evaluating and mitigating discrimination in language model decisions</a></li>
+  <li><a href="https://platform.claude.com/docs/en/test-and-evaluate/develop-tests" rel="noopener">Define success criteria and build evaluations</a></li>
+  <li><a href="https://platform.claude.com/docs/en/build-with-claude/structured-outputs" rel="noopener">Structured outputs</a></li>
+  <li><a href="https://www.anthropic.com/transparency" rel="noopener">Transparency Hub</a></li>
+  <li><a href="../../../../ccar-p/">The CCAR-P exam guide, summarised</a></li>
+</ul>
+
+<nav class="lessonnav" aria-label="Lesson navigation">
+  <a class="prev" href="../../governance-safety-risk/regulatory-compliance/"><span class="lbl">&larr; Previous</span><span class="t">5.4 Compliance by design: GDPR, HIPAA and FedRAMP on Claude</span></a>
+  <a class="next" href="../../stakeholder-communication-lifecycle/structured-discovery/"><span class="lbl">Next &rarr;</span><span class="t">6.1 Structured discovery: stakeholders, evidence and requirements design can use</span></a>
+</nav>
+
+</main>
+
+<!-- SITEFOOT:START -->
+<footer class="sitefoot">
+  <div class="cols">
+    <div>
+      <h2>Certifications</h2>
+      <ul>
+        <li><a href="../../../../ccar-f/">CCAR-F &middot; Architect</a></li>
+        <li><a href="../../../../ccar-p/">CCAR-P &middot; Architect Pro</a></li>
+        <li><a href="../../../../ccao-f/">CCAO-F &middot; Associate</a></li>
+        <li><a href="../../../../ccdv-f/">CCDV-F &middot; Developer</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Study</h2>
+      <ul>
+        <li><a href="../../../../learn/">Study guides</a></li>
+        <li><a href="../../../../claude-certifications/">Compare the 4 exams</a></li>
+        <li><a href="../../../../articles/">Articles</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Practice</h2>
+      <ul>
+        <li><a href="../../../../#certifications">All certifications</a></li>
+        <li><a href="../../../../course/index.php">All question banks</a></li>
+        <li><a href="#practice">Free questions</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Community</h2>
+      <ul>
+        <li><a href="../../../../about/">About this site</a></li>
+        <li><a href="mailto:admin@termidy.com">Report a correction</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Official</h2>
+      <ul>
+        <li><a href="https://anthropic-partners.skilljar.com/page/faq-certifications" rel="noopener">Partner Academy</a></li>
+        <li><a href="https://www.pearsonvue.com/us/en/anthropic.html" rel="noopener">Pearson VUE</a></li>
+        <li><a href="https://docs.claude.com/" rel="noopener">Anthropic docs</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="apps">
+    <a href="https://apps.apple.com/gb/app/claudeprep/id6794950689" rel="noopener">ClaudePrep for iOS</a>
+    <a href="https://play.google.com/store/apps/details?id=com.termidy.claude.dev" rel="noopener">ClaudePrep for Android</a>
+  </p>
+
+  <p class="maintainer">
+    Maintained by Anton Pavelko, Claude Certified
+    <a href="https://www.credly.com/badges/b58893ef-7864-408e-9f60-5ee30ad2e0ea" rel="noopener">Architect</a> &middot;
+    <a href="https://www.credly.com/badges/3e0fa70c-5795-44fc-8b5d-2ed6ed0972fc" rel="noopener">Associate</a> &middot;
+    <a href="https://www.credly.com/badges/478d6b2e-18e7-4e40-8443-1f341941e4c0/public_url" rel="noopener">Developer</a>.
+  </p>
+
+  <p class="legal">
+    An independent community resource. Not affiliated with, endorsed by, or sponsored by Anthropic.
+    Claude and Anthropic are trademarks of Anthropic, PBC. Practice questions are written from
+    scratch; none come from a real exam.
+  </p>
+  <p class="note" style="font-size:.8rem">
+    CCAR-P domains: Solution Design and Architecture &middot; Claude Models, Prompting and Context Engineering &middot; Integration &middot; Evaluation, Testing and Optimization &middot; Governance, Safety and Risk Management &middot; Stakeholder Communication and Lifecycle Management &middot; Developer Productivity and Operational Enablement.
+  </p>
+  <p class="legal">
+    &copy; 2026 &middot;
+    <a href="../../../../privacy-policy.html">Privacy</a> &middot;
+    <a href="../../../../terms-of-service.html">Terms</a> &middot;
+    <a href="mailto:admin@termidy.com">admin@termidy.com</a>
+  </p>
+</footer>
+<!-- SITEFOOT:END -->
+
+</div>
+</div>
+
+</body>
+</html>

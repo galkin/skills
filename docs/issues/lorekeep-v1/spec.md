@@ -50,16 +50,19 @@ file is written once, and the Index can always be rebuilt from the files.
     or renders on the client, so that such pages are still readable without my intervention.
 11. As a pipeline worker, I want `get` to convert PDF and Office files to Markdown, so that an exam
     guide published as a PDF is read like any page.
-12. As a pipeline worker, I want `get` to cut a very long document into parts by article or
-    heading, so that I can `grep` one article of a regulation rather than print the whole law.
-13. As a pipeline worker, I want `get` to print a warning when the host is not in the Project's
-    host table, so that the owner learns to extend the table and I learn not to cite the page.
+12. As a pipeline worker, I want `get` of a Source whose page is gone (`404`/`410`) or whose host
+    is unreachable to return the stored Version with a warning, so that a vendor removing a page
+    never stops a Run that already has its text.
+13. As a pipeline worker, I want `get` to print a warning when the host is in neither the package's
+    default host table nor the Project's, so that the owner learns to extend the table and I learn
+    not to cite the page.
 14. As the owner, I want `get` to refuse to run without a Tag, so that no Source is ever untagged.
 15. As the owner, I want `add <file> --title …` to store research I pasted from a chat as a Source
     with `origin: owner` and `authority: generated`, so that it is searchable like any page while
     no brief ever cites it.
 16. As the owner, I want a Source fetched under a URL that redirects or declares a canonical URL to
-    be stored under that canonical URL, so that one page never lives in the Store twice.
+    be stored under that canonical URL and found again under either, so that one page never lives
+    in the Store twice and is never fetched twice because a brief used the old address.
 
 ### Provenance
 
@@ -70,7 +73,7 @@ file is written once, and the Index can always be rebuilt from the files.
     date recorded when available, so that "checked as of" is a fact and not a guess.
 19. As a pipeline reviewer, I want the Original the Markdown was made from stored beside it with
     its own hash, so that a doubtful conversion can be checked against the bytes received.
-20. As the owner, I want the Original not stored when it is byte-identical to the Markdown (a Twin),
+20. As the owner, I want the Original not stored for a Twin, whose Markdown is the text received,
     so that the Store and the bucket are not doubled for nothing.
 21. As the owner, I want every Version named `<host>--<path>--<sha8>.md` in one flat folder, so
     that I can see what a file is from its name and a changed page sits beside its older text.
@@ -81,8 +84,9 @@ file is written once, and the Index can always be rebuilt from the files.
 
 ### Search
 
-24. As a pipeline author, I want `search <query>` to return a few ranked snippets with file name and
-    heading path, so that I spend a kilobyte, not a hundred, finding where something is said.
+24. As a pipeline author, I want `search <query>` to return a few ranked snippets with `file:line`
+    and heading path, so that I spend a kilobyte, not a hundred, finding where something is said
+    and can open the file at that line without searching for the heading again.
 25. As a pipeline author, I want the search to understand word forms (`caching` finds `cached`), so
     that I do not have to guess the vendor's wording.
 26. As a pipeline author, I want the search scoped to my Run's Tag by default, so that an Anthropic
@@ -91,8 +95,8 @@ file is written once, and the Index can always be rebuilt from the files.
     so that a page another ecosystem's Run fetched is never silently invisible to me.
 28. As a pipeline author, I want `--all`, `--tag`, `--publisher` and `--authority` to widen or
     narrow the scope, so that "only primary Anthropic pages" and "everything" are one flag away.
-29. As a pipeline reviewer, I want `search --exact '<identifier>'` or plain `grep` to keep working
-    for exact identifiers, so that `cache_control` is found as written.
+29. As a pipeline reviewer, I want `search --exact '<identifier>'` to match the text as written,
+    so that `cache_control` is found as one word and not as `cache` near `control`.
 30. As a pipeline author, I want a page without headings still searchable in Sections of bounded
     size, so that an API reference or a PDF yields a snippet rather than a whole file.
 31. As the owner, I want `index` to rebuild `sources.db` from the Store's files in seconds, so that
@@ -104,10 +108,12 @@ file is written once, and the Index can always be rebuilt from the files.
 ### Rechecking
 
 33. As the owner, I want `recheck` to ask each Source's publisher whether it changed, using a
-    conditional request when the server supports it and a full fetch compared by the Original's
-    hash otherwise, so that the question costs one request and no tokens.
-34. As the owner, I want every Recheck appended to `checks.csv` whatever the answer, so that "last
-    verified on" is recorded even when nothing changed.
+    conditional request when the server supports it and a full fetch compared by received bytes and
+    then by Markdown otherwise, so that the question costs one request and no tokens, and a page
+    whose HTML carries a per-request id is not recorded as changed every time.
+34. As the owner, I want every Recheck appended to `checks.csv` whatever the answer — unchanged,
+    changed, gone or error — so that "last verified on" is recorded even when nothing changed and a
+    removed page is on record.
 35. As the owner, I want a changed page stored as a new Version beside the old, so that both the
     text a lesson was written from and the current text are kept.
 36. As the owner, I want `recheck --citations` to list the finished works whose cited Sources
@@ -120,15 +126,16 @@ file is written once, and the Index can always be rebuilt from the files.
 38. As the owner, I want `backup` to copy the Store to the Project's bucket without deleting
     anything there and without replacing an object already there, so that a local `rm` never
     propagates and an object is never overwritten.
-39. As the owner, I want the growing files (`tags.csv`, `checks.csv`, `datapackage.json`,
-    `lorekeep.toml`) copied on every backup, so that the bucket reflects them, with history kept by
-    the bucket's own versioning.
-40. As the owner, I want the Index and its journal files excluded from the backup, so that a
-    derived file is never restored over a rebuilt one.
+39. As the owner, I want the growing files (`tags.csv`, `checks.csv`, `citations.csv`,
+    `datapackage.json`, `lorekeep.toml`) copied on every backup, so that the bucket reflects them,
+    with history kept by the bucket's own versioning.
+40. As the owner, I want the Index with its journal files, the lock file and half-written temporary
+    files excluded from the backup, so that a derived or unfinished file never reaches the bucket.
 41. As the owner, I want `backup --dry-run` to show what would be copied, so that I can trust it
     before the first real run.
 42. As the owner, I want `restore <name>` to fetch one object, or a named older generation of it,
-    from the bucket, so that recovering a deleted Version is one documented command.
+    from the bucket, and the README to give the commands that bring a whole Store back from the
+    bucket onto an empty disk, so that both recoveries are documented before they are needed.
 
 ### Working together
 
@@ -136,18 +143,24 @@ file is written once, and the Index can always be rebuilt from the files.
     corrupting a file, a CSV or the Index, so that the pipeline needs no coordination around the
     Store.
 44. As the owner, I want the Store's location and the Project's settings (bucket, host table,
-    freshness window) read from `SOURCES_ROOT` and `lorekeep.toml` in the Store, so that nothing
+    freshness window) read from `LOREKEEP_STORE` and `lorekeep.toml` in the Store, so that nothing
     is hardcoded and the configuration is backed up with the data.
-45. As the owner, I want `tag add <tag> <url-or-prefix>` for migrated or hand-added Sources, so
-    that what a migration brings in can be scoped like what a Run fetched.
+45. As the owner, I want `tag add <tag> <url>` and `tag add <tag> --prefix <url-prefix>` for
+    migrated or hand-added Sources, so that what a migration brings in can be scoped like what a
+    Run fetched.
+50. As the owner, I want `search` and `recheck` without a Tag to cover the whole Store, so that I
+    can look at everything from my shell while a Run stays scoped to its own Tag.
+51. As the owner, I want the Twin rules and publishers of the hosts already probed shipped inside
+    the package, so that a new Project's `lorekeep.toml` only adds what is specific to it.
 46. As the owner, I want `status` to summarise a Store — Versions, Sources, Tags, oldest and newest
     fetch, unknown hosts seen — so that I can see its shape without opening SQLite.
 47. As an agent in any repository, I want a skill that teaches lorekeep's commands and output
     formats, shipped inside the package and printed by `lorekeep skill`, so that a brief points at
     the skill and the guide always matches the installed version.
 48. As the owner, I want `lorekeep skill --install <repo>` to vendor that skill into a repository's
-    `.agents/skills/lorekeep/`, so that every agent tool in that repo finds it the way it finds the
-    other skills.
+    `.agents/skills/lorekeep/`, refusing to replace an existing copy without `--force` and reminding
+    me that the repository's skill lock needs updating, so that every agent tool in that repo finds
+    it the way it finds the other skills.
 49. As a pipeline worker, I want `get --max-age <days>` to override the Project's freshness window
     for one call, so that a brief can demand a 1-day-fresh page without touching the Store's
     configuration.
@@ -160,59 +173,73 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 
 - A Python 3.12 package managed by `uv`, exposing one console script `lorekeep` with subcommands
   `get`, `add`, `search`, `index`, `recheck`, `backup`, `restore`, `tag`, `status`, `skill`. Commands print
-  human-readable text by default and `--json` for machine use; `get` prints the Version's path on
-  its last line in both modes so a shell can capture it.
-- The Store is `SOURCES_ROOT` (an environment variable or `--store`), one flat folder. The Run's
-  Tag is `LOREKEEP_TAG` or `--tag`; `get` and `add` fail without one.
-- `lorekeep.toml` in the Store root holds: `bucket`, `freshness_days` (default 30), and the host
-  table — ordered rules of `prefix → publisher, authority`, matched on `host/path` by longest
-  prefix. An unmatched host yields `publisher = <host>`, `authority = third-party` and a warning on
-  stderr.
+  human-readable text by default and `--json` for machine use; in text mode `get` prints the
+  Version's path on its last line so a shell can capture it, in `--json` mode the path is the
+  `path` field of the one object printed and nothing follows it. Warnings go to stderr in both.
+- The Store is `LOREKEEP_STORE` (an environment variable or `--store`), one flat folder. The Run's
+  Tag is `LOREKEEP_TAG` or `--tag`; `get` and `add` fail without one; `search` and `recheck`
+  without one cover the whole Store.
+- The host table is two layers: a default table shipped in the package (every host probed so far,
+  with its Twin rule, `publisher` and `authority`), and `lorekeep.toml` in the Store root, which
+  holds `bucket`, `freshness_days` (default 30) and rules that extend or override the default.
+  Rules are `prefix → publisher, authority [, twin, browser, cut]`, matched on `host/path` by
+  longest prefix. A host matched by neither layer yields `publisher = <host>`,
+  `authority = third-party` and a warning on stderr.
+- Finding the latest Version of a URL never needs the Index: the file stem is derived from the URL,
+  so the candidates are `<stem>--*.md`, and their frontmatter decides, matching the normalised
+  request against `url` and `original.url` alike; the newest `fetched_at` wins. The Index answers
+  the same question faster once it exists.
 - Version file name: `<host>--<path with every / and unsafe character as ->--<first 8 hex of
   sha256>.md`; the path part is cut to keep the whole name under 200 bytes. Original:
-  `<same stem>.orig.<ext>` where `ext` follows the Original's media type. Sidecar for non-Markdown
-  Versions: `<name>.meta.yml`. Owner-added Sources use `owner--<slug>--<sha8>.md` with
-  `url: owner:<slug>`.
+  `<same stem>.orig.<ext>` where `ext` follows the Original's media type. Every Version is
+  Markdown. Owner-added Sources use `owner--<slug>--<sha8>.md` with `url: owner:<slug>`.
 - Growing files, all append-only CSV with a header: `tags.csv` (`url, tag, added_at`),
-  `checks.csv` (`url, checked_at, result, status, sha256`), and `citations.csv` (`work_id, url`),
-  the last written by the consuming Project, never by lorekeep.
+  `checks.csv` (`url, checked_at, result, status, sha256` — `result` is one of `unchanged`,
+  `changed`, `gone`, `error`; `status` the HTTP status or an error label such as `timeout`;
+  `sha256` the Markdown hash of the Version that is latest after the check), and `citations.csv`
+  (`work_id, url[, as_of]`), the last written by the consuming Project, never by lorekeep.
+- The lock file is `.lorekeep.lock` in the Store root; temporary files are `<name>.tmp-<pid>`.
+  Both are excluded from backup.
 
 ### URL normalisation
 
-- Lower-case scheme and host, `http` → `https` when the host answers it, drop the fragment, drop
-  tracking parameters (`utm_*`, `ref`, `source`, `fbclid`, `gclid`), sort the remaining query
-  parameters, drop a trailing slash, collapse duplicate slashes. All other query parameters are
-  kept: they can select content (`?view=`, `?tabs=` on Microsoft Learn).
+- Lower-case scheme and host, drop the fragment, drop tracking parameters (`utm_*`, `ref`,
+  `source`, `fbclid`, `gclid`), sort the remaining query parameters, drop a trailing slash,
+  collapse duplicate slashes. All other query parameters are kept: they can select content
+  (`?view=`, `?tabs=` on Microsoft Learn). `http` is not rewritten; redirects decide.
 - The stored `url` is the final one after HTTP redirects and after a Twin's `canonicalUrl`
-  frontmatter when present; the requested URL is kept in `original.url` when it differs.
+  frontmatter when present, with the Twin suffix (`.md`, `?accept=`) removed; the requested URL
+  is kept in `original.url` when it differs.
 
 ### The cascade (`get`)
 
-1. Twin: for a known host, the Twin URL rule from the host table (`<page>.md`,
-   `?accept=text/markdown`, `raw.githubusercontent.com` rewrite); accepted only when the response
-   media type is `text/markdown` or `text/plain` from a raw host. `converter: md-twin`.
+1. Twin: for a host whose rule names one, the Twin URL (`<page>.md`, `?accept=text/markdown`,
+   `raw.githubusercontent.com` rewrite); accepted only when the response media type is
+   `text/markdown`, or `text/plain` from a raw host. The Twin's own frontmatter, if any, is removed
+   from the body and mined for `title`, `canonicalUrl` and a modification date. `converter:
+   md-twin`; the Original is not stored, `original.sha256` hashes the bytes received.
 2. Static HTML over `httpx`: follow redirects and `<meta http-equiv="refresh">`; extract with
    Trafilatura (formatting, links, tables on); rewrite relative links to absolute against the final
    URL. `converter: trafilatura <version>`.
-3. Documents: PDF and Office files through MarkItDown; `--layout` switches a PDF to Docling.
-   `converter: markitdown <version>` or `docling <version>`.
-4. Browser: Crawl4AI, an optional dependency, used when step 2 gets `403`/`429`, an empty or
-   JavaScript-only body, or when the host table marks the host `browser = true`; a per-host
-   selector list in the host table says what to cut. `converter: crawl4ai <version>`.
-5. Splitting: a Markdown body over a configurable size (default 150 KB) is cut at
-   `Article N` / `Статья N` / `ANNEX` / top-level headings into part files with `part_of` and
-   `part` set, and an index part listing them.
+3. Documents: a response whose media type is PDF or an Office type — whatever the URL ends in —
+   goes through MarkItDown with its `pdf` extra; `--layout` switches a PDF to Docling, an optional
+   extra (`lorekeep[layout]`) because it brings PyTorch, reported as "not installed" with the extra
+   to add when absent. `converter: markitdown <version>` or `docling <version>`.
+4. Browser: Crawl4AI, an optional extra (`lorekeep[browser]`), used when step 2 gets `403`/`429`,
+   an empty or JavaScript-only body, or when the host rule says `browser = true`; the rule's `cut`
+   selector list says what to remove. `converter: crawl4ai <version>`.
 
-- `httpx` runs through an `hishel` file cache in the user's cache directory (never the Store) so a
-  repeat request is conditional for free.
+- Plain `httpx`, no cache library: the Store is the cache and the conditional requests below are
+  lorekeep's own. The client sends a `User-Agent` naming lorekeep and its version.
 - Freshness: the window is `freshness_days` from `lorekeep.toml` (default 30) unless `--max-age
   <days>` is given on the call; `--fresh` is `--max-age 0`. If the latest Version is younger than
-  the window,
-  return it and append the Tag if missing. Otherwise send a conditional request (`If-None-Match`,
-  `If-Modified-Since`); `304` → append a `checks.csv` row and return the latest Version; `200` →
-  convert, compare `original.sha256` (or the Markdown hash for a Twin) with the latest Version:
-  equal → `checks.csv` row, return latest; different → new Version, `checks.csv` row with
-  `changed`.
+  the window, return it and append the Tag if missing. Otherwise send a conditional request
+  (`If-None-Match`, `If-Modified-Since` from the frontmatter); `304` → `unchanged` row, return the
+  latest Version; `200` → compare the received bytes with `original.sha256`: equal → `unchanged`;
+  different → convert and compare the Markdown hash with the Version's: equal → `unchanged`;
+  different → new Version and a `changed` row. `404`/`410` → `gone` row, a warning, the latest
+  Version is returned; a connection or timeout failure → `error` row, a warning, the latest
+  Version is returned. Without any stored Version the same failures exit non-zero.
 - The browser and the `gcloud` binary are reached through two small interfaces (a page fetcher and
   a command runner) that the command layer receives; production wires Crawl4AI and `subprocess`,
   tests wire fakes.
@@ -222,41 +249,56 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 - Required: `url`, `fetched_at` (UTC ISO 8601), `sha256` (of the Markdown body, after the
   frontmatter), `publisher`, `authority` (`primary | official | third-party | generated`),
   `converter`. When served: `etag`, `last_modified`. Optional: `title`, `modified`,
-  `original {url, mediatype, sha256, stored}`, `part_of`, `part`, `extracted_from`, `origin`
-  (`web | owner`, default `web`).
+  `original {url, mediatype, sha256, stored}`, `extracted_from`, `origin` (`web | owner`, default
+  `web`).
 - Nothing that changes later is in the frontmatter; Tags and Rechecks are rows in their CSVs.
+- One commit point: every command that stores a Version or a Tag goes through one function of the
+  Store module that writes the file, appends the CSV rows under the lock and then notifies the
+  Index. Tickets that add fetch steps never touch that function; the Index ticket fills only its
+  notification.
 
 ### Index (`index`, `search`)
 
-- `sources.db` in the Store, WAL mode, rebuilt in full by `index` and updated incrementally by
-  `get`/`add`/`recheck`/`tag`. Tables: `versions` (one row per Version, every frontmatter field,
-  file name), `tags`, `checks`, `citations`, `sections` (version, heading path, body, order), and
-  `sections_fts` — FTS5 external-content over `sections(heading, body)` with
-  `tokenize = 'porter unicode61'`.
+- `sources.db` in the Store, WAL mode with a busy timeout, rebuilt in full by `index` and updated
+  incrementally through the commit point by `get`/`add`/`recheck`/`tag`. Tables: `versions` (one
+  row per Version, every frontmatter field, file name), `tags`, `checks`, `citations`, `sections`
+  (version, heading path, line of the heading in the file, body, order), and `sections_fts` —
+  FTS5 external-content over `sections(heading, body)` with `tokenize = 'porter unicode61'`.
+- Staleness: a command that reads the Index compares the count of `.md` files in the Store with
+  the count of `versions` rows; on a mismatch or a missing file it rebuilds under the Store lock,
+  so six workers finding no Index produce one rebuild, not six. `restore` and a hand-copied file
+  are therefore picked up on the next read.
 - Sections: split at Markdown headings; a Section over 4 KB is cut again at paragraph boundaries
   with the same heading path; code fences are never split.
 - `search`: `bm25` ranking, `snippet()` of the body, default 5 results, `--limit`; output lines are
-  `file | heading path | snippet`; the final line is always `+N matches under other tags (--all)`
-  computed from the same query without the Tag filter (`+0` when none). `--exact` runs the query as
-  an FTS5 phrase. `--json` returns the same as objects.
-- Scope: default `tag = LOREKEEP_TAG`; `--all`; `--tag a,b`; `--publisher`; `--authority`.
+  `file:line | heading path | snippet`; the final line is always `+N matches under other tags
+  (--all)` computed from the same query without the Tag filter (`+0` when none), omitted when the
+  scope is already everything. `--exact` is a case-sensitive substring match over `sections.body`
+  instead of an FTS query, so an identifier is found as written. `--json` returns the same as
+  objects.
+- Scope: default `tag = LOREKEEP_TAG`, everything when no Tag is set; `--all`; `--tag a,b`;
+  `--publisher`; `--authority`.
 
 ### Recheck
 
-- Iterates the latest Version per Source in scope, performs the conditional request or full fetch
-  as in `get`, appends to `checks.csv`, stores new Versions. `--citations` joins `citations.csv`
+- Iterates the latest Version per Source in scope (default the Run's Tag, everything when no Tag
+  is set; `owner:` Sources are skipped), performs the conditional request or full fetch as in
+  `get` with the same four outcomes, appends to `checks.csv`, stores new Versions and prints
+  counts per outcome. `--citations` joins `citations.csv`
   with `versions` and prints `work_id, url, old sha8 → new sha8` for every work whose cited Source
   has a Version newer than the one the work was written from: the Version current at the time in
   `citations.csv`'s optional third column `as_of`, or the oldest Version when `as_of` is absent.
 
 ### Backup
 
-- `backup` runs two `gcloud storage rsync` invocations through the command runner: (1) the Store
-  with `--recursive --no-clobber --exclude='^(tags|checks)\.csv$|^datapackage\.json$|^lorekeep\.toml$|^sources\.db(-wal|-shm)?$'`;
-  (2) the four growing files with `gcloud storage cp`. `--dry-run` passes through. Nothing in
-  `backup` deletes.
+- `backup` runs two `gcloud storage` invocations through the command runner: (1) `rsync` of the
+  Store with `--recursive --no-clobber` and an `--exclude` covering the five growing files,
+  `sources.db` with `-wal`/`-shm`, `.lorekeep.lock` and `.tmp-`; (2) `cp` of the five growing files
+  (`tags.csv`, `checks.csv`, `citations.csv`, `datapackage.json`, `lorekeep.toml`), those that
+  exist. `--dry-run` passes through. Nothing in `backup` deletes.
 - `restore <name> [--generation N]` runs `gcloud storage cp gs://<bucket>/<name>[#N] <store>/` and
-  refuses to overwrite an existing local file.
+  refuses to overwrite an existing local file; the next Index read picks the file up. Bringing a
+  whole Store back is a documented reverse `rsync` followed by `index`, in the README.
 - `datapackage.json` is regenerated before every backup and by `index`: resources for each CSV with
   a typed schema, and one `sources` resource listing every Version with its frontmatter fields,
   `hash` and `bytes`.
@@ -265,17 +307,21 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 
 - Versions and Originals: write to `<name>.tmp-<pid>` then `os.replace`; an existing target is left
   alone (same hash, same bytes).
-- CSV appends and `datapackage.json` regeneration under one `fcntl` lock file in the Store.
-- SQLite in WAL mode with a busy timeout; incremental updates are small transactions.
+- CSV appends, `datapackage.json` regeneration and Index rebuilds under the one `fcntl` lock file
+  `.lorekeep.lock` in the Store.
+- SQLite in WAL mode with a busy timeout; incremental updates are small transactions. The Store
+  must be on a local filesystem, which WAL requires.
 
 ### The skill (`skill`)
 
 - The package ships a `SKILL.md` (with any reference files beside it) that documents every
   command, its flags, its output format and the Store's layout for an agent, in the shape the
   `.agents/skills/` convention expects. `lorekeep skill` prints it; `lorekeep skill --install
-  <repo>` copies the folder to `<repo>/.agents/skills/lorekeep/` and refuses to overwrite a
-  modified copy. The skill is generated from the same declarations the CLI parser uses, so a flag
-  cannot exist in one and not the other.
+  <repo>` copies the folder to `<repo>/.agents/skills/lorekeep/`, refuses when that folder exists
+  unless `--force`, and ends by reminding that the repository's skill lock (if it keeps one) needs
+  the new hash. The command reference is generated from the same declarations the CLI parser
+  uses, so a flag cannot exist in one and not the other; the Store layout and frontmatter
+  reference is a hand-written file beside it.
 
 ### Owner-added Sources (`add`)
 
@@ -291,13 +337,17 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
   output, exit code and printed text. Modules under the seam (normalisation, cascade steps, section
   splitting) are exercised only through commands.
 - Two fakes at the seam's edge: an `httpx` mock transport serving recorded responses from
-  `tests/fixtures/` (status, headers, body), and fakes for the page fetcher (browser) and the
-  command runner (`gcloud`) that record their calls and return canned results.
-- Fixtures are the five measured pages (three termidy lessons, Anthropic and AWS `prompt-caching`,
-  each as HTML and as Twin) plus one each of: a `.md` URL answering HTML, a meta-refresh stub, a
-  `403` to the plain client, a `304`, a Microsoft Learn Twin with `canonicalUrl`, a long legal text
-  with Articles, a PDF. Fixtures are committed; the live network is touched only by one manual
-  smoke script outside `pytest`.
+  `tests/fixtures/` (one folder per response: `response.json` with `url`, `status`, `headers`,
+  optional `match_headers`, and a body file; the fake answers `404` and records a miss for any
+  other URL), and fakes for the page fetcher (browser) and the command runner (`gcloud`) that
+  record their calls and return canned results. All three are built from paths and plain values,
+  so a child process can construct its own.
+- Fixtures are committed already and described in `tests/fixtures/README.md`: the five measured
+  pages (three termidy lessons, Anthropic and AWS `prompt-caching`, each as HTML and, for the two
+  vendors, as Twin), the Microsoft Learn redirect chain ending in a Twin with `canonicalUrl`, the
+  NVIDIA NIM meta-refresh stub with its target, and synthesised `403`, `304`, `.md`-answers-HTML,
+  JavaScript-only and PDF responses. The live network is touched only by one manual smoke script
+  outside `pytest`.
 - Concurrency is tested with a process pool calling `get` on the same URLs against one Store and
   asserting one file per Version, complete CSVs and a consistent Index.
 - `pytest`, `ruff`, `pyright` are the whole gate; no coverage threshold.
@@ -309,6 +359,11 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 - Migration of existing archives into a Store, and producing `citations.csv` from the Project's
   lessons — both belong to the consuming Project and a later session.
 - Vector or semantic search; a trigram FTS table.
+- Splitting a long document into part Versions: Sections of 4 KB already answer "one article of a
+  regulation", and parts would need an identity of their own beside the URL.
+- An HTTP cache library (`hishel`): the Store is the cache, and a cache in between hides the `304`
+  that `checks.csv` records.
+- Politeness delays or per-host concurrency limits.
 - A daemon, a watcher, or a scheduled backup (the `launchd` job is proposed separately).
 - WACZ capture of whole sites; `rclone`; any backend other than GCS.
 - Licences, permissions, or any rights metadata.

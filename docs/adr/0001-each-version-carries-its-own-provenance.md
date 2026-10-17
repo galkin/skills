@@ -4,7 +4,7 @@ A Version is a Markdown file whose YAML frontmatter holds its Provenance — `ur
 a reader would open), `fetched_at`, `sha256` of the Markdown body, `publisher`, `authority`,
 `converter` with its version (`trafilatura 2.3.1`), and `etag` / `last_modified` when the server
 sent them; optionally `title`, `modified` (the publisher's own date),
-`original {url, mediatype, sha256, stored}`, `part_of` / `part`, `extracted_from` and `origin`
+`original {url, mediatype, sha256, stored}`, `extracted_from` and `origin`
 (`web` or `owner`). A file that is not Markdown gets the same fields in a `<file>.meta.yml` sidecar.
 The Store's `datapackage.json` (Frictionless Data Package) is generated from those files and never
 edited by hand.
@@ -13,11 +13,17 @@ The main reader is an agent that has already opened the file, so Provenance belo
 read; this is how FineWeb and Dolma keep theirs, beside the text. Frictionless was chosen for the
 package because what the Store holds beyond pages is tables, and because WACZ uses the same format.
 
-Two hashes have two jobs. `sha256` of the Markdown is the Version's identity and name. Whether the
-page *changed upstream* is judged by `original.sha256`: a new release of a Converter rewrites every
-Markdown without any page having changed, and comparing Markdown would then record a false Version
-of the whole Store. For a Twin the two hashes are equal and the Original is not stored twice
-(`original.stored: false`).
+Two hashes have two jobs. `sha256` of the Markdown is the Version's identity and name.
+`original.sha256` is always the hash of the bytes received, and it is the first word on whether the
+page *changed upstream*: equal bytes mean nothing changed and nothing is converted. Different bytes
+are not yet a change — the raw HTML of Microsoft Learn, AWS and most CDNs carries per-request ids,
+nonces and build hashes — so the page is converted again and the new Markdown compared with the
+Version's; only when both differ is a new Version stored. Comparing Markdown alone was rejected
+because a new release of a Converter rewrites every Markdown without any page having changed; the
+Original comparison catches that case, the Markdown comparison catches the noise, and the rare
+page that is both noisy and converted by a newer release is one false Version, not a Store of them.
+For a Twin the Original is not stored (`original.stored: false`): the Markdown is the received
+text minus the publisher's own frontmatter, and `original.sha256` still hashes what was received.
 
 A Source the owner provides rather than fetches (research pasted from a chat) has no address: its
 `url` is `owner:<slug>` and `origin: owner`, so one naming rule serves every Version.

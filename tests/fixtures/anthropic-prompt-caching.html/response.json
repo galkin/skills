@@ -1,0 +1,8 @@
+{
+  "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html; charset=utf-8"
+  },
+  "body": "body.html"
+}

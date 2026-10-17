@@ -4,8 +4,12 @@
 `raw.githubusercontent.com`); the page's static HTML over plain HTTP through Trafilatura, with links
 made absolute; MarkItDown for PDF and Office files, Docling for PDFs whose layout matters; and
 Crawl4AI only for pages that need a browser, with a per-site configuration of what to cut. The
-Converter that succeeded is recorded. HTTP goes through `httpx` with an `hishel` cache so a
-repeated request is conditional; that cache lives outside the Store.
+Converter that succeeded is recorded, and the response's media type — never the URL's extension —
+decides which step converts. HTTP is plain `httpx` with no cache library: the Store is the cache,
+and the conditional requests are lorekeep's own (ADR 0007). The Twin rules and the publisher of
+every host probed so far ship inside the package as a default host table; a Project's
+`lorekeep.toml` extends or overrides it, so no Project rewrites what is true of `learn.microsoft.com`
+everywhere.
 
 Measured on five real pages (2026-10-17): Trafilatura's Markdown was 8–78% smaller than Crawl4AI's
 default `fit_markdown`, which kept cookie banners from the live page, and 0.7 s against 5.2 s per

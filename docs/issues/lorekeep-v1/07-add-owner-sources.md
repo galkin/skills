@@ -1,6 +1,6 @@
 # 07: `add` stores a Source the owner provides
 
-**What to build:** `add <file> --title <t>` copies a Markdown or text file into the Store as a Version with `url: owner:<slug-of-title>`, `origin: owner`, `authority: generated` (or `--authority`), `publisher` from `--publisher` (default `owner`), `converter: owner`, `fetched_at` from the file's mtime or `--fetched-at`, and the Run's Tag. The file name is `owner--<slug>--<sha8>.md`.
+**What to build:** `add <file> --title <t>` copies a Markdown or text file into the Store as a Version with `url: owner:<slug-of-title>`, `origin: owner`, `authority: generated` (or `--authority`), `publisher` from `--publisher` (default `owner`), `converter: owner`, `fetched_at` from the file's mtime or `--fetched-at`, and the Run's Tag, written through the Store's commit point like any Version. The file name is `owner--<slug>--<sha8>.md`.
 
 **Blocked by:** 02
 
