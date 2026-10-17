@@ -233,7 +233,7 @@ def test_a_rule_removing_more_than_twice_its_share_is_held_back(tmp_path: Path) 
     """`readings-fence-table.v1` (synthesised): 25 lines, 3 of them chrome outside the fence and
     the table, so the rule removes 12% where it was accepted at 5%."""
     rules = (
-        f'[[readings]]\nprefix = "docs.example.test/"\ndrop_lines = "^{CHROME}$"\nremoves = 5\n',
+        f'[[readings]]\nprefix = "docs.example.test/"\ndrop_lines = "^{CHROME}$"\nremoves = "5%"\n',
         ARTICLE_RULE.replace("eur-lex.europa.eu/", "docs.example.test/"),
     )
     store = store_with(tmp_path, *rules)
@@ -256,7 +256,7 @@ def test_a_rule_removing_more_than_twice_its_share_is_held_back(tmp_path: Path) 
     assert b"## Article 10\n" in reading_body
     assert reading_head["warnings"] == [warning.split(": ", 3)[3].strip()]
 
-    set_rules(store, rules[0].replace("removes = 5", "removes = 6"), rules[1])
+    set_rules(store, rules[0].replace('removes = "5%"', 'removes = "6%"'), rules[1])
     accepted = lorekeep(store, edges_over()[0], "read")
 
     assert "removed" not in accepted.stderr
@@ -297,6 +297,15 @@ def test_a_reading_rule_that_cannot_be_used_is_a_usage_error(tmp_path: Path) -> 
             "readings[1].drop_lines is not a regular expression"
         ),
         '[[readings]]\nengine = "hugo"\ndrop_lines = "x"\n': "readings[1].engine must be one of",
+        '[[readings]]\nprefix = "a.test/"\ndrop_lines = "x"\nremoves = 4\n': (
+            'readings[1].removes must be written with its unit, as "4%"'
+        ),
+        '[[readings]]\nprefix = "a.test/"\ndrop_leading = "x"\nremoves = "4%"\n': (
+            'readings[1].removes must be written with its unit, as "31 lines"'
+        ),
+        '[[readings]]\nprefix = "a.test/"\nstrip_title_suffix = "x"\nremoves = "0%"\n': (
+            "readings[1].removes belongs to drop_leading, drop_trailing, drop_lines"
+        ),
     }
     for toml, message in cases.items():
         set_rules(store, toml)

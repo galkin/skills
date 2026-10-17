@@ -1,0 +1,24 @@
+# Candidate reading rules for docs.nvidia.com/, as a proposer returns them to `lorekeep rules check`.
+# Written for v1.3 ticket 03 (2026-10-17) before the first live run, over the five Fern Twin
+# fixtures: the banner rule that passes, and one of each kind a proposer gets wrong.
+
+# The llms.txt banner Fern puts before the H1 of every Twin, up to its MCP line.
+[[readings]]
+prefix = "docs.nvidia.com/"
+drop_leading = "llms\\.txt|For clean Markdown|/_mcp/server"
+
+# Every quote line and the Info callout's tags: 41% of the Dynamo router guide, whose banner is
+# long and whose page is short.
+[[readings]]
+prefix = "docs.nvidia.com/"
+drop_lines = "^> |^</?Info>$"
+
+# Stray top-level headings: also a shell comment inside a fence.
+[[readings]]
+prefix = "docs.nvidia.com/"
+drop_lines = "^# "
+
+# Every leading quote line: the page's own summary under the H1 is one too.
+[[readings]]
+prefix = "docs.nvidia.com/"
+drop_leading = "^> "

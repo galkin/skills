@@ -111,6 +111,8 @@ synthesised: `v3.helm.sh` answered `200` itself on that day, not a redirect.
 | `guardrails-rail-types.notfound.301`   | synthesised: that page as a `301` to `nemo/guardrails/about-nemo-guardrails-library/rail-types`, the address NVIDIA moved it to |
 | `guardrails-rail-types.moved.html`     | synthesised: the new address's HTML, the first paragraphs of `guardrails-rail-types.twin` |
 | `guardrails-rail-types.moved.twin`     | the body of `guardrails-rail-types.twin`, served as the new address's Twin (`text/markdown`) |
+| `dynamo-router-guide.twin`             | Dynamo's Router Guide Twin: the first Store's Version body, whole (63 lines, 26 of them the llms.txt banner block `drop_leading` removes: the shortest page under the longest banner) (v1.3 ticket 03) |
+| `nemo-gym-build-verifiers.twin`        | NeMo Gym's Build Verifiers Twin: the first Store's Version body, whole (39 lines, the shortest Fern Twin there, its banner 15 lines) (v1.3 ticket 03) |
 
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and
@@ -149,3 +151,16 @@ headers are the ones the Store's frontmatter records.
 The v1.2 ticket 07 Twin is the first Store's Version body (2026-10-17): a Twin keeps no Original,
 so the body is the text received after its frontmatter. Of that frontmatter only `title` (the
 Version's) is put back; the rest, and the response headers, were never kept.
+The two v1.3 ticket 03 Twins are the first Store's Version bodies (2026-10-17), whole; their
+headers are the `etag` the frontmatter records and the Twin's media type.
+
+## Candidate rules
+
+`readings-candidates-fern.toml` is a file, not a folder: the `[[readings]]` candidates a proposer
+returns for `docs.nvidia.com/`, which `rules check` and `rules accept` read. It was written for
+v1.3 ticket 03 before the first live run of the cycle, over the five Fern Twins
+(`nemo-gym-build-verifiers`, `guardrails-rail-types`, `dynamo-router-guide`,
+`guardrails-jailbreak-protection`, `dynamo-fast-model-loading`): the banner rule that passes, a
+`drop_lines` that removes 41% of the Router Guide, one that matches a shell comment in a fence of
+Fast Model Loading, and a `drop_leading` whose last match is a quote line after that page's first
+heading.

@@ -105,7 +105,8 @@ the Version after the `[[readings]]` rules that apply to it, in `.cache/readings
 [store.md](store.md#readings)). Rarely needed: `get` builds the Reading it returns, `recheck` the
 Reading of a changed page, and `search` every missing or stale one when it rebuilds the Index. A
 Version no rule changes has no Reading. A rule held back by the over-removal guard is named on stderr as
-`lorekeep: warning: <url>: rule <name> removed N% (accepted at M%)`.
+`lorekeep: warning: <url>: rule <name> removed N lines (accepted at M lines)` (a block operation)
+or `… removed N% (accepted at M%)` (`drop_lines`).
 
 - `--prefix URL` — only Sources whose `url` starts with this.
 - `--force` — rebuild every Reading in scope, current or not.
@@ -114,6 +115,87 @@ Version no rule changes has no Reading. A rule held back by the over-removal gua
 ```text
 Built 3 Readings, 41 current
 ```
+
+## `lorekeep rules sample`
+
+`lorekeep rules sample PREFIX [--sample N] [--store DIR]`
+
+Prints the paths of Versions under `PREFIX` (`host/path`, as a rule's `prefix`), the newest of each
+Source: the shortest, the longest, then the others spread between them by length. They are what a
+proposer of reading rules reads (below).
+
+- `--sample N` — how many (default: 5).
+- `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
+
+## `lorekeep rules check`
+
+`lorekeep rules check FILE [--store DIR]`
+
+Measures each candidate `[[readings]]` table of `FILE` on its own on every Version it reaches, and
+writes nothing. Per candidate: the lines removed (headings inserted, titles cut) in total and per
+Version, three of them, and `pass` or `fail: <reason>`. The limits: `drop_lines` removes at most
+30% of any Version's lines; a leading block ends before the first heading and no line after that
+heading matches (a trailing block mirrors it after the last heading), with no limit on its size; no
+rule removes a fence or table line; a candidate must be the grammar, carry no `accepted` or
+`removes`, and change some Version.
+
+- `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
+
+```text
+[1] docs.nvidia.com/ drop_leading = "llms\\.txt|For clean Markdown|/_mcp/server"
+    over 5 Versions: 91 lines removed (per Version min 12, median 15, max 26)
+    | > This page is for version Latest (v1.5.1) (default).
+    | > - v0.7.0: https://docs.nvidia.com/dynamo/v-0-7-0/llms.txt
+    | > For AI client integration (Claude Code, Cursor, etc.), connect to the MCP server at https://docs.…
+    pass
+[2] docs.nvidia.com/ drop_lines = "^# "
+    over 5 Versions: 5 lines removed (per Version min 1, median 1, max 1), at most 3% of a Version
+    | # Router Guide
+    | # Guardrail Types
+    | # Build Verifiers
+    fail: matches a fence line, docs.nvidia.com--dynamo-latest-kubernetes-model-deployment-model-loading-fast-model-loading--eb7e8d5d.md:134
+Checked 2 candidates: 1 pass, 1 fail
+```
+
+## `lorekeep rules accept`
+
+`lorekeep rules accept FILE [--all] [--store DIR]`
+
+Runs `rules check`, writes the passing candidates into the Store's `lorekeep.toml` with `accepted`
+(today) and `removes` (the most one Version lost), prints `Accepted N rules, M failed`, then builds
+the Readings they reach (`Built N Readings, M current`). A rule with the same `prefix` or `engine`
+and operation as a `[[readings]]` table already there replaces that table where it stands; any
+other is appended at the end; every other line of the file stays as written, comments included.
+Of two candidates with the same operation, the later wins.
+
+- `--all` — also accept the failing ones (your override); a candidate that is not the grammar
+  never is.
+- `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
+
+## Proposing reading rules
+
+lorekeep calls no model. Rules come from this cycle, run by the orchestrator when a Run reports a
+Reading with chrome left in it, or a new host lands in the Store:
+
+1. `lorekeep rules sample PREFIX` — the Versions to read.
+2. Launch a subagent on the cheapest model available (the Haiku tier) through Orca orchestration,
+   as any worker, with this brief:
+   - read the printed paths, and propose rules that drop what is not the page's content (banners,
+     chrome, a site suffix in the title) or insert a heading before each article of a law;
+   - the grammar: `[[readings]]` tables, each with `prefix = "PREFIX"` and exactly one operation —
+     `drop_leading` (the lines up to the last match before the first heading), `drop_trailing`
+     (from the first match after the last heading), `drop_lines` (every matching line),
+     `strip_title_suffix` (the match ending the first heading), `heading_before` with `level`
+     (a heading made of each matching line); every value a Python regular expression;
+   - the limits of `rules check` above;
+   - the answer: one TOML file of `[[readings]]` candidates and nothing else — no `accepted`, no
+     `removes`, no prose; several candidates for one operation are fine.
+3. `lorekeep rules check FILE` — read the report; a `fail` names the Version and line.
+4. `lorekeep rules accept FILE` — the passing rules go into `lorekeep.toml` and the Readings under
+   them are rebuilt; the next `search` reindexes them.
+
+Engine rules (Fern, EUR-Lex, Microsoft Learn) found this way belong in lorekeep's own
+`readings.toml`: file them as a lorekeep issue.
 
 ## `lorekeep skill`
 
@@ -159,16 +241,17 @@ defaults (`readings.toml`); a Project rule with the same `prefix` or `engine` an
 replaces a default. Each rule has `prefix` (`host/path`, longest wins) or `engine` (`fern`,
 `mintlify`, `sphinx`, `eur-lex`, `pdf`), exactly one operation — `drop_leading`,
 `drop_trailing`, `drop_lines`, `strip_title_suffix`, or `heading_before` with `level` — whose value
-is a regular expression, and `accepted` (a date) and `removes` (the share of lines in percent it
-removed when accepted; a rule that removes more than twice that from a Version is not applied to
-it). For example:
+is a regular expression, and `accepted` (a date) and `removes` (the most it removed from one
+Version when accepted, with its unit: `"26 lines"` for `drop_leading` and `drop_trailing`, `"4%"`
+of the Version's lines for `drop_lines`, none for the other two; a rule that removes more than
+twice that from a Version is not applied to it). `rules accept` writes both. For example:
 
 ```toml
 [[readings]]
 prefix = "docs.nvidia.com/"
-drop_leading = "llms\\.txt|For clean Markdown"
+drop_leading = "llms\\.txt|For clean Markdown|/_mcp/server"
 accepted = 2026-10-17
-removes = 4
+removes = "26 lines"
 ```
 
 A law or standard is `primary` where its issuer publishes the text, its official journal:

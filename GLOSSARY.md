@@ -47,7 +47,8 @@ _Avoid_: clean copy, cleaned version, rendition
 One operation that makes a Reading from a Version — drop a leading or trailing block, drop lines
 by pattern, cut a suffix from the title, insert a heading before lines by pattern — for the
 Versions under a prefix or made by one engine. It never rewrites a kept line, never touches a code
-fence or a table line, and records the share of lines it removed when it was accepted.
+fence or a table line, and records the most it removed from one Version when it was accepted: lines
+for a block, a share for lines dropped by pattern.
 _Avoid_: filter, cleanup, post-processing rule
 
 ### Trust

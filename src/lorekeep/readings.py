@@ -28,8 +28,9 @@ An engine is recognised from the Version itself:
 
 The operations run in a fixed order — `drop_leading`, `drop_trailing`, `drop_lines`,
 `strip_title_suffix`, `heading_before` — each on what the ones before left. A rule with `removes`
-that would remove more than twice that share of the Version's lines is not applied to that
-Version, and the Reading says so in `warnings`.
+that would remove more than twice that from a Version — lines for a block operation (`"26 lines"`),
+the share of the Version's lines for `drop_lines` (`"4%"`) — is not applied to that Version, and
+the Reading says so in `warnings`.
 """
 
 from __future__ import annotations
@@ -46,14 +47,14 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from lorekeep import frontmatter, sections
-from lorekeep.project import OPERATIONS, ReadingRule
+from lorekeep.project import BLOCK_OPERATIONS, OPERATIONS, ReadingRule, removes_text
 from lorekeep.store import OWNER_SCHEME, lock, parse_version, stem
 
 CACHE_DIR = ".cache"
 """The Store's folder of what is rebuilt from the Versions: never indexed as a Version, never
 backed up."""
 READINGS_DIR = Path(CACHE_DIR) / "readings"
-READER = "1"
+READER = "2"
 """The meaning of the operations: part of every `rules` hash, so a change rebuilds every Reading."""
 
 FERN_BANNER = "> For clean Markdown"
@@ -65,7 +66,8 @@ SPHINX_MARKER = b"_static/documentation_options.js"
 @dataclass(frozen=True)
 class Reading:
     """What `ensure` found: the Reading's path (`None` when no rule changes the Version), whether
-    it was built now, and the guard's warnings (`rule <name> removed N% (accepted at M%)`)."""
+    it was built now, and the guard's warnings (`rule <name> removed N lines (accepted at M
+    lines)`)."""
 
     path: Path | None
     built: bool
@@ -147,8 +149,7 @@ def rules_for(
     rules: Sequence[ReadingRule],
 ) -> list[ReadingRule]:
     """The rules that apply to a Version, one per operation at most, in the order they run."""
-    parts = urlsplit(str(head["url"]))
-    host_path = f"{(parts.hostname or '').lower()}{parts.path}"
+    under = host_path(str(head["url"]))
     engines: dict[str, bool] = {}
 
     def made_by(engine: str) -> bool:
@@ -162,7 +163,7 @@ def rules_for(
         by_prefix = [
             rule
             for rule in of_operation
-            if rule.prefix is not None and host_path.startswith(rule.prefix)
+            if rule.prefix is not None and under.startswith(rule.prefix)
         ]
         rule = max(by_prefix, key=lambda rule: len(rule.prefix or ""), default=None)
         if rule is None:
@@ -172,6 +173,22 @@ def rules_for(
         if rule is not None:
             chosen.append(rule)
     return chosen
+
+
+def host_path(url: str) -> str:
+    """What a rule's `prefix` is matched against: the url's host, lower-cased, and path."""
+    parts = urlsplit(url)
+    return f"{(parts.hostname or '').lower()}{parts.path}"
+
+
+def covers(
+    rule: ReadingRule, store: Path, version: Path, head: dict[str, Any], body: bytes
+) -> bool:
+    """Whether `rule` reaches a Version: its `prefix` starts the Version's `host/path`, or its
+    `engine` made the Version. Another rule of the same operation may still win (`rules_for`)."""
+    if rule.prefix is not None:
+        return host_path(str(head["url"])).startswith(rule.prefix)
+    return rule.engine is not None and _made_by(rule.engine, store, version, head, body)
 
 
 def _made_by(engine: str, store: Path, version: Path, head: dict[str, Any], body: bytes) -> bool:
@@ -226,17 +243,8 @@ class Made:
 
 def apply(head: dict[str, Any], body: bytes, rules: Sequence[ReadingRule]) -> Made:
     """The rules applied to a Version's body and `title`, in the order of `rules_for`."""
-    text = body.decode("utf-8", errors="surrogateescape")
-    lines = _lines(text)
-    bare = [line.removesuffix("\n") for line in lines]
-    code = sections.code_lines(bare)
-    protected = [
-        fenced or line.lstrip().startswith("|") for line, fenced in zip(bare, code, strict=True)
-    ]
-    heading = [
-        not fenced and sections.heading_text(line) is not None
-        for line, fenced in zip(bare, code, strict=True)
-    ]
+    page = _Page.of(body)
+    lines, bare, heading, protected = page.lines, page.bare, page.heading, page.protected
     kept = list(range(len(lines)))
     inserted: dict[int, str] = {}
     edited: dict[int, str] = {}
@@ -255,33 +263,19 @@ def apply(head: dict[str, Any], body: bytes, rules: Sequence[ReadingRule]) -> Ma
         elif rule.operation == "strip_title_suffix":
             first = next((n for n in kept if heading[n]), None)
             if first is not None:
-                cut = _strip_suffix(bare[first], pattern)
-                if cut is not None and sections.heading_text(cut):
+                cut = _cut_heading(bare[first], pattern)
+                if cut is not None:
                     edited[first] = cut + lines[first][len(bare[first]) :]
             if title is not None:
                 title = _strip_suffix(title, pattern) or title
             continue
         else:
             assert rule.level is not None
-            previous_is_heading = False
-            for n in kept:
-                if not bare[n].strip():
-                    continue
-                if (
-                    not protected[n]
-                    and not heading[n]
-                    and not previous_is_heading
-                    and pattern.search(bare[n])
-                ):
-                    inserted[n] = f"{'#' * rule.level} {bare[n].strip()}\n"
-                previous_is_heading = heading[n]
+            inserted |= _headings_before(kept, bare, heading, protected, pattern, rule.level)
             continue
-        removed = len(kept) - len(after)
-        share = 100 * removed / len(lines) if lines else 0.0
-        if rule.removes is not None and share > 2 * rule.removes:
-            warnings.append(
-                f"rule {rule.name} removed {share:.0f}% (accepted at {rule.removes:g}%)"
-            )
+        warning = _held_back(rule, len(kept) - len(after), len(lines))
+        if warning is not None:
+            warnings.append(warning)
             continue
         kept = after
 
@@ -300,6 +294,176 @@ def apply(head: dict[str, Any], body: bytes, rules: Sequence[ReadingRule]) -> Ma
         touched=touched,
         warnings=tuple(warnings),
     )
+
+
+def _held_back(rule: ReadingRule, removed: int, total: int) -> str | None:
+    """The guard's warning when `rule` removed more than twice what it was accepted at, in the
+    unit of its `removes`: lines for a block operation, the share of the Version's `total` lines
+    for `drop_lines`; `None` when it may apply."""
+    allowed = rule.allowed
+    if allowed is None:
+        return None
+    if rule.unit == "lines":
+        if removed <= 2 * allowed:
+            return None
+        return f"rule {rule.name} removed {removes_text(rule.operation, removed)} " + (
+            f"(accepted at {rule.removes})"
+        )
+    share = 100 * removed / total if total else 0.0
+    if share <= 2 * allowed:
+        return None
+    return f"rule {rule.name} removed {share:.0f}% (accepted at {rule.removes})"
+
+
+@dataclass(frozen=True)
+class _Page:
+    """A Version's body as the operations see it: its lines (each with its `\\n`), the same
+    without it, which are headings, and which no rule may remove (fence and table lines)."""
+
+    lines: list[str]
+    bare: list[str]
+    fenced: list[bool]
+    table: list[bool]
+    heading: list[bool]
+
+    @classmethod
+    def of(cls, body: bytes) -> _Page:
+        lines = _lines(body.decode("utf-8", errors="surrogateescape"))
+        bare = [line.removesuffix("\n") for line in lines]
+        fenced = sections.code_lines(bare)
+        table = [
+            not code and line.lstrip().startswith("|")
+            for line, code in zip(bare, fenced, strict=True)
+        ]
+        heading = [
+            not code and sections.heading_text(line) is not None
+            for line, code in zip(bare, fenced, strict=True)
+        ]
+        return cls(lines, bare, fenced, table, heading)
+
+    @property
+    def protected(self) -> list[bool]:
+        return [code or row for code, row in zip(self.fenced, self.table, strict=True)]
+
+
+@dataclass(frozen=True)
+class Measure:
+    """What one rule does to one Version on its own (`rules check`): the lines it removes, the
+    headings it inserts or the first heading as it cuts it (`changed`), and the first line where
+    it breaks a limit (`breach`: the file's line number, `0` for the whole file, and the reason
+    with `{at}` for where)."""
+
+    lines: int
+    changed: tuple[str, ...]
+    breach: tuple[int, str] | None = None
+
+    @property
+    def share(self) -> float:
+        """The share of the Version's lines in percent the rule changes."""
+        return 100 * len(self.changed) / self.lines if self.lines else 0.0
+
+
+DROP_LINES_LIMIT = 30
+"""The most a `drop_lines` rule may remove from any Version, in percent of its lines."""
+
+
+def measure(rule: ReadingRule, body: bytes, offset: int = 0) -> Measure:
+    """`rule` applied alone to a Version's `body` (whose first line is line `offset + 1` of its
+    file), against the limits: `drop_lines` removes at most `DROP_LINES_LIMIT`% of the lines and
+    never matches a fence or table line; a leading block ends before the first heading, holds no
+    fence or table line, and no line after that heading matches (a trailing block mirrors it)."""
+    page = _Page.of(body)
+    bare = page.bare
+    pattern = re.compile(rule.pattern)
+    every = list(range(len(bare)))
+    matches = [n for n in every if pattern.search(bare[n])]
+
+    def at(n: int) -> int:
+        return offset + n + 1
+
+    def kind(n: int) -> str:
+        return "fence" if page.fenced[n] else "table"
+
+    if rule.operation == "drop_lines":
+        removed = [n for n in matches if not page.protected[n]]
+        changed = tuple(bare[n] for n in removed)
+        touched = next((n for n in matches if page.protected[n]), None)
+        if touched is not None:
+            return Measure(
+                len(bare), changed, (at(touched), f"matches a {kind(touched)} line, {{at}}")
+            )
+        made = Measure(len(bare), changed)
+        if made.share > DROP_LINES_LIMIT:
+            return Measure(
+                len(bare),
+                changed,
+                (0, f"removes {made.share:.0f}% of {{at}}, more than {DROP_LINES_LIMIT}%"),
+            )
+        return made
+    if rule.operation in BLOCK_OPERATIONS:
+        leading = rule.operation == "drop_leading"
+        headings = [n for n in every if page.heading[n]]
+        if not headings or not matches:
+            return Measure(len(bare), ())
+        unguarded = [False] * len(bare)
+        if leading:
+            rest = _drop_leading(every, bare, page.heading, unguarded, pattern)
+            block = every[: len(every) - len(rest)]
+        else:
+            block = every[len(_drop_trailing(every, bare, page.heading, unguarded, pattern)) :]
+        changed = tuple(bare[n] for n in block)
+        bound = headings[0] if leading else headings[-1]
+        outside = matches[-1] if leading else matches[0]
+        if outside > bound if leading else outside < bound:
+            where = "after the first" if leading else "before the last"
+            reason = f"matches {{at}}, {where} heading (line {at(bound)})"
+            return Measure(len(bare), changed, (at(outside), reason))
+        touched = next((n for n in block if page.protected[n]), None)
+        if touched is not None:
+            reason = f"its block holds a {kind(touched)} line, {{at}}"
+            return Measure(len(bare), changed, (at(touched), reason))
+        return Measure(len(bare), changed)
+    if rule.operation == "strip_title_suffix":
+        first = next((n for n in every if page.heading[n]), None)
+        cut = None if first is None else _cut_heading(bare[first], pattern)
+        return Measure(len(bare), () if cut is None else (cut,))
+    assert rule.level is not None
+    inserted = _headings_before(every, bare, page.heading, page.protected, pattern, rule.level)
+    return Measure(
+        len(bare), tuple(line.removesuffix("\n") for _, line in sorted(inserted.items()))
+    )
+
+
+def _cut_heading(line: str, pattern: re.Pattern[str]) -> str | None:
+    """The heading `line` without the suffix `pattern` matches, unless that empties it."""
+    cut = _strip_suffix(line, pattern)
+    return cut if cut is not None and sections.heading_text(cut) else None
+
+
+def _headings_before(
+    kept: list[int],
+    bare: list[str],
+    heading: list[bool],
+    protected: list[bool],
+    pattern: re.Pattern[str],
+    level: int,
+) -> dict[int, str]:
+    """The heading line to insert before each kept line that matches, by its index: not before a
+    fence or table line, a heading, or a line right under a heading."""
+    inserted: dict[int, str] = {}
+    previous_is_heading = False
+    for n in kept:
+        if not bare[n].strip():
+            continue
+        if (
+            not protected[n]
+            and not heading[n]
+            and not previous_is_heading
+            and pattern.search(bare[n])
+        ):
+            inserted[n] = f"{'#' * level} {bare[n].strip()}\n"
+        previous_is_heading = heading[n]
+    return inserted
 
 
 def _lines(text: str) -> list[str]:

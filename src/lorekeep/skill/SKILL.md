@@ -90,7 +90,7 @@ one page get one Version.
 | `is third-party under the <prefix> rule`            | report it if the guide treats the page as primary            |
 | `returning the stored Version`                      | use it; the publisher could not be asked or dropped the page |
 | `the Index was missing or stale and was rebuilt`    | nothing                                                      |
-| `rule <name> removed N% (accepted at M%)`           | report; the Reading kept what that rule would have dropped   |
+| `rule <name> removed N … (accepted at M …)`         | report; the Reading kept what that rule would have dropped   |
 
 A Version's warnings print on every `get` that returns it (`fresh` and `unchanged` too); one
 stored by an older lorekeep has none recorded. Exit `0` can still be a menu or a page that lost a

@@ -4,8 +4,10 @@ its default reading rules."""
 from __future__ import annotations
 
 import datetime
+import json
 import re
 import tomllib
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from importlib import resources
 from pathlib import Path
@@ -19,6 +21,8 @@ PROJECT_FILE = "lorekeep.toml"
 TwinKind = Literal["md-suffix", "accept-header", "raw", "github-raw"]
 ENGINES = ("fern", "mintlify", "sphinx", "eur-lex", "pdf")
 OPERATIONS = ("drop_leading", "drop_trailing", "drop_lines", "strip_title_suffix", "heading_before")
+BLOCK_OPERATIONS = ("drop_leading", "drop_trailing")
+"""The operations that drop one block of lines, bounded by the first or the last heading."""
 
 Operation = Literal[
     "drop_leading", "drop_trailing", "drop_lines", "strip_title_suffix", "heading_before"
@@ -49,7 +53,8 @@ class HostRule:
 class ReadingRule:
     """One `[[readings]]` rule: one operation (`pattern`, a regular expression; `level` for
     `heading_before`) on every Version under `prefix` (`host/path`) or made by `engine`, with the
-    date it was `accepted` and the share of lines in percent it `removes` as accepted."""
+    date it was `accepted` and what it `removes` at most as accepted, written with its unit: lines
+    for a block operation (`"31 lines"`), a share for `drop_lines` (`"4%"`), none otherwise."""
 
     operation: Operation
     pattern: str
@@ -57,13 +62,27 @@ class ReadingRule:
     engine: str | None = None
     level: int | None = None
     accepted: str | None = None
-    removes: float | None = None
+    removes: str | None = None
     source: Literal["default", "lorekeep.toml"] = "default"
 
     @property
     def scope(self) -> str:
         """What the rule applies to: its prefix, or `engine:<name>`."""
         return self.prefix if self.prefix is not None else f"engine:{self.engine}"
+
+    @property
+    def unit(self) -> Literal["lines", "%"] | None:
+        """What `removes` counts: lines for a block operation, a share for `drop_lines`."""
+        if self.operation in BLOCK_OPERATIONS:
+            return "lines"
+        return "%" if self.operation == "drop_lines" else None
+
+    @property
+    def allowed(self) -> float | None:
+        """The number in `removes` (`31` of `"31 lines"`, `4` of `"4%"`), `None` without it."""
+        if self.removes is None:
+            return None
+        return float(self.removes.split()[0].removesuffix("%"))
 
     @property
     def name(self) -> str:
@@ -215,6 +234,8 @@ def _parse_hosts(
 
 
 READING_KEYS = ("prefix", "engine", *OPERATIONS, "level", "accepted", "removes")
+REMOVES_LINES = re.compile(r"(\d+) lines?")
+REMOVES_SHARE = re.compile(r"(\d+(?:\.\d+)?)%")
 
 
 def _parse_readings(
@@ -226,58 +247,207 @@ def _parse_readings(
     rules: list[ReadingRule] = []
     seen: set[tuple[str, str]] = set()
     for number, row in enumerate(cast(list[dict[str, Any]], rows), start=1):
-        key = f"readings[{number}]"
-        unknown = sorted(set(row) - set(READING_KEYS))
-        if unknown:
-            raise ProjectError(f"{where}: unknown key {key}.{unknown[0]}")
-        if ("prefix" in row) == ("engine" in row):
-            raise ProjectError(f"{where}: {key} needs exactly one of prefix and engine")
-        prefix, engine = row.get("prefix"), row.get("engine")
-        if prefix is not None and (not isinstance(prefix, str) or not prefix):
-            raise ProjectError(f"{where}: {key}.prefix must be a host/path string")
-        if engine is not None and engine not in ENGINES:
-            raise ProjectError(f"{where}: {key}.engine must be one of {', '.join(ENGINES)}")
-        named = [operation for operation in OPERATIONS if operation in row]
-        if len(named) != 1:
-            raise ProjectError(f"{where}: {key} needs exactly one of {', '.join(OPERATIONS)}")
-        operation = cast(Operation, named[0])
-        pattern = row[operation]
-        if not isinstance(pattern, str) or not pattern:
-            raise ProjectError(f"{where}: {key}.{operation} must be a regular expression")
         try:
-            re.compile(pattern)
-        except re.error as error:
+            rule = parse_reading(row, number, source)
+        except ProjectError as error:
+            raise ProjectError(f"{where}: {error}") from error
+        if (rule.scope, rule.operation) in seen:
             raise ProjectError(
-                f"{where}: {key}.{operation} is not a regular expression: {error}"
-            ) from error
-        level = row.get("level")
-        if operation == "heading_before":
-            if isinstance(level, bool) or not isinstance(level, int) or not 1 <= level <= 6:
-                raise ProjectError(f"{where}: {key}.level must be a heading level from 1 to 6")
-        elif level is not None:
-            raise ProjectError(f"{where}: {key}.level belongs to heading_before only")
-        accepted = row.get("accepted")
-        if isinstance(accepted, datetime.date):
-            accepted = accepted.isoformat()
-        if accepted is not None and not isinstance(accepted, str):
-            raise ProjectError(f"{where}: {key}.accepted must be a date")
-        removes = row.get("removes")
-        if removes is not None and (
-            isinstance(removes, bool) or not isinstance(removes, int | float) or removes < 0
-        ):
-            raise ProjectError(f"{where}: {key}.removes must be a percentage >= 0")
-        rule = ReadingRule(
-            operation=operation,
-            pattern=pattern,
-            prefix=prefix,
-            engine=engine,
-            level=level,
-            accepted=accepted,
-            removes=None if removes is None else float(removes),
-            source=source,
-        )
-        if (rule.scope, operation) in seen:
-            raise ProjectError(f"{where}: {key} repeats {operation} for {rule.scope}")
-        seen.add((rule.scope, operation))
+                f"{where}: readings[{number}] repeats {rule.operation} for {rule.scope}"
+            )
+        seen.add((rule.scope, rule.operation))
         rules.append(rule)
     return rules
+
+
+def parse_reading(
+    row: dict[str, Any],
+    number: int,
+    source: Literal["default", "lorekeep.toml"] = "lorekeep.toml",
+    *,
+    candidate: bool = False,
+) -> ReadingRule:
+    """The `[[readings]]` table `row`, the `number`th of its file; `ProjectError` naming
+    `readings[N].<key>` when it is not the grammar. A `candidate` (`rules check`) carries neither
+    `accepted` nor `removes`: `rules accept` measures and writes them."""
+    key = f"readings[{number}]"
+    unknown = sorted(set(row) - set(READING_KEYS))
+    if unknown:
+        raise ProjectError(f"unknown key {key}.{unknown[0]}")
+    if candidate:
+        given = [name for name in ("accepted", "removes") if name in row]
+        if given:
+            raise ProjectError(f"{key}.{given[0]} is written by rules accept, not by a candidate")
+    if ("prefix" in row) == ("engine" in row):
+        raise ProjectError(f"{key} needs exactly one of prefix and engine")
+    prefix, engine = row.get("prefix"), row.get("engine")
+    if prefix is not None and (not isinstance(prefix, str) or not prefix):
+        raise ProjectError(f"{key}.prefix must be a host/path string")
+    if engine is not None and engine not in ENGINES:
+        raise ProjectError(f"{key}.engine must be one of {', '.join(ENGINES)}")
+    named = [operation for operation in OPERATIONS if operation in row]
+    if len(named) != 1:
+        raise ProjectError(f"{key} needs exactly one of {', '.join(OPERATIONS)}")
+    operation = cast(Operation, named[0])
+    pattern = row[operation]
+    if not isinstance(pattern, str) or not pattern:
+        raise ProjectError(f"{key}.{operation} must be a regular expression")
+    try:
+        re.compile(pattern)
+    except re.error as error:
+        raise ProjectError(f"{key}.{operation} is not a regular expression: {error}") from error
+    level = row.get("level")
+    if operation == "heading_before":
+        if isinstance(level, bool) or not isinstance(level, int) or not 1 <= level <= 6:
+            raise ProjectError(f"{key}.level must be a heading level from 1 to 6")
+    elif level is not None:
+        raise ProjectError(f"{key}.level belongs to heading_before only")
+    accepted = row.get("accepted")
+    if isinstance(accepted, datetime.date):
+        accepted = accepted.isoformat()
+    if accepted is not None and not isinstance(accepted, str):
+        raise ProjectError(f"{key}.accepted must be a date")
+    removes = row.get("removes")
+    if removes is not None:
+        if operation in BLOCK_OPERATIONS:
+            unit = REMOVES_LINES
+            example = '"31 lines"'
+        elif operation == "drop_lines":
+            unit = REMOVES_SHARE
+            example = '"4%"'
+        else:
+            raise ProjectError(f"{key}.removes belongs to drop_leading, drop_trailing, drop_lines")
+        if not isinstance(removes, str) or not unit.fullmatch(removes):
+            raise ProjectError(f"{key}.removes must be written with its unit, as {example}")
+    return ReadingRule(
+        operation=operation,
+        pattern=pattern,
+        prefix=prefix,
+        engine=engine,
+        level=level,
+        accepted=accepted,
+        removes=removes,
+        source=source,
+    )
+
+
+def removes_text(operation: str, amount: float) -> str:
+    """`removes` as `rules accept` writes it: `"31 lines"` for a block operation, `"4%"` for
+    `drop_lines`."""
+    if operation in BLOCK_OPERATIONS:
+        count = round(amount)
+        return f"{count} line" if count == 1 else f"{count} lines"
+    return f"{amount:g}%"
+
+
+READINGS_HEADER = re.compile(r"\s*\[\[\s*readings\s*\]\]\s*(#.*)?")
+TABLE_HEADER = re.compile(r"\s*\[\[?\s*[A-Za-z0-9_.\"' -]+\s*\]\]?\s*(#.*)?")
+
+
+def with_readings(text: str, rules: Sequence[ReadingRule]) -> str:
+    """The text of a `lorekeep.toml` with `rules` written into it as `[[readings]]` tables: a
+    rule with the same `prefix`/`engine` and operation as a table already there replaces that
+    table where it stands, any other is appended at the end. Every other line stays as written,
+    comments included; `ProjectError` when the result would not read back as the old settings
+    plus exactly these rules (a `readings` array written inline, say)."""
+    before = _loads(text)
+    lines = text.splitlines(keepends=True)
+    starts = [at for at, line in enumerate(lines) if READINGS_HEADER.fullmatch(line.rstrip("\n"))]
+    existing = _parse_readings(before, "lorekeep.toml", PROJECT_FILE)
+    if len(starts) != len(existing):
+        raise ProjectError(
+            f"{PROJECT_FILE}: its readings are not one [[readings]] header per rule; "
+            "add the rules by hand"
+        )
+    spans: dict[tuple[str, str], tuple[int, int]] = {}
+    for at, rule in zip(starts, existing, strict=True):
+        end = next(
+            (
+                later
+                for later in range(at + 1, len(lines))
+                if TABLE_HEADER.fullmatch(lines[later].rstrip("\n"))
+            ),
+            len(lines),
+        )
+        while end > at + 1 and (not lines[end - 1].strip() or lines[end - 1].lstrip()[0] == "#"):
+            end -= 1
+        spans[(rule.scope, rule.operation)] = (at, end)
+    replacing: dict[int, tuple[int, str]] = {}
+    appended: list[str] = []
+    for rule in rules:
+        table = render_reading(rule)
+        span = spans.get((rule.scope, rule.operation))
+        if span is None:
+            appended.append(table)
+        else:
+            replacing[span[0]] = (span[1], table)
+    out: list[str] = []
+    at = 0
+    while at < len(lines):
+        if at in replacing:
+            end, table = replacing[at]
+            out.append(table)
+            at = end
+            continue
+        out.append(lines[at])
+        at += 1
+    written = "".join(out)
+    if appended:
+        if written and not written.endswith("\n"):
+            written += "\n"
+        written += "".join(
+            f"\n{table}" if written or n else table for n, table in enumerate(appended)
+        )
+    _same_but_readings(before, _loads(written), existing, rules)
+    return written
+
+
+def render_reading(rule: ReadingRule) -> str:
+    """`rule` as one `[[readings]]` table, its strings in TOML basic quotes."""
+    rows = ["[[readings]]"]
+    if rule.prefix is not None:
+        rows.append(f"prefix = {json.dumps(rule.prefix, ensure_ascii=False)}")
+    else:
+        rows.append(f"engine = {json.dumps(rule.engine, ensure_ascii=False)}")
+    rows.append(f"{rule.operation} = {json.dumps(rule.pattern, ensure_ascii=False)}")
+    if rule.level is not None:
+        rows.append(f"level = {rule.level}")
+    if rule.accepted is not None:
+        rows.append(f"accepted = {rule.accepted}")
+    if rule.removes is not None:
+        rows.append(f"removes = {json.dumps(rule.removes)}")
+    return "\n".join(rows) + "\n"
+
+
+def _loads(text: str) -> dict[str, Any]:
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError as error:
+        raise ProjectError(f"{PROJECT_FILE} is not valid TOML: {error}") from error
+
+
+def _same_but_readings(
+    before: dict[str, Any],
+    after: dict[str, Any],
+    existing: Sequence[ReadingRule],
+    rules: Sequence[ReadingRule],
+) -> None:
+    """Refuse an edit of `lorekeep.toml` that changed anything but its `[[readings]]` by
+    `rules`."""
+    others = {key: value for key, value in before.items() if key != "readings"}
+    if {key: value for key, value in after.items() if key != "readings"} != others:
+        raise ProjectError(f"{PROJECT_FILE}: writing the rules would change other settings")
+    keys = {(rule.scope, rule.operation) for rule in rules}
+    wanted = {
+        (rule.scope, rule.operation): rule
+        for rule in [
+            *(rule for rule in existing if (rule.scope, rule.operation) not in keys),
+            *rules,
+        ]
+    }
+    got = {
+        (rule.scope, rule.operation): rule
+        for rule in _parse_readings(after, "lorekeep.toml", PROJECT_FILE)
+    }
+    if got != wanted:
+        raise ProjectError(f"{PROJECT_FILE}: the rules did not read back as written")
