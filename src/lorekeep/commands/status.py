@@ -39,6 +39,8 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     print(f"Size on disk: {size} bytes")
     print(f"Bucket: {ctx.project.bucket or 'none'}")
     print(f"Freshness window: {ctx.project.freshness_days} days")
+    if not args.rules:
+        return 0
     print(f"Host rules ({len(ctx.project.hosts)}):")
     for rule in ctx.project.hosts:
         words = [rule.prefix, rule.publisher, rule.authority]

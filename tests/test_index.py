@@ -170,7 +170,7 @@ def test_a_fence_over_4_kb_after_two_blank_lines_is_kept_whole_and_its_line_is_t
         assert file_lines[line - 1].strip(), (line, body[:40])
 
 
-def test_every_section_line_points_at_its_heading_and_carries_its_heading_path(
+def test_every_section_knows_its_heading_line_its_first_text_line_and_its_heading_path(
     tmp_path: Path,
 ) -> None:
     store = tmp_path / "store"
@@ -185,18 +185,23 @@ def test_every_section_line_points_at_its_heading_and_carries_its_heading_path(
     run_cli(["index", "--store", str(store)])
 
     file_lines = path.read_text(encoding="utf-8").splitlines()
-    found = [(heading, line, body) for _, heading, line, body in sections(store)]
-    assert [heading for heading, _, _ in found] == [
+    with sqlite3.connect(store / "sources.db") as con:
+        found = con.execute(
+            "SELECT heading, heading_line, line, body FROM sections ORDER BY ord"
+        ).fetchall()
+    assert [heading for heading, *_ in found] == [
         "",
         "Prompt caching",
         "Prompt caching > Pricing",
         "Prompt caching > Pricing > Reads",
         "Prompt caching > Limits",
     ]
-    assert file_lines[found[0][1] - 1] == "Intro before any heading."
-    for heading, line, _ in found[1:]:
-        assert file_lines[line - 1].lstrip("#").strip() == heading.split(" > ")[-1]
-    assert "# not a heading" in found[1][2]
+    assert found[0][1] is None
+    assert file_lines[found[0][2] - 1] == "Intro before any heading."
+    for heading, heading_line, line, body in found[1:]:
+        assert file_lines[heading_line - 1].lstrip("#").strip() == heading.split(" > ")[-1]
+        assert file_lines[line - 1] == body.splitlines()[0]
+    assert "# not a heading" in found[1][3]
 
 
 def result_lines(stdout: str) -> list[str]:
@@ -219,7 +224,7 @@ def test_search_returns_ranked_lines_with_file_line_heading_path_and_snippet(
         file, number = location.rsplit(":", 1)
         text = Path(file).read_text(encoding="utf-8").splitlines()
         assert Path(file).parent == tmp_path
-        # The line is the heading's own, or the first line of a later slice under it.
+        # The line holds a query word, or is the first text line of a Section under the heading.
         assert text[int(number) - 1].strip()
         assert any(
             heading.split(" > ")[-1] in above
@@ -245,7 +250,10 @@ def test_search_understands_word_forms(tmp_path: Path) -> None:
     location, heading, _ = lines[0].split(" | ", 2)
     file, number = location.rsplit(":", 1)
     assert heading == "Reuse"
-    assert Path(file).read_text(encoding="utf-8").splitlines()[int(number) - 1] == "# Reuse"
+    # No line holds "caching" as written, so the line is the Section's first text line.
+    assert Path(file).read_text(encoding="utf-8").splitlines()[int(number) - 1] == (
+        "The prefix was cached by the server."
+    )
 
 
 def test_search_limit_caps_the_number_of_results(tmp_path: Path) -> None:
@@ -352,9 +360,9 @@ def test_tag_publisher_and_authority_filter_the_scope(tmp_path: Path) -> None:
     }
     assert hosts("--publisher", "aws", "--all") == {"docs.aws.amazon.com"}
     assert hosts("--authority", "official", "--all") == {"learn.microsoft.com"}
-    assert search(tmp_path, "caching", "--tag", "aws", "--publisher", "aws")[-1] == (
-        "+0 matches under other tags (--all)"
-    )
+    scoped = search(tmp_path, "caching", "--tag", "aws", "--publisher", "aws")
+    assert result_lines_of(scoped)
+    assert not any(line.startswith("+") for line in scoped)
 
 
 def test_exact_matches_the_identifier_as_written_and_not_its_words_apart(tmp_path: Path) -> None:
@@ -394,7 +402,7 @@ def test_json_prints_results_and_the_other_tags_count(tmp_path: Path) -> None:
     assert data["other_tags"] == 1
     assert len(data["results"]) == 3
     for hit in data["results"]:
-        assert set(hit) == {"file", "line", "heading", "snippet", "url", "tag"}
+        assert set(hit) == {"file", "line", "heading_line", "heading", "snippet", "url", "tag"}
         assert Path(hit["file"]).parent == tmp_path
         assert isinstance(hit["line"], int)
         assert hit["url"] == AWS

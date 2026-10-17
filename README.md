@@ -98,7 +98,7 @@ fence (`converter: verbatim`).
 The package ships the hosts probed so far in
 [`src/lorekeep/hosts.toml`](src/lorekeep/hosts.toml), in the same shape. A rule in
 `lorekeep.toml` with the same `prefix` replaces the default one; any other rule is added beside
-them. `lorekeep status` prints the merged table, marking the Project's rules `(lorekeep.toml)`.
+them. `lorekeep status --rules` prints the merged table, marking the Project's rules `(lorekeep.toml)`.
 
 | Prefix                             | Publisher   | Authority   | Twin                                          |
 | ---------------------------------- | ----------- | ----------- | --------------------------------------------- |

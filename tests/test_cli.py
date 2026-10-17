@@ -87,11 +87,11 @@ def test_only_get_and_add_need_a_tag(tmp_path: Path) -> None:
         assert "LOREKEEP_TAG" not in run_cli(argv, env=env).stderr, argv
 
 
-def test_the_root_parser_takes_no_flag_but_help(tmp_path: Path) -> None:
+def test_the_root_parser_takes_no_flag_but_help_and_version(tmp_path: Path) -> None:
     root_help = run_cli(["--help"]).stdout
     options = root_help.split("options:")[1]
 
-    assert [line.split()[0] for line in options.strip().splitlines()] == ["-h,"]
+    assert [line.split()[0] for line in options.strip().splitlines()] == ["-h,", "--version"]
     for argv in (["--store", str(tmp_path), "status"], ["--tag", "aws", "status"]):
         assert run_cli(argv).exit_code == 2, argv
 
@@ -131,7 +131,7 @@ def test_every_subcommand_declares_its_own_flags() -> None:
         "recheck": ["--tag", "--publisher", "--prefix", "--citations", "--dry-run", "--store"],
         "backup": ["--dry-run", "--store"],
         "restore": ["--generation", "--store"],
-        "status": ["--json", "--store"],
+        "status": ["--rules", "--json", "--store"],
         "skill": ["--install", "--force"],
     }
     for command, flags in expected.items():

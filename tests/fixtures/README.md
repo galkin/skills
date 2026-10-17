@@ -82,3 +82,12 @@ The OWASP and NVIDIA pages are cut from the Originals of the first migration's S
 the ones the Store's frontmatter records. The OWASP `301` and both helm `200`s were recorded from
 the live hosts with `curl` on 2026-10-17, bodies cut short. `helm-rollback.v3-redirect` is
 synthesised: `v3.helm.sh` answered `200` itself on that day, not a redirect.
+| `vllm-cli-serve.v1`                    | Markdown body of the vLLM `cli/serve` Version as v1 stored it, cut: an inline ```` ``` ```` after `Example (new format):`, headings with `[¶](…)` permalinks |
+| `trtllm-kv-cache.v1`                    | hand-written Markdown as v1 wrote it: `free\_gpu\_memory\_fraction`, `[#](…)` heading permalinks, text before the first heading |
+
+The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
+response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and
+NVIDIA responses carry the headers as received. The `403`, `304`, `google-md-answers-html`,
+`js-only.html`, `.noisy`, `.changed`, `.alias`, `google-overview.html`, `timeout`, `relative-links.html`, the PDF and its three `exam-guide.*` variants are synthesised. The two `.v1` folders are Markdown bodies for `write_version`, served as
+`text/markdown`; the vLLM one is cut from the first migration's Store (2026-10-17). A ticket may add
+further synthesised folders in the same format; keep this table current.

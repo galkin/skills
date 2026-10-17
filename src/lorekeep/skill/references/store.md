@@ -95,6 +95,6 @@ Recheck.
 
 lorekeep knows where publishers serve a Twin and who they are from two layers of rules, matched
 on `host/path` by longest prefix: a default table shipped in the package and the `[[hosts]]` of
-the Store's `lorekeep.toml`, which extends or overrides it. `lorekeep status` prints the merged
+the Store's `lorekeep.toml`, which extends or overrides it. `lorekeep status --rules` prints the merged
 table. A host matched by neither gets `publisher = <host>`, `authority = third-party`, and a
 warning on every `get`.

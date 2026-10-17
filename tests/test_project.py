@@ -31,7 +31,7 @@ def host_rules(stdout: str) -> list[list[str]]:
 
 
 def status(store: Path) -> str:
-    result = run_cli(["status", "--store", str(store)])
+    result = run_cli(["status", "--rules", "--store", str(store)])
     assert result.exit_code == 0, result.stderr
     return result.stdout
 
@@ -115,7 +115,7 @@ def test_a_malformed_lorekeep_toml_names_the_key_that_failed(tmp_path: Path) -> 
     for text, key in cases.items():
         (tmp_path / "lorekeep.toml").write_text(text)
 
-        result = run_cli(["status", "--store", str(tmp_path)])
+        result = run_cli(["status", "--rules", "--store", str(tmp_path)])
 
         assert result.exit_code != 0, text
         assert key in result.stderr, (text, result.stderr)
