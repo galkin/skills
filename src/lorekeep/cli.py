@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from lorekeep.commands import add as add_command
+from lorekeep.commands import backup as backup_command
 from lorekeep.commands import get as get_command
 from lorekeep.edges import Edges
 from lorekeep.project import AUTHORITIES, Project, ProjectError, load_project
@@ -207,8 +208,8 @@ HANDLERS: dict[str, Callable[[argparse.Namespace, Context], int]] = {
     "search": _not_yet,
     "index": _not_yet,
     "recheck": _not_yet,
-    "backup": _not_yet,
-    "restore": _not_yet,
+    "backup": backup_command.run_backup,
+    "restore": backup_command.run_restore,
     "tag": _not_yet,
     "status": cmd_status,
 }
