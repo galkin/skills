@@ -48,9 +48,13 @@ _VERSION_COLUMNS = (
     "last_modified",
     "title",
     "modified",
+    "canonical",
     "origin",
 )
 _ORIGINAL_COLUMNS = ("url", "mediatype", "sha256", "stored")
+SCHEMA_VERSION = "2"
+"""Bumped whenever a table's columns change, so an Index built by an older lorekeep reads as stale
+and is rebuilt with the new tables (2: `versions.canonical`)."""
 
 _SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -169,6 +173,10 @@ def _looks_current(store: Path) -> bool:
 def _rebuild_locked(store: Path, rules: Sequence[HostRule]) -> Counts:
     con = _connect(store)
     try:
+        if _schema_of(con) != SCHEMA_VERSION:
+            # `CREATE TABLE IF NOT EXISTS` keeps an older table's columns; every table but
+            # `meta` is rebuilt from the files anyway.
+            con.executescript(_DROP)
         con.executescript(_SCHEMA)
         con.execute("BEGIN IMMEDIATE")
         try:
@@ -315,6 +323,29 @@ def _fingerprint(store: Path) -> list[tuple[str, str]]:
     return values
 
 
+_SCHEMA_KEY = "schema"
+"""The `meta` key holding the `SCHEMA_VERSION` the Index was built with."""
+
+_DROP = """
+DROP VIEW IF EXISTS latest;
+DROP TABLE IF EXISTS sections_fts;
+DROP TABLE IF EXISTS sections;
+DROP TABLE IF EXISTS versions;
+DROP TABLE IF EXISTS tags;
+DROP TABLE IF EXISTS checks;
+DROP TABLE IF EXISTS aliases;
+DROP TABLE IF EXISTS citations;
+"""
+
+
+def _schema_of(con: sqlite3.Connection) -> str | None:
+    try:
+        row = con.execute("SELECT value FROM meta WHERE key = ?", (_SCHEMA_KEY,)).fetchone()
+    except sqlite3.Error:
+        return None
+    return str(row[0]) if row else None
+
+
 _IGNORED = "md_ignored"
 """The `meta` key for how many of the `md_files` are not Versions and have no `versions` row,
 so a commit can tell that `versions` still accounts for every `.md` file."""
@@ -322,7 +353,7 @@ so a commit can tell that `versions` still accounts for every `.md` file."""
 
 def _write_meta(con: sqlite3.Connection, store: Path, ignored: int) -> None:
     con.execute("DELETE FROM meta")
-    values = [*_fingerprint(store), (_IGNORED, str(ignored))]
+    values = [*_fingerprint(store), (_IGNORED, str(ignored)), (_SCHEMA_KEY, SCHEMA_VERSION)]
     con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", values)
 
 
@@ -333,6 +364,8 @@ def _is_current(store: Path, con: sqlite3.Connection) -> bool:
     except sqlite3.Error:
         return False
     recorded.pop(_IGNORED, None)
+    if recorded.pop(_SCHEMA_KEY, None) != SCHEMA_VERSION:
+        return False
     return bool(recorded) and recorded == dict(_fingerprint(store))
 
 
@@ -353,7 +386,8 @@ def notify(
     already in the Index are inserted; then, when every table agrees with the files the commit
     touched and no file it did not touch has changed, `meta` is brought up to date in the same
     transaction, so the commit never looks like staleness. Otherwise `meta` is left as it was and
-    the Index stays stale for the next reader to rebuild.
+    the Index stays stale for the next reader to rebuild. An Index built with another
+    `SCHEMA_VERSION` is left alone the same way.
     """
     if not _exists(store):
         return
@@ -362,6 +396,8 @@ def notify(
     except sqlite3.Error:
         return
     try:
+        if _schema_of(con) != SCHEMA_VERSION:
+            return  # an older Index's tables: the next reader rebuilds it
         con.execute("BEGIN IMMEDIATE")
         try:
             if (

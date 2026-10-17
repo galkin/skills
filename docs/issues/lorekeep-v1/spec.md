@@ -276,11 +276,14 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 - What goes on the wire is the address as given (or the Twin address built from it by the host
   rule), untouched; normalisation applies to what is stored, looked up and compared, never to
   what is sent.
-- The stored `url` is the final one after HTTP redirects, after a Twin's `canonicalUrl`
-  frontmatter or an HTML page's `<link rel="canonical">` when present, normalised, with the Twin
-  suffix removed. When the normalised address asked for differs from `url`, the pair is appended
-  to `aliases.csv` by the commit — also when the Version already existed, which is the case a
-  frontmatter field could not record. `original.url` is something else: the address the bytes
+- The stored `url` is the final one after HTTP redirects (and meta refreshes), normalised, with
+  the Twin suffix removed. When the normalised address asked for differs from `url`, the pair is
+  appended to `aliases.csv` by the commit — also when the Version already existed, which is the
+  case a frontmatter field could not record. *Amended by v1.1 (ticket 02):* a Twin's
+  `canonicalUrl` or an HTML page's `<link rel="canonical">` no longer decides `url` — it is
+  recorded as frontmatter `canonical` when it differs, with a warning, and never as an alias —
+  because OWASP's 2025 Excessive Agency page declares the 2023 Sensitive Information Disclosure
+  page as canonical and v1 filed one under the other. `original.url` is something else: the address the bytes
   came from (the Twin URL, the target of a meta-refresh stub).
 
 ### The cascade (`get`)

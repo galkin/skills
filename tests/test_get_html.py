@@ -133,7 +133,7 @@ def test_a_meta_refresh_stub_is_followed_and_never_stored(tmp_path: Path) -> Non
 LESSON_ALIAS = f"{LESSON}/index.html"
 
 
-def test_a_page_with_a_canonical_link_is_stored_under_the_canonical_url(tmp_path: Path) -> None:
+def test_a_page_with_a_canonical_link_is_stored_where_it_was_served(tmp_path: Path) -> None:
     store = make_store(tmp_path)
     edges, _ = edges_over("termidy-coordinator-and-subagents.alias")
 
@@ -142,15 +142,13 @@ def test_a_page_with_a_canonical_link_is_stored_under_the_canonical_url(tmp_path
     assert result.exit_code == 0, result.stderr
     [version] = store.glob("*.md")
     head, _ = read_version(version)
-    assert head["url"] == LESSON
+    assert (head["url"], head["canonical"]) == (LESSON_ALIAS, LESSON)
     assert head["original"]["url"] == LESSON_ALIAS
-    assert version.name.startswith("claude.termidy.com--learn-ccar-f-agentic-architecture-")
-    assert [(row["alias"], row["url"]) for row in rows(store, "aliases.csv")] == [
-        (LESSON_ALIAS, LESSON)
-    ]
+    assert "declares another page as canonical" in result.stderr
+    assert not (store / "aliases.csv").exists()
 
 
-def test_the_alias_fetched_after_the_lesson_adds_its_row_and_no_second_file(
+def test_the_address_naming_the_lesson_canonical_is_a_source_of_its_own(
     tmp_path: Path,
 ) -> None:
     store = make_store(tmp_path)
@@ -160,23 +158,20 @@ def test_the_alias_fetched_after_the_lesson_adds_its_row_and_no_second_file(
     lesson = get(store, edges, f"{LESSON}/")
     assert lesson.exit_code == 0, lesson.stderr
     [version] = store.glob("*.md")
+
+    by_index = get(store, edges, LESSON_ALIAS)
+
+    assert by_index.exit_code == 0, by_index.stderr
+    other = Path(by_index.stdout.splitlines()[-1])
+    assert other != version
+    assert sorted(store.glob("*.md")) == sorted([version, other])
     assert not (store / "aliases.csv").exists()
-
-    by_alias = get(store, edges, LESSON_ALIAS)
-
-    assert by_alias.exit_code == 0, by_alias.stderr
-    assert by_alias.stdout.splitlines()[-1] == str(version)
-    assert list(store.glob("*.md")) == [version]
-    assert [(row["alias"], row["url"]) for row in rows(store, "aliases.csv")] == [
-        (LESSON_ALIAS, LESSON)
-    ]
     calls = len(transport.requests)
 
     again = get(store, edges, LESSON_ALIAS)
 
-    assert again.stdout.splitlines()[-1] == str(version)
+    assert again.stdout.splitlines()[-1] == str(other)
     assert len(transport.requests) == calls
-    assert len(rows(store, "aliases.csv")) == 1
 
 
 def test_tracking_parameters_and_a_trailing_slash_are_sent_as_given_and_add_no_alias(

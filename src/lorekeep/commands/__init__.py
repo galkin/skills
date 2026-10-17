@@ -27,13 +27,17 @@ def plural(count: int, word: str, plural_word: str | None = None) -> str:
     return f"{count} {word if count == 1 else plural_word or word + 's'}"
 
 
-def version_json(store: Path, path: Path, outcome: str) -> dict[str, Any]:
+def version_json(
+    store: Path, path: Path, outcome: str, *, requested_url: str | None = None
+) -> dict[str, Any]:
     """The one JSON object `get --json` and `add --json` print: the Version as its file says,
-    when its publisher last confirmed it, and what the call did (`outcome`)."""
+    the normalised address the caller asked for (`requested_url`, the Version's `url` when not
+    given), when its publisher last confirmed it, and what the call did (`outcome`)."""
     head = read_head(path)
     return {
         "path": str(path),
         "url": head["url"],
+        "requested_url": requested_url or head["url"],
         "sha256": head["sha256"],
         "fetched_at": head["fetched_at"],
         "converter": head["converter"],

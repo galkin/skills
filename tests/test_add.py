@@ -76,6 +76,7 @@ def test_add_json_prints_one_object_with_the_path(tmp_path: Path) -> None:
     data = json.loads(result.stdout)
     assert data["path"] == str(store_dir / f"owner--research--{digest[:8]}.md")
     assert data["url"] == "owner:research"
+    assert data["requested_url"] == data["url"]
     assert data["sha256"] == digest
     assert data["converter"] == "owner"
     assert data["publisher"] == "owner"
@@ -85,6 +86,7 @@ def test_add_json_prints_one_object_with_the_path(tmp_path: Path) -> None:
     assert set(data) == {
         "path",
         "url",
+        "requested_url",
         "sha256",
         "fetched_at",
         "converter",

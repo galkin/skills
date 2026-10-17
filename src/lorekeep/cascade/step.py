@@ -26,10 +26,11 @@ class Request:
 class Fetched:
     """A step's result: the Markdown and the Provenance it learned on the way.
 
-    `final_url` is where the page says it lives (after redirects and any canonical address),
-    not yet normalised; `original_url` is the address the bytes came from. `original` is
-    `None` when the Original is not stored (a Twin), but `original_sha256` always hashes the
-    bytes received.
+    `final_url` is where the page was served (after redirects and meta refreshes), not yet
+    normalised; `canonical` is the address the page names as its own (`<link rel="canonical">`,
+    a Twin's `canonicalUrl`), absolute, which never decides `url` (ADR 0003). `original_url` is
+    the address the bytes came from. `original` is `None` when the Original is not stored (a
+    Twin), but `original_sha256` always hashes the bytes received.
     """
 
     markdown: bytes
@@ -44,6 +45,7 @@ class Fetched:
     last_modified: str | None = None
     title: str | None = None
     modified: str | None = None
+    canonical: str | None = None
 
 
 @dataclass(frozen=True)

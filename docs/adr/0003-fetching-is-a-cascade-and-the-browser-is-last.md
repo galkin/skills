@@ -29,6 +29,15 @@ Probing the hosts of three finished Runs (2026-10-17) fixed four rules the casca
 - **A page without any Twin is the common case for a whole ecosystem**: NVIDIA, vLLM, Kubernetes,
   A2A and Python's documentation have none, so Trafilatura is the main path there, not a fallback.
 
+**A Version's `url` is where the page was served** — the final address after redirects and
+meta refreshes, normalised and Twin-reduced — and never the page's `<link rel="canonical">` or a
+Twin's `canonicalUrl`; a canonical that differs is kept as frontmatter `canonical`, with a warning,
+and is not an alias (amended in v1.1, 2026-10-17). v1 stored a page under its canonical, and the
+first migration showed publishers get it wrong: `genai.owasp.org/llmrisk/llm062025-excessive-agency/`
+declares the 2023 `…/llm06-sensitive-information-disclosure` page as canonical, so the 2025
+Excessive Agency text was filed and cited under the other risk's address, and NVIDIA's
+`…/retriever/latest/…` pages became `…/26.8.1/…`, which a Recheck would then ask forever.
+
 ## Considered Options
 
 - **Crawl4AI for everything.** Rejected: a browser per page, larger output, per-site tuning to

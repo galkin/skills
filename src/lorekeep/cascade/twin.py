@@ -80,11 +80,10 @@ class TwinStep:
         if sha256 == unchanged:
             return Same()
         fields, body = split_frontmatter(received)
-        canonical = _text(fields.get("canonicalUrl"))
         return Fetched(
             markdown=_LEADING_BLANK_LINES.sub(b"", body),
             converter=CONVERTER,
-            final_url=canonical or address,
+            final_url=address,
             original_url=decoded(address),
             mediatype=mediatype,
             original_sha256=sha256,
@@ -92,6 +91,7 @@ class TwinStep:
             last_modified=response.headers.get("last-modified"),
             title=_text(fields.get("title")),
             modified=first_date(fields),
+            canonical=_text(fields.get("canonicalUrl")),
         )
 
 

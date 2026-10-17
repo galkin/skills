@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+<meta charset="UTF-8">
+	<title>LLM06:2025 Excessive Agency - OWASP Gen AI Security Project</title>
+	<link rel="canonical" href="https://genai.owasp.org/llmrisk/llm06-sensitive-information-disclosure/" />
+</head>
+<body>
+<main id="main" class="site-main">
+					<h2 class="xpro-post-title">
+<span class="xpro-post-title-text">
+		LLM06:2025 Excessive Agency	</span>
+</h2>
+
+<div class="xpro-elementor-content">
+		
+<p class="wp-block-paragraph" dir="auto">An LLM-based system is often granted a degree of agency by its developer &#8211; the ability to call functions or interface with other systems via extensions (sometimes referred to as tools, skills or plugins by different vendors) to undertake actions in response to a prompt. The decision over which extension to invoke may also be delegated to an LLM &#8216;agent&#8217; to dynamically determine based on input prompt or LLM output. Agent-based systems will typically make repeated calls to an LLM using output from previous invocations to ground and direct subsequent invocations.</p>
+<p dir="auto">Excessive Agency is the vulnerability that enables damaging actions to be performed in response to unexpected, ambiguous or manipulated outputs from an LLM, regardless of what is causing the LLM to malfunction. Common triggers include:</p>
+<ul dir="auto">
+<li>hallucination/confabulation caused by poorly-engineered benign prompts, or just a poorly-performing model;</li>
+<li>direct/indirect prompt injection from a malicious user, an earlier invocation of a malicious/compromised extension, or (in multi-agent/collaborative systems) a malicious/compromised peer agent.</li>
+</ul>
+<p dir="auto">The root cause of Excessive Agency is typically one or more of:</p>
+<ul dir="auto">
+<li>excessive functionality;</li>
+<li>excessive permissions;</li>
+<li>excessive autonomy.</li>
+</ul>
+<p dir="auto">Excessive Agency can lead to a broad range of impacts across the confidentiality, integrity and availability spectrum, and is dependent on which systems an LLM-based app is able to interact with.</p>
+<p dir="auto">Note: Excessive Agency differs from Insecure Output Handling which is concerned with insufficient scrutiny of LLM outputs.</p>
+</div>
+</main>
+</body>
+</html>

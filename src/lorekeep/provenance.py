@@ -21,8 +21,11 @@ def parse_time(value: str) -> datetime:
     return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
 
 
-def build(fetched: Fetched, url: str, publisher: str, authority: str) -> dict[str, Any]:
-    """The Version's frontmatter, in the order a reader expects; absent values are left out."""
+def build(
+    fetched: Fetched, url: str, publisher: str, authority: str, *, canonical: str | None = None
+) -> dict[str, Any]:
+    """The Version's frontmatter, in the order a reader expects; absent values are left out.
+    `canonical` is the address the page declares as its own when it is not `url`."""
     return {
         "url": url,
         "fetched_at": now(),
@@ -34,6 +37,7 @@ def build(fetched: Fetched, url: str, publisher: str, authority: str) -> dict[st
         "last_modified": fetched.last_modified,
         "title": fetched.title,
         "modified": fetched.modified,
+        "canonical": canonical,
         "original": {
             "url": fetched.original_url,
             "mediatype": fetched.mediatype,

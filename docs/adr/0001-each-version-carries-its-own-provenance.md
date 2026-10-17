@@ -3,11 +3,13 @@
 A Version is a Markdown file whose YAML frontmatter holds its Provenance — `url` (normalised, the page
 a reader would open), `fetched_at`, `sha256` of the Markdown body, `publisher`, `authority`,
 `converter` with its version (`trafilatura 2.3.1`), and `etag` / `last_modified` when the server
-sent them; optionally `title`, `modified` (the publisher's own date),
+sent them; optionally `title`, `modified` (the publisher's own date), `canonical` (the address the
+page declares as its own, when it is not `url`; ADR 0003),
 `original {url, mediatype, sha256, stored}` (`stored` is a boolean; the Original's name follows
 from the Version's; `original.url` is the address the bytes came from) and `origin` (`web` or
-`owner`). The other addresses a page was asked for — before a redirect or a canonical link — are
-rows of `aliases.csv` beside it, because a second address can arrive after the file exists.
+`owner`). The other addresses a page was asked for — before a redirect — are rows of
+`aliases.csv` beside it, because a second address can arrive after the file exists; a canonical
+link never makes one (amended in v1.1).
 The Store's `datapackage.json` (Frictionless Data Package) is generated from those files and never
 edited by hand.
 
