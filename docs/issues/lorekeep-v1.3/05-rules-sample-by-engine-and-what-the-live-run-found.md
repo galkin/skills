@@ -84,3 +84,16 @@ accept) and `tests/test_readings.py` (the stack, the Store layer, the first head
   the shadowing. `references/store.md`: the Reading's `title` line, which had become false.
   `SKILL.md` (249 lines) and `GLOSSARY.md` are unchanged, since none of their sentences became
   false. `tests/fixtures/README.md` lists `nim-legal.html` and `readings-candidates-eur-lex.toml`.
+
+**2026-10-17 — accepted and run live (orchestrator), merged as `dc718df`.** The owner's choice
+on the heading set: the act's name. On the first Store, `rules accept` of four candidates on
+`eur-lex.europa.eu/` — `drop_leading = "^# Need help\?$"` (2 lines per Version), the act line
+`^REGULATION \(EU\) \d+/\d+ OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL$` at level 1 (one per
+act), `^CHAPTER [IVXLC]+$` at 2 (24), `^Article \d+$` at 3 (212) — `Accepted 4 rules, 0 failed`,
+`Built 2 Readings`. Both Readings are now titled by the act
+(`REGULATION (EU) 2024/1689 OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL`), begin at `This
+document is an excerpt from the EUR-Lex website`, and `search "risk management system high-risk"`
+answers `… > CHAPTER III > Article 9`. `rules sample docs.nvidia.com/ --sample 2` prints the
+`fern`, `sphinx` and `other` groups. The Store holds 9 rules (3 package, 6 Store); the four EUR-Lex
+ones are `engine = "eur-lex"` rules for `readings.toml`, dispatched as the last step, after which
+the Store's copies go.
