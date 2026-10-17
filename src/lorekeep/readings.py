@@ -15,7 +15,11 @@ removed.
 
 Which rules apply to a Version: for each operation, the rule whose `prefix` is the longest the
 Version's `host/path` starts with, else the first `engine` rule whose engine made the Version.
-An engine is recognised from the Version itself:
+`heading_before` alone stacks: every `heading_before` rule of that winning scope (the longest
+prefix that has one, else the first engine that made the Version and has one) applies, in the
+order the rules are merged (the package's, then the Store's, each in file order), and a heading an
+earlier one inserted counts as a heading for the next. An engine is recognised from the Version
+itself, the first of these that holds (`engine_of`):
 
 - `fern` — a Twin (`md-twin`) with a line before its first heading starting
   `> For clean Markdown` (the llms.txt banner, worded two ways on `docs.nvidia.com`);
@@ -27,7 +31,10 @@ An engine is recognised from the Version itself:
 - `pdf` — a PDF conversion (`markitdown …`).
 
 The operations run in a fixed order — `drop_leading`, `drop_trailing`, `drop_lines`,
-`strip_title_suffix`, `heading_before` — each on what the ones before left. A rule with `removes`
+`strip_title_suffix`, `heading_before` — each on what the ones before left. A `drop_leading`
+whose pattern matches the first heading line removes the block up to and including that heading.
+The Reading's `title` is the Version's, unless the Version has none or a rule removed its first
+heading: then it is the Reading's first heading, an inserted one included. A rule with `removes`
 that would remove more than twice that from a Version — lines for a block operation (`"26 lines"`),
 the share of the Version's lines for `drop_lines` (`"4%"`) — is not applied to that Version, and
 the Reading says so in `warnings`.
@@ -47,14 +54,21 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from lorekeep import frontmatter, sections
-from lorekeep.project import BLOCK_OPERATIONS, OPERATIONS, ReadingRule, removes_text
+from lorekeep.project import (
+    BLOCK_OPERATIONS,
+    ENGINES,
+    OPERATIONS,
+    STACKED,
+    ReadingRule,
+    removes_text,
+)
 from lorekeep.store import OWNER_SCHEME, lock, parse_version, stem
 
 CACHE_DIR = ".cache"
 """The Store's folder of what is rebuilt from the Versions: never indexed as a Version, never
 backed up."""
 READINGS_DIR = Path(CACHE_DIR) / "readings"
-READER = "2"
+READER = "3"
 """The meaning of the operations: part of every `rules` hash, so a change rebuilds every Reading."""
 
 FERN_BANNER = "> For clean Markdown"
@@ -148,7 +162,8 @@ def rules_for(
     body: bytes,
     rules: Sequence[ReadingRule],
 ) -> list[ReadingRule]:
-    """The rules that apply to a Version, one per operation at most, in the order they run."""
+    """The rules that apply to a Version, in the order they run: one per operation at most, but
+    every `heading_before` rule of the scope that wins for it, in their order."""
     under = host_path(str(head["url"]))
     engines: dict[str, bool] = {}
 
@@ -170,7 +185,11 @@ def rules_for(
             rule = next(
                 (r for r in of_operation if r.engine is not None and made_by(r.engine)), None
             )
-        if rule is not None:
+        if rule is None:
+            continue
+        if operation == STACKED:
+            chosen += [other for other in of_operation if other.scope == rule.scope]
+        else:
             chosen.append(rule)
     return chosen
 
@@ -189,6 +208,14 @@ def covers(
     if rule.prefix is not None:
         return host_path(str(head["url"])).startswith(rule.prefix)
     return rule.engine is not None and _made_by(rule.engine, store, version, head, body)
+
+
+def engine_of(store: Path, version: Path, head: dict[str, Any], body: bytes) -> str | None:
+    """The engine that made a Version, the first of `ENGINES` whose markers it carries; `None`
+    when none does."""
+    return next(
+        (engine for engine in ENGINES if _made_by(engine, store, version, head, body)), None
+    )
 
 
 def _made_by(engine: str, store: Path, version: Path, head: dict[str, Any], body: bytes) -> bool:
@@ -250,6 +277,7 @@ def apply(head: dict[str, Any], body: bytes, rules: Sequence[ReadingRule]) -> Ma
     edited: dict[int, str] = {}
     title = head.get("title")
     title = str(title) if title is not None else None
+    retitled = False
     warnings: list[str] = []
 
     for rule in rules:
@@ -271,12 +299,17 @@ def apply(head: dict[str, Any], body: bytes, rules: Sequence[ReadingRule]) -> Ma
             continue
         else:
             assert rule.level is not None
-            inserted |= _headings_before(kept, bare, heading, protected, pattern, rule.level)
+            inserted |= _headings_before(
+                kept, bare, heading, protected, pattern, rule.level, inserted
+            )
             continue
         warning = _held_back(rule, len(kept) - len(after), len(lines))
         if warning is not None:
             warnings.append(warning)
             continue
+        first = next((n for n in kept if heading[n]), None)
+        # A rule that took the first heading took the line the title was read from.
+        retitled = retitled or (first is not None and first not in after)
         kept = after
 
     out: list[str] = []
@@ -285,8 +318,13 @@ def apply(head: dict[str, Any], body: bytes, rules: Sequence[ReadingRule]) -> Ma
             out.append(inserted[n])
         out.append(edited.get(n, lines[n]))
     touched = len(kept) != len(lines) or bool(inserted) or bool(edited)
-    if title is None:
-        found = (sections.heading_text(line.removesuffix("\n")) for line in out)
+    if title is None or retitled:
+        texts = [line.removesuffix("\n") for line in out]
+        found = (
+            sections.heading_text(text)
+            for text, code in zip(texts, sections.code_lines(texts), strict=True)
+            if not code
+        )
         title = next((text for text in found if text), None)
     return Made(
         body="".join(out).encode("utf-8", errors="surrogateescape"),
@@ -370,8 +408,9 @@ DROP_LINES_LIMIT = 30
 def measure(rule: ReadingRule, body: bytes, offset: int = 0) -> Measure:
     """`rule` applied alone to a Version's `body` (whose first line is line `offset + 1` of its
     file), against the limits: `drop_lines` removes at most `DROP_LINES_LIMIT`% of the lines and
-    never matches a fence or table line; a leading block ends before the first heading, holds no
-    fence or table line, and no line after that heading matches (a trailing block mirrors it)."""
+    never matches a fence or table line; a leading block ends at the first heading at most (it
+    takes that heading when the pattern matches it), holds no fence or table line, and no line
+    after that heading matches (a trailing block mirrors it, never taking the last heading)."""
     page = _Page.of(body)
     bare = page.bare
     pattern = re.compile(rule.pattern)
@@ -428,7 +467,7 @@ def measure(rule: ReadingRule, body: bytes, offset: int = 0) -> Measure:
         cut = None if first is None else _cut_heading(bare[first], pattern)
         return Measure(len(bare), () if cut is None else (cut,))
     assert rule.level is not None
-    inserted = _headings_before(every, bare, page.heading, page.protected, pattern, rule.level)
+    inserted = _headings_before(every, bare, page.heading, page.protected, pattern, rule.level, {})
     return Measure(
         len(bare), tuple(line.removesuffix("\n") for _, line in sorted(inserted.items()))
     )
@@ -447,9 +486,11 @@ def _headings_before(
     protected: list[bool],
     pattern: re.Pattern[str],
     level: int,
+    earlier: dict[int, str],
 ) -> dict[int, str]:
     """The heading line to insert before each kept line that matches, by its index: not before a
-    fence or table line, a heading, or a line right under a heading."""
+    fence or table line, a heading, or a line right under a heading — one of the Version's, or
+    one an `earlier` rule inserts before that line."""
     inserted: dict[int, str] = {}
     previous_is_heading = False
     for n in kept:
@@ -459,6 +500,7 @@ def _headings_before(
             not protected[n]
             and not heading[n]
             and not previous_is_heading
+            and n not in earlier
             and pattern.search(bare[n])
         ):
             inserted[n] = f"{'#' * level} {bare[n].strip()}\n"
@@ -479,17 +521,21 @@ def _drop_leading(
     protected: list[bool],
     pattern: re.Pattern[str],
 ) -> list[int]:
-    """`kept` without its lines up to the last one before the first heading that matches, and the
-    blank lines after them; unchanged when there is no heading, no match, or the block holds a
-    fence or table line."""
+    """`kept` without its lines up to the last one before the first heading that matches — the
+    first heading itself when it matches — and the blank lines after them; unchanged when there is
+    no heading, no match, or the block holds a fence or table line."""
     first = next((at for at, n in enumerate(kept) if heading[n]), None)
     if first is None:
         return kept
-    last = next((at for at in range(first - 1, -1, -1) if pattern.search(bare[kept[at]])), None)
+    if pattern.search(bare[kept[first]]):
+        last, bound = first, len(kept)
+    else:
+        found = (at for at in range(first - 1, -1, -1) if pattern.search(bare[kept[at]]))
+        last, bound = next(found, None), first
     if last is None:
         return kept
     end = last + 1
-    while end < first and not bare[kept[end]].strip():
+    while end < bound and not bare[kept[end]].strip():
         end += 1
     if any(protected[n] for n in kept[:end]):
         return kept

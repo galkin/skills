@@ -113,6 +113,7 @@ synthesised: `v3.helm.sh` answered `200` itself on that day, not a redirect.
 | `guardrails-rail-types.moved.twin`     | the body of `guardrails-rail-types.twin`, served as the new address's Twin (`text/markdown`) |
 | `dynamo-router-guide.twin`             | Dynamo's Router Guide Twin: the first Store's Version body, whole (63 lines, 26 of them the llms.txt banner block `drop_leading` removes: the shortest page under the longest banner) (v1.3 ticket 03) |
 | `nemo-gym-build-verifiers.twin`        | NeMo Gym's Build Verifiers Twin: the first Store's Version body, whole (39 lines, the shortest Fern Twin there, its banner 15 lines) (v1.3 ticket 03) |
+| `nim-legal.html`                       | NIM for LLMs' Legal and Acknowledgements page: the first Store's Original, whole and byte for byte (its `sha256` `acde7c93…`), a Sphinx page (it loads `_static/documentation_options.js`) shorter than `nim-overview.html` once converted (v1.3 ticket 05) |
 
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and
@@ -164,3 +165,9 @@ v1.3 ticket 03 before the first live run of the cycle, over the five Fern Twins
 `drop_lines` that removes 41% of the Router Guide, one that matches a shell comment in a fence of
 Fast Model Loading, and a `drop_leading` whose last match is a quote line after that page's first
 heading.
+
+`readings-candidates-eur-lex.toml` is the same for `eur-lex.europa.eu/` (v1.3 ticket 05): the
+`drop_leading` that takes the site's `# Need help?` box, the Version's first heading, and the
+two `heading_before` rules the first live run's proposer offered for one prefix (`^CHAPTER`,
+level 1, here anchored as `^CHAPTER [IVXLC]+$`; `^Article \d+$`, level 2, as the orchestrator
+anchored it).

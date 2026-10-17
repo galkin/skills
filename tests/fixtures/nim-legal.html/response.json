@@ -1,0 +1,10 @@
+{
+  "url": "https://docs.nvidia.com/nim/large-language-models/latest/resources/legal.html",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html",
+    "etag": "\"170124289ac54932f68f84cd7eae1933\"",
+    "last-modified": "Fri, 16 Oct 2026 23:18:58 GMT"
+  },
+  "body": "body.html"
+}
