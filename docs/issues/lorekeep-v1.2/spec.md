@@ -84,16 +84,18 @@ column) and the commands' flags do not change.
 
 ### Converters (ticket 04)
 
-- `md-twin`: a leading blockquote before the first heading that contains `llms.txt` or `For clean
-  Markdown` is dropped (Fern's banner); nothing else of the publisher's Markdown changes.
-- `trafilatura`: when the `<title>` is `<h1> - <site> | <site>`, the title and the inserted first
-  heading use the `<h1>`'s text (Microsoft Learn); the rule is "the `<h1>` wins over `<title>`
-  when both exist".
-- `markitdown`: `title` from the PDF's metadata, else the first non-empty line; the Markdown has
-  Unicode ligatures (`ﬁ ﬂ ﬀ ﬃ ﬄ`) normalised to their letters (NFKC on those code points only).
-- A Version with no heading below the title and more than 20,000 characters prints
+Owner's decision (2026-10-17): the tool does not edit the Markdown it stores; stripping a
+publisher's banner is post-processing. The ticket keeps what the tool owns:
+
+- `title`: the `<h1>` wins over `<title>` when both exist (Microsoft Learn); a PDF's `title` comes
+  from its metadata, else its first non-empty line.
+- Search reads the ligature code points `ﬁ ﬂ ﬀ ﬃ ﬄ` as letters at Index time and in `--exact`,
+  as `\_` is unescaped today; the stored Markdown keeps them.
+- A Version over 20,000 characters with no heading below the title prints
   `lorekeep: warning: <url>: no headings; search answers with the whole page as one Section`
   (EUR-Lex, OWASP). Recovering structure from such pages is out of scope.
+- The Fern llms.txt banner in NVIDIA's Twins stays (about 150 tokens per page on every read; an
+  Index-only exclusion of a leading blockquote may come later).
 
 ### Host rules inherit (ticket 06)
 
