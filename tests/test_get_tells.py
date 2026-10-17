@@ -203,7 +203,7 @@ def test_an_index_built_by_v1_1_is_rebuilt_and_search_answers_as_before(tmp_path
     assert after.stdout == before.stdout
     assert json.loads(after.stdout)["results"]
     with sqlite3.connect(store / "sources.db") as con:
-        assert con.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone() == ("4",)
+        assert con.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone() == ("5",)
 
 
 def test_the_store_reference_documents_asked_and_warnings() -> None:

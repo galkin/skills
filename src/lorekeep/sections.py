@@ -86,6 +86,15 @@ def _kinds(texts: list[str]) -> list[_Kind | None]:
     return kinds
 
 
+def headings(text: str) -> int:
+    """How many lines of `text` are Markdown headings; a `#` line inside a code fence is code."""
+    texts = text.splitlines()
+    kinds = _kinds(texts)
+    return sum(
+        1 for line, kind in zip(texts, kinds, strict=True) if kind is None and _HEADING.match(line)
+    )
+
+
 def split(text: str, first_line: int = 1) -> Iterator[Section]:
     """The text under each Markdown heading, with its heading path (`A > B`, permalinks dropped)
     and the lines its heading and its text sit on (`first_line` is the body's first line in the

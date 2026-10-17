@@ -1,0 +1,8 @@
+{
+  "url": "https://eur-lex.europa.eu/eli/reg/2024/1689/oj",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html; charset=utf-8"
+  },
+  "body": "body.html"
+}

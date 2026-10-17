@@ -87,13 +87,16 @@ column) and the commands' flags do not change.
 Owner's decision (2026-10-17): the tool does not edit the Markdown it stores; stripping a
 publisher's banner is post-processing. The ticket keeps what the tool owns:
 
-- `title`: the `<h1>` wins over `<title>` when both exist (Microsoft Learn); a PDF's `title` comes
-  from its metadata, else its first non-empty line.
+- `title`: an `<h1>` that the `<title>` begins with wins over the `<title>` (`helm rollback` of
+  `helm rollback | Helm`); any other `<h1>` does not (OWASP's first is a banner). A Twin keeps the
+  publisher's title: Microsoft Learn's Twin heads itself with the whole `<title>`, and the tool does
+  not edit it. A PDF's `title` comes from its metadata, else its first non-empty line.
 - Search reads the ligature code points `ﬁ ﬂ ﬀ ﬃ ﬄ` as letters at Index time and in `--exact`,
   as `\_` is unescaped today; the stored Markdown keeps them.
 - A Version over 20,000 characters with no heading below the title prints
   `lorekeep: warning: <url>: no headings; search answers with the whole page as one Section`
-  (EUR-Lex, OWASP). Recovering structure from such pages is out of scope.
+  (EUR-Lex; the OWASP pages are under 20,000 characters). Recovering structure from such pages is
+  out of scope.
 - The Fern llms.txt banner in NVIDIA's Twins stays (about 150 tokens per page on every read; an
   Index-only exclusion of a leading blockquote may come later).
 

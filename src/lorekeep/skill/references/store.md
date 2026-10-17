@@ -77,7 +77,9 @@ Every value is a quoted string (`warnings` a list of them); a field without a va
   - `trafilatura <version> via crawl4ai <version>` — a page the browser rendered.
   - `owner` — a file added with `lorekeep add`.
 - `etag`, `last_modified` — the server's validators, used for conditional Rechecks.
-- `title` — the page's title.
+- `title` — the page's title: an HTML page's `<h1>` when its `<title>` begins with it (`helm
+  rollback` of `helm rollback | Helm`), else the `<title>`, else the first heading; a Twin's own
+  `title`, else its first heading; a PDF's from its metadata, else its first non-empty line.
 - `modified` — the publisher's own last-modified date, `YYYY-MM-DD`, when it gives one.
 - `original` — the bytes the Markdown came from: `url` (the address they came from, such as the
   Twin's or the raw file's), `mediatype`, `sha256`, and `stored` (`true` when `<stem>.orig.<ext>`

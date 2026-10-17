@@ -8,6 +8,9 @@ and the next step runs.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
+from lorekeep import sections
 from lorekeep.cascade import browser, twin
 from lorekeep.cascade.browser import BrowserStep
 from lorekeep.cascade.page import PageStep
@@ -28,6 +31,11 @@ __all__ = [
 
 STEPS: tuple[Step, ...] = (TwinStep(), PageStep())
 BROWSER: Step = BrowserStep()
+STRUCTURELESS = 20_000
+ONE_FENCE = ("raw-twin", "verbatim")
+"""Converters that keep a file in one fence: no headings is expected there, not a warning."""
+"""Characters of Markdown over which a Version with no heading below its title is worth a
+warning: every Section of it has the same heading path, so a hit cannot say where it is."""
 
 
 def step_of(converter: str) -> Step | Fallthrough:
@@ -58,7 +66,7 @@ def run_cascade(request: Request) -> Fetched | list[Fallthrough]:
         for step in STEPS:
             outcome = step.attempt(request)
             if isinstance(outcome, Fetched):
-                return outcome
+                return structure_warned(outcome)
             reasons.append(outcome)
             if outcome.final:
                 return reasons
@@ -66,6 +74,19 @@ def run_cascade(request: Request) -> Fetched | list[Fallthrough]:
             return reasons
     outcome = BROWSER.attempt(request)
     if isinstance(outcome, Fetched):
-        return outcome
+        return structure_warned(outcome)
     reasons.append(outcome)
     return reasons
+
+
+def structure_warned(fetched: Fetched) -> Fetched:
+    """`fetched` with a warning when its Markdown is over `STRUCTURELESS` characters and has at
+    most one heading (the title, or the heading the converter wrote for it, which on EUR-Lex is a
+    footer's `Need help?`). The Markdown is left as it is."""
+    if fetched.converter in ONE_FENCE:
+        return fetched
+    markdown = fetched.markdown.decode("utf-8", errors="replace")
+    if len(markdown) <= STRUCTURELESS or sections.headings(markdown) > 1:
+        return fetched
+    warning = "no headings; search answers with the whole page as one Section"
+    return replace(fetched, warnings=(*fetched.warnings, warning))
