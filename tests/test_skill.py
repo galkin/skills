@@ -1,22 +1,34 @@
 import argparse
+import json
 import re
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
 
 from lorekeep import cli
-from tests.support import run_cli
+from lorekeep.commands.skill import skill_folder
+from tests.support import edges_over, get, lorekeep, make_store, run_cli
 
-# A command section of SKILL.md is headed "## `lorekeep <command>`"; each flag it documents is a
-# bullet that starts with the flag in backticks.
+# A command section of SKILL.md or references/owner.md is headed "## `lorekeep <command>`"; each
+# flag it documents is a bullet that starts with the flag in backticks. Any other flag the text
+# names starts a code span (`--max-age 0`), and must exist too.
 SECTION = re.compile(r"`lorekeep ([a-z ]+)`")
 DOCUMENTED_FLAG = re.compile(r"^- `(--[a-z][a-z-]*)", re.MULTILINE)
+MENTIONED_FLAG = re.compile(r"`(--[a-z][a-z-]*)")
 # In `--help`, an option starts its line after two spaces; a subcommand after four.
 HELP_FLAG = re.compile(r"^  (?:-\w, )?(--[a-z][a-z-]*)", re.MULTILINE)
 HELP_SUBCOMMAND = re.compile(r"^    ([a-z][a-z-]*)\s", re.MULTILINE)
+# What a Run calls is in SKILL.md; the owner's commands are in references/owner.md.
+RUN_COMMANDS = {"get", "add", "search", "status"}
+MAX_SKILL_LINES = 250
+GUARDRAILS = (
+    "https://docs.nvidia.com/nemo/guardrails/latest/configure-guardrails/guardrail-catalog/"
+    "jailbreak-protection"
+)
 
 
 def skill_frontmatter(text: str) -> dict[str, str]:
@@ -24,15 +36,28 @@ def skill_frontmatter(text: str) -> dict[str, str]:
     return yaml.safe_load(head)
 
 
-def documented(skill: str) -> dict[str, set[str]]:
-    """Every command section of SKILL.md with the flags it documents."""
-    sections: dict[str, set[str]] = {}
-    for chunk in skill.split("\n## ")[1:]:
+def owner_reference() -> str:
+    return skill_folder().joinpath("references", "owner.md").read_text(encoding="utf-8")
+
+
+def sections(text: str) -> dict[str, str]:
+    """Every command section of a skill file with its body."""
+    found: dict[str, str] = {}
+    for chunk in text.split("\n## ")[1:]:
         heading, _, body = chunk.partition("\n")
         command = SECTION.fullmatch(heading)
         if command:
-            sections[command.group(1)] = set(DOCUMENTED_FLAG.findall(body))
-    return sections
+            found[command.group(1)] = body
+    return found
+
+
+def outside_sections(text: str) -> str:
+    """The text of a skill file that belongs to no command section."""
+    chunks = text.split("\n## ")
+    return "\n".join(
+        chunks[:1]
+        + [chunk for chunk in chunks[1:] if not SECTION.fullmatch(chunk.partition("\n")[0])]
+    )
 
 
 def parsed(command: tuple[str, ...] = ()) -> dict[str, set[str]]:
@@ -47,15 +72,32 @@ def parsed(command: tuple[str, ...] = ()) -> dict[str, set[str]]:
     return commands
 
 
-def drift(skill: str) -> list[str]:
-    """What SKILL.md and the parser disagree on, one line each; empty when they agree."""
-    in_skill, in_parser = documented(skill), parsed()
-    lines = [f"{name}: no section in SKILL.md" for name in in_parser.keys() - in_skill.keys()]
-    lines += [f"{name}: no such command" for name in in_skill.keys() - in_parser.keys()]
-    for name in in_parser.keys() & in_skill.keys():
-        lines += [f"{name}: {flag} not in SKILL.md" for flag in in_parser[name] - in_skill[name]]
-        lines += [f"{name}: {flag} not in --help" for flag in in_skill[name] - in_parser[name]]
-    return sorted(lines)
+def drift(skill: str, owner: str) -> list[str]:
+    """What SKILL.md and references/owner.md disagree with the parser on, one line each; empty
+    when they agree. Every command has one section in one of the two files, documenting every
+    flag of its `--help` as a bullet; every flag either file names exists."""
+    in_parser = parsed()
+    every_flag = set().union(*in_parser.values()) | {"--version"}
+    in_docs: dict[str, tuple[str, str]] = {}
+    lines: list[str] = []
+    for file, text in (("SKILL.md", skill), ("owner.md", owner)):
+        for name, body in sections(text).items():
+            if name in in_docs:
+                lines.append(f"{name}: a section in both SKILL.md and owner.md")
+            in_docs[name] = (file, body)
+        lines += [
+            f"{file}: {flag} not in any --help"
+            for flag in set(MENTIONED_FLAG.findall(outside_sections(text))) - every_flag
+        ]
+    lines += [f"{name}: no section in SKILL.md or owner.md" for name in in_parser.keys() - in_docs]
+    lines += [f"{name}: no such command" for name in in_docs.keys() - in_parser.keys()]
+    for name in in_parser.keys() & in_docs.keys():
+        file, body = in_docs[name]
+        bullets = set(DOCUMENTED_FLAG.findall(body))
+        named = bullets | set(MENTIONED_FLAG.findall(body))
+        lines += [f"{name}: {flag} not in {file}" for flag in in_parser[name] - bullets]
+        lines += [f"{name}: {flag} not in --help" for flag in named - in_parser[name]]
+    return sorted(set(lines))
 
 
 def test_skill_prints_the_skill_with_its_name_and_description() -> None:
@@ -72,7 +114,47 @@ def test_every_command_and_flag_of_the_parser_is_in_the_skill_and_no_other() -> 
     skill = run_cli(["skill"]).stdout
 
     assert parsed().keys() >= {"get", "add", "search", "status", "tag add", "skill"}
-    assert drift(skill) == []
+    assert drift(skill, owner_reference()) == []
+
+
+def test_skill_md_covers_what_a_run_calls_and_owner_md_the_rest() -> None:
+    skill = run_cli(["skill"]).stdout
+
+    assert sections(skill).keys() == RUN_COMMANDS
+    assert sections(owner_reference()).keys() == parsed().keys() - RUN_COMMANDS
+
+
+def test_skill_md_is_under_250_lines() -> None:
+    assert len(run_cli(["skill"]).stdout.splitlines()) < MAX_SKILL_LINES
+
+
+def json_examples(skill: str) -> list[dict[str, Any]]:
+    return [json.loads(block) for block in re.findall(r"```json\n(.*?)\n```", skill, re.DOTALL)]
+
+
+def test_the_json_examples_have_the_fields_the_commands_print(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    edges, _ = edges_over(
+        "helm-rollback.v3-redirect", "helm-rollback.html", "guardrails-jailbreak-protection.twin"
+    )
+    got = json.loads(
+        get(store, edges, "--json", "https://v3.helm.sh/docs/helm/helm_rollback/").stdout
+    )
+    get(store, edges, GUARDRAILS, tag="nvidia")
+    found = json.loads(lorekeep(store, edges, "search", "--json", "--exact", "threshold").stdout)
+    status = json.loads(lorekeep(store, edges, "status", "--json").stdout)
+
+    examples = json_examples(run_cli(["skill"]).stdout)
+
+    assert [example.keys() for example in examples] == [
+        got.keys(),
+        got.keys(),
+        found.keys(),
+        status.keys(),
+    ]
+    assert [result.keys() for result in examples[2]["results"]] == [
+        result.keys() for result in found["results"]
+    ][:1]
 
 
 def with_extra_flag(command: str, flag: str) -> Callable[[], argparse.ArgumentParser]:
@@ -93,21 +175,32 @@ def test_a_flag_added_to_the_parser_alone_is_drift(monkeypatch: pytest.MonkeyPat
     skill = run_cli(["skill"]).stdout
     monkeypatch.setattr(cli, "build_parser", with_extra_flag("search", "--fuzzy"))
 
-    assert drift(skill) == ["search: --fuzzy not in SKILL.md"]
+    assert drift(skill, owner_reference()) == ["search: --fuzzy not in SKILL.md"]
 
 
-def test_a_flag_documented_in_the_skill_alone_is_drift() -> None:
+def test_a_flag_documented_in_the_owner_reference_alone_is_drift() -> None:
     skill = run_cli(["skill"]).stdout
-    edited = skill.replace("## `lorekeep index`\n", "## `lorekeep index`\n\n- `--quick` faster\n")
+    edited = owner_reference().replace(
+        "## `lorekeep index`\n", "## `lorekeep index`\n\n- `--quick` faster\n"
+    )
 
-    assert drift(edited) == ["index: --quick not in --help"]
+    assert drift(skill, edited) == ["index: --quick not in --help"]
+
+
+def test_a_flag_named_in_the_text_alone_is_drift() -> None:
+    skill = run_cli(["skill"]).stdout
+    in_section = skill.replace("ask the publisher now", "ask the publisher now (`--retry 2`)")
+    outside = skill.replace("## How a Run works\n", "## How a Run works\n\nUse `--quiet`.\n")
+
+    assert drift(in_section, owner_reference()) == ["get: --retry not in --help"]
+    assert drift(outside, owner_reference()) == ["SKILL.md: --quiet not in any --help"]
 
 
 def test_a_command_without_a_section_is_drift() -> None:
     skill = run_cli(["skill"]).stdout
-    edited = skill.replace("## `lorekeep restore`", "## Restoring")
+    edited = owner_reference().replace("## `lorekeep restore`", "## Restoring")
 
-    assert drift(edited) == ["restore: no section in SKILL.md"]
+    assert drift(skill, edited) == ["restore: no section in SKILL.md or owner.md"]
 
 
 def installed(repo: Path) -> Path:
@@ -125,6 +218,7 @@ def test_install_copies_the_skill_folder_into_the_repo_and_reminds_of_the_lock(
     folder = installed(tmp_path)
     assert (folder / "SKILL.md").read_text() == printed
     assert (folder / "references" / "store.md").read_text().startswith("# The Store")
+    assert (folder / "references" / "owner.md").read_text() == owner_reference()
     assert str(folder) in result.stdout
     assert "skill lock" in result.stdout.splitlines()[-1]
     assert "hash" in result.stdout.splitlines()[-1]
