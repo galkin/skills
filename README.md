@@ -99,6 +99,10 @@ The package ships the hosts probed so far in
 [`src/lorekeep/hosts.toml`](src/lorekeep/hosts.toml), in the same shape. A rule in
 `lorekeep.toml` with the same `prefix` replaces the default one; any other rule is added beside
 them. `lorekeep status --rules` prints the merged table, marking the Project's rules `(lorekeep.toml)`.
+Nothing is inherited: a Project rule with the same or a longer prefix than a default rule wins over
+it whole, so a rule that sets `publisher` and `authority` for `github.com/<org>/` must repeat
+`twin = "github-raw"` ([`references/owner.md`](src/lorekeep/skill/references/owner.md) has the
+example).
 
 | Prefix                             | Publisher   | Authority   | Twin                                          |
 | ---------------------------------- | ----------- | ----------- | --------------------------------------------- |
@@ -121,7 +125,10 @@ them. `lorekeep status --rules` prints the merged table, marking the Project's r
 
 A host matched by no rule is stored with `publisher = <host>` and `authority = third-party`, and
 every `get` of it warns, so the table can be extended. A rule added after a page was fetched does
-not change the stored Version (frontmatter is never rewritten); `get --fresh` stores a new one.
+not change its stored Versions (frontmatter is never rewritten). A Version a Recheck stores takes
+the new `publisher` and `authority`, but a Recheck rereads the page with the converter that stored
+it, so a new Twin rule reaches only a Source first fetched after it: fetch the pages into a new
+Store.
 
 ## The first Store
 
@@ -140,9 +147,13 @@ printf 'bucket = "agentic-system-design-sources"\n' > ~/orca/sources/agentic-sys
 
 ## For agents: the skill
 
-`lorekeep skill` prints a skill (`SKILL.md`) that teaches an agent every command, its flags and
-its output, with a reference on the Store's layout and frontmatter. It ships inside the package,
-so it always matches the installed version. To vendor it into a repository:
+`lorekeep skill` prints a skill ([`SKILL.md`](src/lorekeep/skill/SKILL.md)) that teaches a Run
+the commands it calls (`get`, `search`, `add`, `status`), what to cite and what to report. Two
+references sit beside it: [`references/store.md`](src/lorekeep/skill/references/store.md), the
+Store's layout, frontmatter and `citations.csv`; and
+[`references/owner.md`](src/lorekeep/skill/references/owner.md), the owner's commands (`recheck`,
+`tag add`, `backup`, `restore`, `index`, `skill`) and how to write `[[hosts]]` rules. It ships
+inside the package, so it always matches the installed version. To vendor it into a repository:
 
 ```sh
 lorekeep skill --install path/to/repo          # writes path/to/repo/.agents/skills/lorekeep/
