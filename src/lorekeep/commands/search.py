@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from lorekeep import index
 from lorekeep.commands import scope_tags
+from lorekeep.stopwords import content_words
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
@@ -16,6 +17,9 @@ if TYPE_CHECKING:
 
 TOP = "(top)"
 """The heading path printed for text before a Version's first heading."""
+
+RELAXED = "lorekeep: note: no Section has every word; these have most of them"
+"""Printed on stderr before the results of a plain query no Section matched whole."""
 
 
 def run(args: argparse.Namespace, ctx: Context) -> int:
@@ -29,6 +33,16 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     )
     with index.ensured(ctx.store, ctx.project.hosts) as reader:
         hits, other = reader.search(args.query, scope, limit=args.limit, exact=args.exact)
+        relaxed = False
+        words = content_words(args.query)
+        if not hits and not args.exact and words and words != args.query.split():
+            some, some_other = reader.search(
+                " ".join(words), scope, limit=args.limit, exact=False, any_word=True
+            )
+            if some:
+                hits, other, relaxed = some, some_other, True
+    if relaxed:
+        print(RELAXED, file=sys.stderr)
     if args.json:
         results = [
             {
@@ -42,7 +56,10 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
             }
             for hit in hits
         ]
-        print(json.dumps({"results": results, "other_tags": other or 0}, ensure_ascii=False))
+        found = {"results": results, "other_tags": other or 0} | (
+            {"relaxed": True} if relaxed else {}
+        )
+        print(json.dumps(found, ensure_ascii=False))
         return 0
     for hit in hits:
         print(f"{ctx.store / hit.file}:{hit.line} | {hit.heading or TOP} | {hit.snippet}")

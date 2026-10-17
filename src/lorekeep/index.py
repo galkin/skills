@@ -594,11 +594,12 @@ class Reader:
         return [VersionInfo.read(self.store / file) for (file,) in rows]
 
     def search(
-        self, query: str, scope: Scope, *, limit: int, exact: bool
+        self, query: str, scope: Scope, *, limit: int, exact: bool, any_word: bool = False
     ) -> tuple[list[Hit], int | None]:
         """The best `limit` Sections of the latest Versions in `scope`, and the count of
         distinct Sources the same query matches under other Tags (`None` when the scope is
-        every Tag)."""
+        every Tag). A Section matches when it holds every word of `query`, or one of them with
+        `any_word`; then `line` is the Section's line holding the most of them."""
         con = self.con
         needle = unescape(query)
         if exact:
@@ -613,7 +614,7 @@ class Reader:
             match_where = "sections_fts MATCH ?"
             order = "bm25(sections_fts, 2.0, 1.0), s.file, s.ord"
             snippet = "snippet(sections_fts, 1, '[', ']', '…', 16)"
-            match_args = [_fts_query(query)]
+            match_args = [_fts_query(query, any_word=any_word)]
             words = [unescape(word).casefold() for word in query.split()]
         filters, filter_args = _filters(scope)
         tag_filter, tag_args = _tag_filter(scope.tags)
@@ -627,7 +628,12 @@ class Reader:
         hits = [
             Hit(
                 file=file,
-                line=line + _match_offset(body, words, exact=exact),
+                line=line
+                + (
+                    _best_offset(body, words)
+                    if any_word
+                    else _match_offset(body, words, exact=exact)
+                ),
                 heading_line=heading_line,
                 heading=heading,
                 snippet=_snippet(unescape(text), needle) if exact else unescape(_one_line(text)),
@@ -730,9 +736,23 @@ def _match_offset(body: str, words: Sequence[str], *, exact: bool) -> int:
     return 0
 
 
-def _fts_query(query: str) -> str:
-    """Every whitespace-separated word as a quoted phrase, so user input is never FTS5 syntax."""
-    return " ".join('"' + word.replace('"', '""') + '"' for word in query.split())
+def _best_offset(body: str, words: Sequence[str]) -> int:
+    """How many lines into `body` the first line holding the most of `words` sits
+    (case-insensitively, after `unescape`); 0 when none holds one."""
+    best, most = 0, 0
+    for offset, line in enumerate(body.split("\n")):
+        text = unescape(line).casefold()
+        held = sum(word in text for word in words)
+        if held > most:
+            best, most = offset, held
+    return best
+
+
+def _fts_query(query: str, *, any_word: bool = False) -> str:
+    """Every whitespace-separated word as a quoted phrase, so user input is never FTS5 syntax;
+    joined by `OR` with `any_word`."""
+    joiner = " OR " if any_word else " "
+    return joiner.join('"' + word.replace('"', '""') + '"' for word in query.split())
 
 
 def _filters(scope: Scope) -> tuple[str, list[object]]:

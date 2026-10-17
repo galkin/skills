@@ -172,11 +172,14 @@ Version with `url` `owner:<slug of the title>`, searchable like any page. Never 
 Searches the Sections (the text under each heading) of the Latest Version of every Source in scope,
 ranked by BM25; word forms match (`caching` finds `cached`). The scope is the Run's Tag, else the
 whole Store. A plain query needs every word in one Section, so use 2–4 content words in the
-page's own wording, never a question:
+page's own wording, never a question. When no Section has them all, `search` prints the line
+`lorekeep: note: no Section has every word; these have most of them` on stderr and ranks the
+Sections holding most of the words but stopwords: a weaker answer, check it in the file.
 
 ```text
-$ lorekeep search 'how do I set the perplexity threshold for jailbreak detection'
-no matches
+$ lorekeep search 'how do I set the perplexity threshold for jailbreak detection' --limit 1
+lorekeep: note: no Section has every word; these have most of them
+/…/store/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md:37 | Jailbreak Protection > Jailbreak Detection | …[jailbreak]_[detection]: server_endpoint: "http://0.0.0.0:1337/heuristics" length_per_[perplexity]_[threshold]: 89…
 $ lorekeep search 'jailbreak perplexity threshold' --limit 1
 /…/store/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md:37 | Jailbreak Protection > Jailbreak Detection | …[jailbreak]_detection: server_endpoint: "http://0.0.0.0:1337/heuristics" length_per_[perplexity]_[threshold]: 89…
 ```
@@ -210,7 +213,8 @@ no matches
 ```
 
 `--json` output: `line` is the matching line, `heading_line` the Section's heading (`null`, with
-`heading` `""`, before the first heading); `other_tags` is `0` when the scope is everything.
+`heading` `""`, before the first heading); `other_tags` is `0` when the scope is everything;
+`"relaxed": true` comes with the note line.
 
 ```json
 {"results": [{"file": "/…/store/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md", "line": 60, "heading_line": 35, "heading": "Jailbreak Protection > Jailbreak Detection", "snippet": "…server_endpoint: \"http://0.0.0.0:1337/heuristics\" [length_per_perplexity_threshold]: 89.79 prefix_suffix_perplexity_threshold: 1845.65 ``…", "url": "https://docs.nvidia.com/nemo/guardrails/latest/configure-guardrails/guardrail-catalog/jailbreak-protection", "tag": ["nvidia"]}], "other_tags": 0}

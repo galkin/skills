@@ -8,10 +8,17 @@ import re
 import sqlite3
 from pathlib import Path
 
+from lorekeep import index
 from tests.support import FIXTURES, Result, run_cli, write_version
 
 KV_CACHE = FIXTURES / "trtllm-kv-cache.v1"
 VLLM = FIXTURES / "vllm-cli-serve.v1"
+RAIL_TYPES = FIXTURES / "guardrails-rail-types.twin"
+RAIL_TYPES_URL = (
+    "https://docs.nvidia.com/nemo/guardrails/latest/about-nemo-guardrails-library/rail-types"
+)
+QUESTION = "which rail type validates tool call arguments"
+RELAXED = "lorekeep: note: no Section has every word; these have most of them\n"
 PERMALINK = re.compile(r"\[[#¶]\]\([^)]*\)")
 
 
@@ -200,6 +207,75 @@ def test_no_hit_prints_no_matches_and_the_other_tags_line_only_above_zero(
     assert nothing_anywhere.stdout == "no matches\n"
     assert elsewhere.stdout == "no matches\n+3 matches under other tags (--all)\n"
     assert as_json == {"results": [], "other_tags": 3}
+
+
+def three_pages(store: Path) -> Path:
+    """The KV cache and vLLM pages and the NeMo Guardrails `rail-types` Twin, indexed; the
+    Twin's path."""
+    write_version(store, KV_CACHE, fetched_at="2026-10-17T00:00:00Z")
+    write_version(store, VLLM, fetched_at="2026-10-17T00:00:00Z")
+    path = write_version(store, RAIL_TYPES, fetched_at="2026-10-17T00:00:00Z", url=RAIL_TYPES_URL)
+    assert run_cli(["index", "--store", str(store)]).exit_code == 0
+    return path
+
+
+def test_a_question_no_section_matches_whole_answers_with_the_sections_holding_most_words(
+    tmp_path: Path,
+) -> None:
+    path = three_pages(tmp_path)
+    answer = number_of(
+        path, "Execution rails control and validate tool/function calls, their arguments"
+    )
+
+    text = search(tmp_path, QUESTION)
+    as_json = search(tmp_path, QUESTION, "--json")
+
+    assert text.stderr == RELAXED
+    assert text.stdout.splitlines()[0].startswith(f"{path}:{answer} | Guardrail Types | ")
+    data = json.loads(as_json.stdout)
+    assert data["relaxed"] is True
+    assert (data["results"][0]["file"], data["results"][0]["line"]) == (str(path), answer)
+
+
+def test_a_query_one_section_matches_whole_prints_no_note_and_no_relaxed_key(
+    tmp_path: Path,
+) -> None:
+    path = three_pages(tmp_path)
+    query = "execution rails tool call arguments"
+    with index.current(tmp_path) as reader:
+        assert reader is not None
+        hits, _ = reader.search(query, index.Scope(), limit=5, exact=False)
+
+    text = search(tmp_path, query)
+    data = json.loads(search(tmp_path, query, "--json").stdout)
+
+    assert text.stderr == ""
+    assert "relaxed" not in data
+    assert [(r["file"], r["line"]) for r in data["results"]] == [
+        (str(tmp_path / hit.file), hit.line) for hit in hits
+    ]
+    assert data["results"][0]["file"] == str(path)
+
+
+def test_a_query_of_stopwords_or_of_words_found_nowhere_prints_no_matches(tmp_path: Path) -> None:
+    three_pages(tmp_path)
+
+    for query in ("what is it that they would have been", "zebra unicorn narwhal"):
+        result = search(tmp_path, query)
+        as_json = json.loads(search(tmp_path, query, "--json").stdout)
+
+        assert (result.stdout, result.stderr) == ("no matches\n", "")
+        assert as_json == {"results": [], "other_tags": 0}
+
+
+def test_exact_never_relaxes(tmp_path: Path) -> None:
+    three_pages(tmp_path)
+
+    result = search(tmp_path, "--exact", QUESTION)
+    as_json = json.loads(search(tmp_path, "--exact", QUESTION, "--json").stdout)
+
+    assert (result.stdout, result.stderr) == ("no matches\n", "")
+    assert as_json == {"results": [], "other_tags": 0}
 
 
 def test_version_prints_the_package_version() -> None:
