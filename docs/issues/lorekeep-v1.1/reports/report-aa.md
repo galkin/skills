@@ -1,0 +1,11 @@
+# batch-aa migration report (saved by the orchestrator from the worker's final message)
+
+Counts: 127 URLs → 125 Versions; exit 0: 126, exit 1: 1. Outcomes: stored 124, fresh 2. Converters: trafilatura 2.3.1 ×125, markitdown 0.1.8 ×1. Publishers: nvidia/primary 93, langchain/primary 23, docker 3, eu/official 2, unknown third-party: distributed.dask.org 2, a2a-protocol.org, creativecommons.org, developers.openai.com. 27 stored urls differ from the asked address (25 docs.nvidia.com `latest/` → unversioned; a2a v1.0.0 → latest; 2 fragments).
+
+Failure: https://docs.langchain.com/oss/python/langchain/sql-agent → raw traceback `ValueError: Input object is not an XML element: lxml.etree._Comment` (trafilatura xml.py via lorekeep/cascade/html.py:61), no `lorekeep: error:` line.
+
+Quality: Fern-built docs.nvidia.com (26 pages: Guardrails, Dynamo, Curator) lose code on 22/22 and tables on 18/18; Mintlify docs.langchain.com (21) lose code 18/19, tables 13/13; Sphinx docs.nvidia.com (37) keep code, lose 1/11 tables, 65 Versions carry `[#](url#anchor)` permalinks glued to headings. build.nvidia.com modelcard + safety-for-agentic-ai = navigation only (233 / 647 bytes), stored, exit 0, no warning, browser never ran. No Version has `title`. markitdown PDF usable with artefacts.
+
+Search: plain query good; `--exact length_per_perplexity_threshold` → 0 (identifier only in dropped code/table); `file:line` = Section heading line, not the matching line (off by 2–19 lines).
+
+Friction (worker's words, condensed): silently dropped code/tables (fix extraction or add Twin rules for Fern/Mintlify, warn when Original has pre/table and Markdown none); client-rendered page stored as menu with no signal (size/menu heuristic → browser or warn); converter crash as traceback (catch, `lorekeep: error:`, say next step); no retryable hint; pinned version replaced by canonical `latest` silently (warn; skill: which address to cite); `file:line` semantics; empty search prints only `+0` line (say "no matches"); `title` never written; Sphinx headerlink anchors; authority for law/standards undefined; unknown-host warning tells the Run to edit lorekeep.toml (should say "tell the owner"); fragments dropped silently; `status` prints 32 host rules (flag); harness blocks subagents from writing report files.
