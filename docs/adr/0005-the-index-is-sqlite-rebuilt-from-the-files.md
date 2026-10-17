@@ -1,0 +1,21 @@
+# The Index is SQLite, rebuilt from the files, with one full-text table over Sections
+
+`sources.db` sits in the Store and is derived from it entirely: it can be deleted and rebuilt at any
+time and is not backed up. It holds every Version's Provenance, every Check, every Citation of the
+consuming Project, and one FTS5 table (`porter unicode61`) over Sections — the text under each
+heading, with its heading path — answered with `bm25` ranking and `snippet()`. Anything the Index
+reports that is not in a file is a bug; so the log of Checks is an append-only `checks.csv` in the
+Store, not rows that live only in the database.
+
+Measured on one Run's cache of 1,403 pages (2026-10-17): 32,339 Sections, a 93 MB index built in
+about 5 s; a question `grep` answered with roughly 210 KB of context, the Index answered with five
+snippets of about 1.5 KB. The ranking is not semantic — the right Section came fourth — so queries
+are cheap to refine, and `grep` stays for a file already known.
+
+## Considered Options
+
+- **A second FTS5 table with the `trigram` tokenizer** for exact identifiers. Rejected: it more than
+  doubled the index (214 MB) for what `grep` already does.
+- **Vector search** (sqlite-vec with local embeddings). Not now: the owner will ask for it when it is
+  needed. When it is, measure it first on the Project's own Citations.
+- **DuckDB.** Rejected: SQLite's CLI is on every machine and FTS5 is built in.

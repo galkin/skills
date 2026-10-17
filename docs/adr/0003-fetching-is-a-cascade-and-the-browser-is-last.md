@@ -1,0 +1,21 @@
+# Fetching is a cascade, and the browser is the last resort
+
+`get` tries, in order: the publisher's Twin over plain HTTP (`<page>.md`, `?accept=text/markdown`,
+`raw.githubusercontent.com`); the page's static HTML over plain HTTP through Trafilatura, with links
+made absolute; MarkItDown for PDF and Office files, Docling for PDFs whose layout matters; and
+Crawl4AI only for pages that need a browser, with a per-site configuration of what to cut. The
+Converter that succeeded is recorded. HTTP goes through `httpx` with an `hishel` cache so a
+repeated request is conditional.
+
+Measured on five real pages (2026-10-17): Trafilatura's Markdown was 8–78% smaller than Crawl4AI's
+default `fit_markdown`, which kept cookie banners from the live page, and 0.7 s against 5.2 s per
+page; pandoc on full HTML left 443 `<div>` lines on one page. A Twin was the most complete of all —
+it carries every code-language tab the HTML hides. What an agent reads is what costs tokens, so the
+cheapest clean text wins, and the browser is used where nothing else can see the page.
+
+## Considered Options
+
+- **Crawl4AI for everything.** Rejected: a browser per page, larger output, per-site tuning to
+  remove overlays.
+- **LLM-based extraction** (Crawl4AI or Firecrawl strategies). Rejected: it spends tokens on every
+  page and paraphrases, and facts are checked against verbatim text.
