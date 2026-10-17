@@ -1,0 +1,54 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "APIs for NVIDIA RAG Server (v1)",
+    "description": "This API schema describes all the retriever endpoints exposed for NVIDIA RAG server Blueprint",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "Health APIs"
+        ],
+        "summary": "Health Check",
+        "description": "Perform a health check on the RAG server.",
+        "operationId": "health_check_v1_health_get",
+        "parameters": [
+          {
+            "name": "check_dependencies",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Check Dependencies"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RAGHealthResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

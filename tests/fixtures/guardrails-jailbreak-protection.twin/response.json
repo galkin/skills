@@ -1,0 +1,9 @@
+{
+  "url": "https://docs.nvidia.com/nemo/guardrails/latest/configure-guardrails/guardrail-catalog/jailbreak-protection.md",
+  "status": 200,
+  "headers": {
+    "content-type": "text/markdown; charset=utf-8",
+    "etag": "W/\"cb2facfbdd09caf5f353d9ef97bc9f5f\""
+  },
+  "body": "body.md"
+}

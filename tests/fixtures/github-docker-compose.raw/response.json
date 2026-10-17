@@ -1,0 +1,9 @@
+{
+  "url": "https://raw.githubusercontent.com/NVIDIA-AI-Blueprints/deep-researcher-agent/main/deploy/compose/docker-compose.yaml",
+  "status": 200,
+  "headers": {
+    "content-type": "text/plain; charset=utf-8",
+    "etag": "\"4897db3064eef041a302dba215d97df6aea0344b572675bcd5e38c8aa386b697\""
+  },
+  "body": "body.yaml"
+}

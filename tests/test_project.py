@@ -9,10 +9,18 @@ DEFAULT_RULES = [
     ["docs.aws.amazon.com/", "aws", "primary", "twin=md-suffix", "page_suffix=.html"],
     ["learn.microsoft.com/", "microsoft", "primary", "twin=accept-header"],
     ["docs.nvidia.com/", "nvidia", "primary"],
+    ["docs.nvidia.com/cuvs/", "nvidia", "primary", "twin=md-suffix"],
+    ["docs.nvidia.com/dynamo/", "nvidia", "primary", "twin=md-suffix"],
+    ["docs.nvidia.com/nemo/curator/", "nvidia", "primary", "twin=md-suffix"],
+    ["docs.nvidia.com/nemo/guardrails/", "nvidia", "primary", "twin=md-suffix"],
+    ["docs.nvidia.com/nemo/gym/", "nvidia", "primary", "twin=md-suffix"],
+    ["docs.nvidia.com/openshell/", "nvidia", "primary", "twin=md-suffix"],
+    ["docs.langchain.com/", "langchain", "primary", "twin=md-suffix"],
     ["cloud.google.com/", "google", "primary"],
     ["milvus.io/", "milvus", "primary"],
     ["claude.termidy.com/", "termidy", "third-party"],
     ["raw.githubusercontent.com/", "github", "third-party", "twin=raw"],
+    ["github.com/", "github", "third-party", "twin=github-raw"],
 ]
 
 

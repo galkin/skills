@@ -32,13 +32,13 @@ BROWSER: Step = BrowserStep()
 
 def step_of(converter: str) -> Step | Fallthrough:
     """The step that rereads a Version carrying `converter` (its first word names the step's
-    converter: `md-twin`, `trafilatura`, `markitdown`), or why none does: the browser's mark
-    (`via crawl4ai`) means bytes that differ on every visit, and a converter no step writes
-    (`owner`) has no step. The only reader of the `converter` string."""
+    converter: `md-twin`, `raw-twin`, `trafilatura`, `markitdown`, `verbatim`), or why none
+    does: the browser's mark (`via crawl4ai`) means bytes that differ on every visit, and a
+    converter no step writes (`owner`) has no step. The only reader of the `converter` string."""
     if browser.via_browser(converter):
         return Fallthrough(browser.NEVER_REREAD)
     name = converter.split(" ", 1)[0]
-    if name == twin.CONVERTER:
+    if name in (twin.CONVERTER, twin.RAW_CONVERTER):
         return STEPS[0]
     step = PageStep.of(name)
     if step is None:

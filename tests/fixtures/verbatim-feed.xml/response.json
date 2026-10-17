@@ -1,0 +1,8 @@
+{
+  "url": "https://docs.nvidia.com/rag/latest/_static/examples/feed.xml",
+  "status": 200,
+  "headers": {
+    "content-type": "application/xml"
+  },
+  "body": "body.xml"
+}

@@ -62,9 +62,12 @@ address, and the old address finds it too.
 - `--json` — print one JSON object instead of the path.
 - `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
 
-How it fetches, in order: the publisher's Markdown **Twin** when the host has a rule for one; the
+How it fetches, in order: the publisher's Markdown **Twin** when the host has a rule for one
+(`….md` on Fern and Mintlify sites, `?accept=text/markdown`, a raw file; a GitHub `blob/` page is
+read from its raw file and stored under the `blob` address, code fenced by its extension); the
 static HTML, main content extracted, links made absolute, redirects and meta-refresh followed; a
-PDF converted to Markdown; a browser, last, when the host refuses a plain client or renders on the
+PDF converted to Markdown; JSON, YAML, plain text, CSV or XML kept verbatim in one fence; a
+browser, last, when the host refuses a plain client or renders on the
 client. A stored Version younger than the window is returned without any request (`fresh`). An
 older one is asked about with a conditional request; a page that is gone (`404`/`410`) or a host
 that fails returns the stored Version with a warning. A Version rendered by the browser is never
