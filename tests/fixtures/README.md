@@ -94,6 +94,10 @@ synthesised: `v3.helm.sh` answered `200` itself on that day, not a redirect.
 | `trtllm-kvcache.html`                  | Sphinx (`nvidia.github.io`): `a.headerlink` in every heading                               |
 | `nim-tool-calling.html`                | Sphinx (`docs.nvidia.com`): 4 highlighted code blocks, `\_` escapes, a table inside a list item Trafilatura drops |
 | `build-nemotron-modelcard.html`        | a client-rendered page: a menu as static HTML, its Next.js payload in a `<script>`          |
+| `langchain-parent-document-retriever.html` | LangChain reference: `<title>` `ParentDocumentRetriever \| langchain_classic \| LangChain Reference`, `<h1>` `ParentDocumentRetriever`, no heading Trafilatura keeps (v1.2 ticket 04) |
+| `ai-act-service-desk-article-26.html`  | AI Act Service Desk: the only `<h1>` is the site's banner `AI Act Explorer`, which the `<title>` does not begin with |
+| `nist-ai-600-1.pdf`                    | page 5 of NIST AI 600-1 with the document's metadata `Title`; its text spells `proﬁle` with U+FB01 |
+| `eur-lex-ai-act.html`                  | EUR-Lex AI Act: the head, the title block and the first 30 recitals (60 KB, 28,000 characters of Markdown), and the footer whose `Need help?` is the one heading |
 
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and
@@ -111,3 +115,10 @@ pages cut after the sections a test reads; the model card keeps the first 8,000 
 payload `<script>`, which is what makes it thin. `langchain-sql-agent.html` was recorded live the
 same day, because its Original was never stored, and cut to the step whose tab buttons hold the
 comments. Their headers are the minimum a test needs.
+
+The four v1.2 ticket 04 folders are cut from the first Store's Originals (2026-10-17). The HTML
+pages lose scripts, styles, SVG, images, forms, navigation and `style`/`data-*`/`aria-*`
+attributes and keep only the subtrees a test reads, under the original `<title>`, canonical link and
+`<meta>` tags (EUR-Lex keeps only its `og:` and `description` ones of 107 KB). The PDF is the
+Original's fifth page, cut with `qpdf --pages . 5`, which keeps the information dictionary. Their
+headers are the ones the Store's frontmatter records.

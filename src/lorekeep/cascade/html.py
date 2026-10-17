@@ -416,9 +416,17 @@ def finish(markdown: str, title: str | None) -> str:
 
 
 def page_title(document: lxml.html.HtmlElement, url: str) -> str | None:
-    """Trafilatura's title of the page, else its `<title>`, else its first `<h1>`."""
+    """The page's `<h1>` that its `<title>` begins with (`helm rollback` of `helm rollback | Helm`),
+    else Trafilatura's title of the page, else its `<title>`, else its first `<h1>`. An `<h1>`
+    the `<title>` does not begin with is as often a banner or a logo as the page's name."""
     import trafilatura
 
+    named = squeeze(document.findtext(".//title") or "")
+    for heading in document.iter("h1"):
+        text = squeeze(heading.text_content())
+        rest = named.removeprefix(text) if text else ""
+        if rest != named and rest and not rest[0].isalnum():
+            return text
     found = trafilatura.extract_metadata(copy.deepcopy(document), default_url=url).title
     if not found:
         found = document.findtext(".//title")

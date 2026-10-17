@@ -116,9 +116,9 @@ Returns a Version of the page at `URL`, fetching only when the Store has none or
 the freshness window, and adds the Tag to it. lorekeep reads, in order: the publisher's Markdown
 **Twin** under a host rule (a GitHub `blob/` page from its raw file, code fenced by extension); the
 static HTML, main content extracted; a PDF; JSON, YAML, plain text, CSV or XML verbatim in one
-fence; the browser, last. A PDF Version (`converter` `markitdown …`) may run words together, and
-it or a long page with almost no headings (EUR-Lex, OWASP) is one Section to `search`: read it
-rather than trusting `search` to find a phrase in it.
+fence; the browser, last. A PDF Version (`markitdown …`) may run words together and keep ligatures
+(`proﬁle`, which `search`, exact or not, reads as letters); it or a long page with no headings
+(`get` warns) is one Section to `search`: read it rather than trusting it to find a phrase in it.
 
 - `--tag TAG` — the Run's Tag, exactly one (default: `$LOREKEEP_TAG`).
 - `--max-age DAYS` — recheck a stored Version older than this (default: the Project's

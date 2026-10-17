@@ -10,6 +10,7 @@ unreadable, and the caller reads the files); `ensured` brings the Index up to da
 
 from __future__ import annotations
 
+import bisect
 import contextlib
 import csv
 import sqlite3
@@ -52,10 +53,11 @@ _VERSION_COLUMNS = (
     "origin",
 )
 _ORIGINAL_COLUMNS = ("url", "mediatype", "sha256", "stored")
-SCHEMA_VERSION = "3"
-"""Bumped whenever a table's columns change, so an Index built by an older lorekeep reads as stale
-and is rebuilt with the new tables (2: `versions.canonical`; 3: `sections.heading_line` beside
-`sections.line`, which is now the Section's first text line)."""
+SCHEMA_VERSION = "4"
+"""Bumped whenever a table's columns or what they hold change, so an Index built by an older
+lorekeep reads as stale and is rebuilt with the new tables (2: `versions.canonical`; 3:
+`sections.heading_line` beside `sections.line`, which is now the Section's first text line; 4:
+`sections_fts` holds the text with its ligatures read as letters)."""
 
 _SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -289,9 +291,11 @@ def _index_version(con: sqlite3.Connection, path: Path) -> int:
             "VALUES(?, ?, ?, ?, ?, ?)",
             (path.name, section.heading, section.heading_line, section.line, section.body, order),
         )
+        # The FTS rows read ligatures as letters; `sections` keeps the text as stored, which
+        # `snippet()` shows: a ligature is a letter to the tokenizer, so the tokens line up.
         con.execute(
             "INSERT INTO sections_fts(rowid, heading, body) VALUES(?, ?, ?)",
-            (cursor.lastrowid, section.heading, section.body),
+            (cursor.lastrowid, as_letters(section.heading), as_letters(section.body)),
         )
         count += 1
     return count
@@ -601,7 +605,7 @@ class Reader:
         every Tag). A Section matches when it holds every word of `query`, or one of them with
         `any_word`; then `line` is the Section's line holding the most of them."""
         con = self.con
-        needle = unescape(query)
+        needle = as_letters(unescape(query))
         if exact:
             match_from = "sections s"
             match_where = f"instr({_UNESCAPED_BODY}, ?) > 0"
@@ -614,8 +618,8 @@ class Reader:
             match_where = "sections_fts MATCH ?"
             order = "bm25(sections_fts, 2.0, 1.0), s.file, s.ord"
             snippet = "snippet(sections_fts, 1, '[', ']', '…', 16)"
-            match_args = [_fts_query(query, any_word=any_word)]
-            words = [unescape(word).casefold() for word in query.split()]
+            match_args = [_fts_query(as_letters(query), any_word=any_word)]
+            words = [as_letters(unescape(word)).casefold() for word in query.split()]
         filters, filter_args = _filters(scope)
         tag_filter, tag_args = _tag_filter(scope.tags)
         rows = con.execute(
@@ -715,8 +719,20 @@ class Reader:
         )
 
 
-_UNESCAPED_BODY = r"replace(replace(s.body, '\_', '_'), '\*', '*')"
-"""`s.body` with `unescape` applied, in SQL."""
+LIGATURES = {"ﬀ": "ff", "ﬁ": "fi", "ﬂ": "fl", "ﬃ": "ffi", "ﬄ": "ffl"}
+"""The ligature code points a PDF's text keeps (`proﬁle`), and the letters search reads them as."""
+_LIGATURE_TABLE = str.maketrans(LIGATURES)
+
+
+def _as_searched(column: str) -> str:
+    """`column` with `unescape` and `as_letters` applied, in SQL."""
+    sql = rf"replace(replace({column}, '\_', '_'), '\*', '*')"
+    for ligature, letters in LIGATURES.items():
+        sql = f"replace({sql}, '{ligature}', '{letters}')"
+    return sql
+
+
+_UNESCAPED_BODY = _as_searched("s.body")
 
 
 def unescape(text: str) -> str:
@@ -725,12 +741,19 @@ def unescape(text: str) -> str:
     return text.replace("\\_", "_").replace("\\*", "*")
 
 
+def as_letters(text: str) -> str:
+    """Text with each ligature read as its letters, so `proﬁle` reads as `profile` (the Index's
+    FTS rows and both sides of an `--exact` comparison go through it; the files keep them)."""
+    return text.translate(_LIGATURE_TABLE)
+
+
 def _match_offset(body: str, words: Sequence[str], *, exact: bool) -> int:
     """How many lines into `body` the first line holding one of `words` sits (as written for
     `--exact`, case-insensitively otherwise, after `unescape`); 0 when none does, as with a
     stemmed match."""
     for offset, line in enumerate(body.split("\n")):
-        text = unescape(line) if exact else unescape(line).casefold()
+        text = as_letters(unescape(line))
+        text = text if exact else text.casefold()
         if any(word in text for word in words):
             return offset
     return 0
@@ -741,7 +764,7 @@ def _best_offset(body: str, words: Sequence[str]) -> int:
     (case-insensitively, after `unescape`); 0 when none holds one."""
     best, most = 0, 0
     for offset, line in enumerate(body.split("\n")):
-        text = unescape(line).casefold()
+        text = as_letters(unescape(line)).casefold()
         held = sum(word in text for word in words)
         if held > most:
             best, most = offset, held
@@ -784,8 +807,16 @@ def _one_line(text: str) -> str:
 
 
 def _snippet(body: str, needle: str, around: int = 60) -> str:
-    """A snippet for an exact match: the text around its first occurrence, marked `[…]`."""
-    at = body.find(needle)
-    start, end = max(0, at - around), min(len(body), at + len(needle) + around)
-    text = body[start:at] + "[" + needle + "]" + body[at + len(needle) : end]
+    """A snippet for an exact match: the text around its first occurrence in `body` read as
+    letters, marked `[…]` and shown as `body` writes it (`[proﬁle]` for `profile`)."""
+    starts: list[int] = []  # where each character of `body` starts in `body` read as letters
+    read = 0
+    for character in body:
+        starts.append(read)
+        read += len(as_letters(character))
+    found = max(as_letters(body).find(needle), 0)
+    at = bisect.bisect_right(starts, found) - 1
+    after = bisect.bisect_left(starts, found + len(needle))
+    start, end = max(0, at - around), min(len(body), after + around)
+    text = body[start:at] + "[" + body[at:after] + "]" + body[after:end]
     return ("…" if start else "") + _one_line(text) + ("…" if end < len(body) else "")
