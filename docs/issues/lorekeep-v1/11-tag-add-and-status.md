@@ -7,5 +7,5 @@
 **Status:** ready-for-agent
 
 - [ ] `tag add nvidia --prefix https://docs.nvidia.com/` tags every Source under that prefix once; rerunning adds nothing; without `--prefix` only the exact URL is tagged; a URL no Source has exits non-zero
-- [ ] `status` on a Store written by the helper with a `checks.csv` of mixed outcomes prints every figure above; `--json` returns them as an object
+- [ ] `status` on a Store written by the helper with a `checks.csv` of mixed outcomes prints every figure above; `--json` returns them as one object in the spec's shape
 - [ ] `status` on a Store without an Index builds it first

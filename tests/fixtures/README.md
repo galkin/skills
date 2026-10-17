@@ -36,17 +36,19 @@ are lower-case. `match_headers` is optional.
 | `aws-prompt-caching.twin` / `.html`    | AWS Bedrock page as Twin and HTML; the HTML carries cookie banners                         |
 | `termidy-*.html`                       | three lessons of a site reused under permission; no Twin exists                            |
 | `termidy-coordinator-and-subagents.noisy` | the same lesson with a per-request nonce in a `<script>`: different bytes, same Markdown |
+| `termidy-coordinator-and-subagents.changed` | the same lesson with a changed `<h1>`: different bytes, different Markdown           |
 | `timeout`                              | a URL whose request raises `ReadTimeout`                                                   |
 | `ms-foundry.redirect-1`, `-2`, `.twin` | Microsoft Learn: two `301`s, then a Twin whose own frontmatter has a `canonicalUrl`        |
 | `nim-introduction.stub`                | NVIDIA NIM 98-byte `<meta http-equiv="Refresh">` page                                      |
 | `nim-overview.html`                    | the page that stub points at                                                               |
 | `milvus-403`                           | a host that answers `403` to a plain client (browser step)                                 |
 | `google-md-answers-html`               | a `.md` URL that answers `200` with HTML (must not be accepted as a Twin)                   |
+| `google-overview.html`                 | the page behind that `.md` URL, served as HTML                                             |
 | `js-only.html`                         | a body with no text after extraction (browser step)                                        |
 | `exam-guide.pdf`                       | a one-page PDF served as `application/pdf` under a URL without `.pdf`                      |
 
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and
 NVIDIA responses carry the headers as received. The `403`, `304`, `google-md-answers-html`,
-`js-only.html`, `.noisy`, `timeout` and the PDF are synthesised. A ticket may add further synthesised folders in the
+`js-only.html`, `.noisy`, `.changed`, `google-overview.html`, `timeout` and the PDF are synthesised. A ticket may add further synthesised folders in the
 same format; keep this table current.

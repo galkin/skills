@@ -5,8 +5,9 @@ a reader would open), `fetched_at`, `sha256` of the Markdown body, `publisher`, 
 `converter` with its version (`trafilatura 2.3.1`), and `etag` / `last_modified` when the server
 sent them; optionally `title`, `modified` (the publisher's own date),
 `original {url, mediatype, sha256, stored}` (`stored` is a boolean; the Original's name follows
-from the Version's) and `origin`
-(`web` or `owner`).
+from the Version's; `original.url` is the address the bytes came from), `requested` (the
+address asked for, when a redirect or a canonical link changed it) and `origin` (`web` or
+`owner`).
 The Store's `datapackage.json` (Frictionless Data Package) is generated from those files and never
 edited by hand.
 

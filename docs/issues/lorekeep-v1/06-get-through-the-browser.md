@@ -7,7 +7,7 @@
 **Status:** ready-for-agent
 
 - [ ] the `milvus-403` fixture triggers the fetcher fake exactly once and stores what it returns with `converter: trafilatura … via crawl4ai …` and the rendered HTML as the Original
-- [ ] a host with `browser = true` skips the plain client entirely (zero transport calls)
+- [ ] a host given `browser = true` in the test's `lorekeep.toml` skips the plain client entirely (zero transport calls)
 - [ ] the `js-only.html` fixture now triggers the fetcher instead of "no content"
 - [ ] the rule's `cut` selectors are passed to the fetcher
 - [ ] with the fetcher absent (fake reports "not installed"), `get` exits non-zero with the extra's name and stores nothing

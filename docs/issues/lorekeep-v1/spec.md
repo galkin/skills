@@ -175,9 +175,14 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 
 - A Python 3.12 package managed by `uv`, exposing one console script `lorekeep` with subcommands
   `get`, `add`, `search`, `index`, `recheck`, `backup`, `restore`, `tag`, `status`, `skill`. Commands print
-  human-readable text by default and `--json` for machine use; in text mode `get` prints the
-  Version's path on its last line so a shell can capture it, in `--json` mode the path is the
-  `path` field of the one object printed and nothing follows it. Warnings go to stderr in both.
+  human-readable text; `get`, `search` and `status` also take `--json`, and no other command does.
+  In text mode `get` prints the Version's path on its last line so a shell can capture it; with
+  `--json` it prints one object `{path, url, sha256, fetched_at, converter, publisher, authority,
+  verified_at, outcome}` (`outcome` one of `stored | fresh | unchanged | changed | gone | error`)
+  and nothing follows it. `search --json` prints `{results: [{file, line, heading, snippet, url,
+  tag[]}], other_tags: N}`; `status --json` prints the figures of ticket 11 as one object.
+  Warnings go to stderr in every mode.
+- A Store folder is never created by lorekeep: a `--store` that does not exist is an error.
 - The Store is `LOREKEEP_STORE` (an environment variable or `--store`), one flat folder. The Run's
   Tag is `LOREKEEP_TAG` or `--tag`; `get` and `add` fail without one and accept exactly one;
   `search` and `recheck` take `--tag` repeated as their scope and without any cover the whole
@@ -198,18 +203,32 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
   twin = "accept-header"        # "md-suffix" | "accept-header" | "raw" | absent (no Twin)
 
   [[hosts]]
-  prefix = "milvus.io/docs/"
-  publisher = "milvus"
+  prefix = "docs.aws.amazon.com/"
+  publisher = "aws"
   authority = "primary"
+  twin = "md-suffix"
+  page_suffix = ".html"         # what md-suffix replaces; absent means .md is appended
+
+  [[hosts]]
+  prefix = "example.test/app/"
+  publisher = "example"
+  authority = "third-party"
   browser = true
   cut = ["nav", ".cookie-banner"]
   ```
 
-  `md-suffix` appends `.md` to the page path; `accept-header` adds `?accept=text/markdown`; `raw`
-  means the URL as given answers plain text and is its own Twin.
+  `md-suffix` replaces the page's `page_suffix` (or appends when there is none) with `.md`, and
+  the reverse reduction puts `page_suffix` back; `accept-header` adds `?accept=text/markdown`;
+  `raw` means the URL as given answers plain text and is its own Twin. The package default table
+  holds exactly: `platform.claude.com/` → `anthropic`, primary, `md-suffix`;
+  `docs.aws.amazon.com/` → `aws`, primary, `md-suffix` with `page_suffix = ".html"`;
+  `learn.microsoft.com/` → `microsoft`, primary, `accept-header`; `docs.nvidia.com/` → `nvidia`,
+  primary; `cloud.google.com/` → `google`, primary; `milvus.io/` → `milvus`, primary (no
+  `browser` flag: the `403` is the signal); `claude.termidy.com/` → `termidy`, third-party;
+  `raw.githubusercontent.com/` → `github`, third-party, `raw`.
 - Finding the latest Version of a URL never needs the Index: without one, the frontmatter of
   every `.md` file in the Store is read (a few thousand small headers, well under a second) and
-  matched on `url` and `original.url` against the normalised request; the newest `fetched_at`
+  matched on `url` and `requested` against the normalised request; the newest `fetched_at`
   wins. With an Index the same question is one query.
 - Version file name: `<host>--<path with every / and unsafe character as ->--<first 8 hex of
   sha256>.md`; the path part is cut to keep the whole name under 200 bytes. The *stem* is that
@@ -219,7 +238,8 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
   Sources use `owner--<slug>--<sha8>.md` with `url: owner:<slug>`.
 - Growing files, all append-only CSV with a header: `tags.csv` (`url, tag, added_at`),
   `checks.csv` (`url, checked_at, result, status, sha256` — `result` is one of `unchanged`,
-  `changed`, `gone`, `error`; `status` the HTTP status or an error label such as `timeout`;
+  `changed`, `gone`, `error`; `status` the HTTP status code, or the exception's class name such as
+  `ReadTimeout` when there was no response;
   `sha256` the Markdown hash of the Version that is latest after the check), and `citations.csv`
   (`work_id, url[, as_of]`), the last written by the consuming Project, never by lorekeep.
 - The lock file is `.lorekeep.lock` in the Store root; temporary files are `<name>.tmp-<pid>`.
@@ -234,16 +254,19 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 - A request that is itself a Twin URL under a host rule (`….md`, `?accept=text/markdown`) is
   reduced to the page URL first, so a brief that hands over the Twin's address finds the same
   Version.
-- The stored `url` is the final one after HTTP redirects and after a Twin's `canonicalUrl`
-  frontmatter when present, with the Twin suffix removed; the requested URL is kept in
-  `original.url` when it differs.
+- The stored `url` is the final one after HTTP redirects, after a Twin's `canonicalUrl`
+  frontmatter or an HTML page's `<link rel="canonical">` when present, normalised, with the Twin
+  suffix removed. The normalised URL as requested is kept in `requested` when it differs from
+  `url`. `original.url` is something else: the address the bytes came from (the Twin URL, the
+  target of a meta-refresh stub).
 
 ### The cascade (`get`)
 
 1. Twin: for a host whose rule names one, the Twin URL per the rule's `twin` kind; accepted only
    when the response media type is `text/markdown`, or `text/plain` under a `raw` rule. The Twin's
    own frontmatter, if any, is removed from the body and mined for `title`, `canonicalUrl` and
-   `modified` (the first present of `ms.date`, `updated_at`, `lastmod`, `date`). `converter:
+   `modified` (the first present of `ms.date`, `updated_at`, `lastmod`, `date`). A Twin URL that
+   answers anything but Markdown is discarded and the page URL is fetched by step 2. `converter:
    md-twin`; the Original is not stored, `original.sha256` hashes the bytes received.
 2. Static HTML over `httpx`: follow redirects and `<meta http-equiv="refresh">`; extract with
    Trafilatura (formatting, links, tables on); rewrite relative links to absolute against the final
@@ -261,13 +284,18 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 - Freshness: the window is `freshness_days` from `lorekeep.toml` (default 30) unless `--max-age
   <days>` is given on the call; `--fresh` is `--max-age 0`. A Version's age is counted from the
   later of its `fetched_at` and its last `unchanged` row in `checks.csv`. If the latest Version is
-  younger than the window, return it and append the Tag if missing. Otherwise send a conditional request
-  (`If-None-Match`, `If-Modified-Since` from the frontmatter); `304` → `unchanged` row, return the
-  latest Version; `200` → compare the received bytes with `original.sha256`: equal → `unchanged`;
-  different → convert and compare the Markdown hash with the Version's: equal → `unchanged`;
-  different → new Version and a `changed` row. `404`/`410` → `gone` row, a warning, the latest
-  Version is returned; a connection or timeout failure → `error` row, a warning, the latest
-  Version is returned. Without any stored Version the same failures exit non-zero.
+  younger than the window, return it and append the Tag if missing. Otherwise send a conditional
+  request (`If-None-Match`, `If-Modified-Since` from the frontmatter) to `original.url`, the
+  address the Version's bytes came from; `304` → `unchanged` row, return the latest Version;
+  `200` → compare the received bytes with `original.sha256`: equal → `unchanged`; different →
+  convert with the Version's step and compare the Markdown hash with the Version's: equal →
+  `unchanged`; different → new Version and a `changed` row. `404`/`410` on a Twin address → the
+  cascade continues with the page URL: content → a new Version by that step and a `changed` row
+  (the publisher dropped its Twin, which is real news); `404`/`410` there too, or on a page
+  address → `gone` row, a warning, the latest Version is returned. Any other status (`403`, `429`,
+  `5xx`) → `error` row with that status, a warning, the latest Version returned; a transport
+  exception → `error` row with the exception's class name, likewise. Without any stored Version
+  the same failures exit non-zero.
 - The browser and the `gcloud` binary are reached through two small interfaces (a page fetcher and
   a command runner) that the command layer receives; production wires Crawl4AI and `subprocess`,
   tests wire fakes.
@@ -276,13 +304,18 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 
 - Required: `url`, `fetched_at` (UTC ISO 8601), `sha256` (of the Markdown body, after the
   frontmatter), `publisher`, `authority` (`primary | official | third-party | generated`),
-  `converter`. When served: `etag`, `last_modified`. Optional: `title`, `modified`,
-  `original {url, mediatype, sha256, stored}`, `origin` (`web | owner`, default `web`).
+  `converter`. When served: `etag`, `last_modified`. Optional: `title`, `modified` (a date,
+  `YYYY-MM-DD`, parsed leniently from whatever the publisher gives — `2026-08-13T00:00:00.0000000Z`
+  becomes `2026-08-13` — and omitted when nothing parses), `requested`, `original {url, mediatype,
+  sha256, stored}`, `origin` (`web | owner`, default `web`).
 - Nothing that changes later is in the frontmatter; Tags and Rechecks are rows in their CSVs.
-- One commit point: every command that stores a Version or a Tag goes through one function of the
-  Store module that writes the file, appends the CSV rows under the lock and then notifies the
-  Index. Tickets that add fetch steps never touch that function; the Index ticket fills only its
-  notification.
+- One commit point: every command that writes to the Store goes through one function of the
+  Store module whose full signature is fixed in the first ticket that builds it: an optional
+  Version (frontmatter plus body) with its optional Original bytes, a list of `tags.csv` rows and
+  a list of `checks.csv` rows — any of them may be empty — and it takes `.lorekeep.lock`, renames
+  the files into place, appends the rows, notifies the Index, and releases the lock. Later tickets
+  pass different arguments; the Index ticket fills only the notification; nobody widens the
+  signature.
 
 ### Index (`index`, `search`)
 
@@ -291,12 +324,15 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
   row per Version, every frontmatter field, file name), `tags`, `checks`, `citations`, `sections`
   (version, heading path, line of the heading in the file, body, order), and `sections_fts` —
   FTS5 external-content over `sections(heading, body)` with `tokenize = 'porter unicode61'`.
-- Staleness: a command that reads the Index compares the count of `.md` files in the Store with
-  the count of `versions` rows; on a mismatch or a missing file it rebuilds under the Store lock,
-  so six workers finding no Index produce one rebuild, not six. `restore` and a hand-copied file
+- Staleness: a command that reads the Index takes the Store lock, compares the count of `.md`
+  files with the count of `versions` rows, and rebuilds on a mismatch or a missing file before
+  releasing it; because a commit holds the same lock from rename to notification, a reader never
+  sees a file without its row, and six workers finding no Index produce one rebuild, not six. `restore` and a hand-copied file
   are therefore picked up on the next read.
 - Sections: split at Markdown headings; a Section over 4 KB is cut again at paragraph boundaries
   with the same heading path; code fences are never split.
+- `citations.csv` at ingest: `url` is normalised and Twin-reduced like a request, so a Project may
+  cite the `.md` address; `as_of` is an ISO 8601 date or timestamp compared against `fetched_at`.
 - `search`: `bm25` ranking, `snippet()` of the body, default 5 results, `--limit`; output lines are
   `file:line | heading path | snippet`; the final line is always `+N matches under other tags
   (--all)` computed from the same query without the Tag filter (`+0` when none), omitted when the
@@ -311,8 +347,8 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 - Iterates the latest Version per Source in scope (`--tag` repeated, `--publisher`, `--prefix
   <url-prefix>`; default the Run's Tag, everything when no Tag is set; `owner:` Sources are
   skipped), performs the conditional request or full fetch through the same cascade as `get`,
-  browser step included, with the same four outcomes (a `403` that no browser can follow is
-  `error` with status `403`), appends to `checks.csv`, stores new Versions and prints
+  browser step included — a Version whose `converter` says `via crawl4ai` is asked through the
+  fetcher — with the same four outcomes, appends to `checks.csv`, stores new Versions and prints
   counts per outcome. `--citations` joins `citations.csv`
   with `versions` and prints `work_id, url, old sha8 → new sha8` for every work whose cited Source
   has a Version newer than the one the work was written from: the Version current at the time in
@@ -372,12 +408,13 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
   `404` and recorded as a miss), and fakes for the page fetcher (browser) and the command runner
   (`gcloud`) that record their calls and return canned results. All three are built from paths
   and plain values, so a child process can construct its own. There is no clock edge: a test that
-  needs an old Version writes one with a helper that takes `fetched_at`.
+  needs a stored Version writes one with a helper that takes a fixture folder (so `original.sha256`
+  and the body match that response) and a `fetched_at`.
 - Fixtures are committed already and described in `tests/fixtures/README.md`: the five measured
   pages (three termidy lessons, Anthropic and AWS `prompt-caching`, each as HTML and, for the two
   vendors, as Twin), the Microsoft Learn redirect chain ending in a Twin with `canonicalUrl`, the
   NVIDIA NIM meta-refresh stub with its target, and synthesised `403`, `304`, `.md`-answers-HTML,
-  JavaScript-only, timeout, noisy-HTML and PDF responses. The live network is touched only by one manual smoke script
+  JavaScript-only, timeout, noisy-HTML, changed-HTML and PDF responses. The live network is touched only by one manual smoke script
   outside `pytest`.
 - Concurrency is tested with a process pool calling `get` on the same URLs against one Store and
   asserting one file per Version, complete CSVs and a consistent Index.
