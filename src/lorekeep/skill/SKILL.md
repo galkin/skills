@@ -233,7 +233,7 @@ fetch, Recheck results, hosts no rule knows, size, and the Project's settings.
 ```text
 Store: /…/store
 5 Versions of 5 Sources
-Readings: 1 of 5 Versions, 3 rules
+Readings: 1 of 5 Versions, 6 rules
 Tags: nvidia 5
 Oldest fetched_at: 2026-10-17T20:08:26Z
 Newest fetched_at: 2026-10-17T20:08:26Z
@@ -245,5 +245,5 @@ Freshness window: 30 days
 ```
 
 ```json
-{"versions": 5, "sources": 5, "tags": {"nvidia": 5}, "oldest_fetched_at": "2026-10-17T20:08:26Z", "newest_fetched_at": "2026-10-17T20:08:26Z", "checks": {"unchanged": 0, "changed": 0, "gone": 0, "error": 0}, "unknown_hosts": ["genai.owasp.org", "helm.sh"], "readings": 1, "rules": 3, "bytes": 303355}
+{"versions": 5, "sources": 5, "tags": {"nvidia": 5}, "oldest_fetched_at": "2026-10-17T20:08:26Z", "newest_fetched_at": "2026-10-17T20:08:26Z", "checks": {"unchanged": 0, "changed": 0, "gone": 0, "error": 0}, "unknown_hosts": ["genai.owasp.org", "helm.sh"], "readings": 1, "rules": 6, "bytes": 303355}
 ```

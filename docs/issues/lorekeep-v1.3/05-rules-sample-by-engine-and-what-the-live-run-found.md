@@ -97,3 +97,19 @@ answers `… > CHAPTER III > Article 9`. `rules sample docs.nvidia.com/ --sample
 `fern`, `sphinx` and `other` groups. The Store holds 9 rules (3 package, 6 Store); the four EUR-Lex
 ones are `engine = "eur-lex"` rules for `readings.toml`, dispatched as the last step, after which
 the Store's copies go.
+
+**2026-10-17 — the EUR-Lex rules in `readings.toml` (branch `galkin/lorekeep-v13-05b`).** The
+package's article rule (level 2) is replaced by the four rules as accepted live, all
+`engine = "eur-lex"`, in this order: `drop_leading = "^# Need help\?$"` (`removes = "2 lines"`),
+`heading_before` the act line at level 1 (one per act), `^CHAPTER [IVXLC]+$` at 2 (24) and
+`^Article \d+$` at 3 (212); the table's comment names those measurements. The package now holds 6
+rules, so `status` counts 3 more everywhere (the tests and `SKILL.md`'s `status` example: `6
+rules`). `eur-lex-ai-act.v1` already held the help box and the act line, so it was not extended:
+in a Store without rules its Reading starts at `This document is an excerpt from the EUR-Lex
+website`, is titled `REGULATION (EU) 2024/1689 OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL`, and
+`search` answers `REGULATION (EU) 2024/1689 … > CHAPTER I > Article 2`. The engine tests follow: a
+Store rule stacking on the defaults is now `^Whereas:$` (the chapter rule is a default), the
+replacing one moves the articles to level 4, and a prefix's own `heading_before` rules still take
+the help-box `drop_leading`, so that Reading is titled `CHAPTER I`. `references/owner.md` names the
+new defaults. The first Store's four `prefix = "eur-lex.europa.eu/"` copies are untouched; while
+they stay, that prefix's rules win there, with the same effect.

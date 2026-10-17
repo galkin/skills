@@ -27,6 +27,7 @@ RAIL_TYPES = (
 RETRY = "https://learn.microsoft.com/en-us/azure/architecture/patterns/retry"
 LANGCHAIN_TOOLS = "https://docs.langchain.com/oss/python/langchain/tools"
 AI_ACT = "https://eur-lex.europa.eu/eli/reg/2024/1689/oj"
+ACT = "REGULATION (EU) 2024/1689 OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL"
 FENCES = "https://docs.example.test/guide/fences-and-tables"
 
 # The ticket's rule was `llms\.txt|For clean Markdown`; the banner's last line names neither (it
@@ -326,21 +327,37 @@ def test_the_package_mintlify_rule_drops_the_banner_and_keeps_the_footer(tmp_pat
     assert b'<div className="source-links">\n' in reading_body
 
 
-def test_the_package_eur_lex_rule_puts_a_heading_before_each_article(tmp_path: Path) -> None:
-    """`eur-lex-ai-act.v1` converted by Trafilatura in a Store without rules: the package's EUR-Lex
-    rule heads Articles 1, 2 and 3 at level 2 (212 headings over the first Store's two acts)."""
+def test_the_package_eur_lex_rules_title_the_act_and_head_its_chapters_and_articles(
+    tmp_path: Path,
+) -> None:
+    """`eur-lex-ai-act.v1` as the first Store holds it, in a Store without rules: the package's
+    four EUR-Lex rules drop the `Need help?` box (2 lines) and head the act line at level 1,
+    Chapter I at 2 and Articles 1 to 3 at 3, so the Reading is titled by the act and `search`
+    names act, chapter and article."""
     store = make_store(tmp_path)
-    version = stored(store, "eur-lex-ai-act.v1", converter="trafilatura 2.3.1")
+    version = ai_act(store)
 
     printed = get_json(store, AI_ACT)
+    found = search_json(store, "--exact", "This Regulation applies to")
 
     [reading] = readings_of(store)
     assert printed["path"] == str(reading)
     _, body = read_version(version)
-    _, reading_body = read_version(reading)
+    reading_head, reading_body = read_version(reading)
     added = [line for line in lines_of(reading_body) if line not in set(lines_of(body))]
-    assert added == [b"## Article 1\n", b"## Article 2\n", b"## Article 3\n"]
-    assert len(lines_of(reading_body)) == len(lines_of(body)) + 3
+    assert added == [
+        f"# {ACT}\n".encode(),
+        b"## CHAPTER I\n",
+        b"### Article 1\n",
+        b"### Article 2\n",
+        b"### Article 3\n",
+    ]
+    assert reading_body.startswith(b"This document is an excerpt from the EUR-Lex website\n")
+    assert len(lines_of(reading_body)) == len(lines_of(body)) - 2 + 5
+    assert reading_head["title"] == ACT
+    [hit, *_] = found["results"]
+    assert hit["file"] == str(reading)
+    assert hit["heading"] == f"{ACT} > CHAPTER I > Article 2"
 
 
 def test_a_store_rule_with_the_same_engine_and_operation_replaces_the_default(
@@ -348,7 +365,7 @@ def test_a_store_rule_with_the_same_engine_and_operation_replaces_the_default(
 ) -> None:
     """`guardrails-rail-types.twin` under a Store `engine = "fern"` `drop_leading` that stops at
     the banner's `For clean Markdown` line: the package's rule, which reaches its last line, is
-    not applied, and `status` counts three rules, not four."""
+    not applied, and `status` counts six rules, not seven."""
     rule = '[[readings]]\nengine = "fern"\ndrop_leading = "^> For clean Markdown"\n'
     store = store_with(tmp_path, rule)
     edges, _ = edges_over("guardrails-rail-types.twin")
@@ -361,7 +378,7 @@ def test_a_store_rule_with_the_same_engine_and_operation_replaces_the_default(
     _, body = read_version(Path(printed["version"]))
     assert reading_body.startswith(b"> For a complete documentation index, see ")
     assert lines_of(reading_body) == lines_of(body)[9:]
-    assert status["rules"] == 3
+    assert status["rules"] == 6
 
 
 def test_a_reading_rule_that_cannot_be_used_is_a_usage_error(tmp_path: Path) -> None:
@@ -415,7 +432,9 @@ def search_json(store: Path, *argv: str) -> dict[str, Any]:
 def test_two_heading_before_rules_on_one_prefix_stack_in_file_order(tmp_path: Path) -> None:
     """`eur-lex-ai-act.v1`: a heading per chapter (level 1) and per article (level 2) on
     `eur-lex.europa.eu/`, then a third rule on the article lines that the article rule already
-    headed, which inserts nothing; `search` names the chapter and the article."""
+    headed, which inserts nothing; `search` names the chapter and the article. The prefix shadows
+    the package's `heading_before` rules for the engine, not its help-box `drop_leading`, so the
+    Reading is titled by its first remaining heading, the chapter."""
     again = '[[readings]]\nprefix = "eur-lex.europa.eu/"\nheading_before = "^Article"\nlevel = 3\n'
     store = store_with(tmp_path, CHAPTER_RULE, ARTICLE_RULE, again)
     version = ai_act(store)
@@ -430,38 +449,41 @@ def test_two_heading_before_rules_on_one_prefix_stack_in_file_order(tmp_path: Pa
     assert added == [b"# CHAPTER I\n", b"## Article 1\n", b"## Article 2\n", b"## Article 3\n"]
     assert b"\nGENERAL PROVISIONS\n\n## Article 1\nArticle 1\n" in reading_body
     assert b"### Article" not in reading_body
-    assert reading_head["title"] == "Need help?"
+    assert reading_head["title"] == "CHAPTER I"
     [hit, *_] = found["results"]
     assert hit["file"] == str(reading)
     assert hit["heading"] == "CHAPTER I > Article 2"
-    assert status["rules"] == 6
+    assert status["rules"] == 9
 
 
 def test_a_store_heading_before_replaces_a_default_only_with_the_same_pattern(
     tmp_path: Path,
 ) -> None:
-    """`eur-lex-ai-act.v1` under the package's article rule (`engine = "eur-lex"`, level 2): a
-    Store chapter rule for the engine stacks after it; a Store article rule with the same pattern
-    at level 3 replaces it."""
-    chapter = CHAPTER_RULE.replace('prefix = "eur-lex.europa.eu/"', 'engine = "eur-lex"')
+    """`eur-lex-ai-act.v1` under the package's four EUR-Lex rules: a Store `heading_before` for the
+    engine with another pattern (`^Whereas:$`) stacks after them; a Store article rule with the
+    package's pattern at level 4 replaces the package's level 3."""
+    whereas = '[[readings]]\nengine = "eur-lex"\nheading_before = "^Whereas:$"\nlevel = 2\n'
     article = ARTICLE_RULE.replace('prefix = "eur-lex.europa.eu/"', 'engine = "eur-lex"')
-    store = store_with(tmp_path, chapter)
+    store = store_with(tmp_path, whereas)
     ai_act(store)
 
     stacked = json.loads(lorekeep(store, edges_over()[0], "status", "--json").stdout)
     [reading] = readings_of(store)
     stacked_body = read_version(reading)[1]
-    set_rules(store, article.replace("level = 2", "level = 3"))
+    set_rules(store, article.replace("level = 2", "level = 4"))
     replaced = json.loads(lorekeep(store, edges_over()[0], "status", "--json").stdout)
     lorekeep(store, edges_over()[0], "read")
     replaced_body = read_version(reading)[1]
 
-    assert stacked["rules"] == 4
-    assert b"# CHAPTER I\n" in stacked_body
-    assert stacked_body.count(b"\n## Article ") == 3
-    assert replaced["rules"] == 3
-    assert replaced_body.count(b"\n### Article ") == 3
-    assert b"\n## Article " not in replaced_body
+    assert stacked["rules"] == 7
+    assert f"# {ACT}\n".encode() in stacked_body
+    assert b"\n## Whereas:\nWhereas:\n" in stacked_body
+    assert b"\n## CHAPTER I\n" in stacked_body
+    assert stacked_body.count(b"\n### Article ") == 3
+    assert replaced["rules"] == 6
+    assert b"\n## Whereas:" not in replaced_body
+    assert replaced_body.count(b"\n#### Article ") == 3
+    assert b"\n### Article " not in replaced_body
 
 
 def test_a_drop_leading_that_matches_the_first_heading_takes_it_and_the_title(
@@ -469,8 +491,8 @@ def test_a_drop_leading_that_matches_the_first_heading_takes_it_and_the_title(
 ) -> None:
     """`eur-lex-ai-act.v1`, whose first heading and `title` are EUR-Lex's `Need help?` box: the
     rule takes that heading and the blank line after it; the Reading is titled by its first
-    remaining heading, the package's `## Article 1`. On `readings-fence-table.v1` (synthesised)
-    the first remaining heading is the page's own `## Article 9`."""
+    remaining heading, the act line the package's rule heads. On `readings-fence-table.v1`
+    (synthesised) the first remaining heading is the page's own `## Article 9`."""
     store = store_with(tmp_path, HELP_BOX_RULE)
     version = ai_act(store)
     page_rule = (
@@ -491,7 +513,7 @@ def test_a_drop_leading_that_matches_the_first_heading_takes_it_and_the_title(
     )
     assert reading_body.startswith(b"This document is an excerpt from the EUR-Lex website\n")
     assert lines_of(reading_body)[:20] == lines_of(body)[2:22]
-    assert reading_head["title"] == "Article 1"
+    assert reading_head["title"] == ACT
     [page] = readings_of(page_store)
     page_head, page_body = read_version(page)
     assert page_body.startswith(b"Edit this page on GitHub\n")
