@@ -1,5 +1,28 @@
 # The package's default reading rules, one [[readings]] table per rule, keyed by `engine` (or by
 # `prefix`). A Project's `lorekeep.toml` extends them, and replaces a rule with the same engine or
-# prefix and operation. Empty on purpose: the engine rules (the Fern banner, EUR-Lex articles,
-# the Microsoft Learn title suffix) come from the live run of `rules check` and `rules accept`
-# on the first Store (v1.3 ticket 03), with the measurements they were accepted at.
+# prefix and operation. Each came from the live run of `rules check` and `rules accept` on the
+# first Store (v1.3 ticket 03), with the measurements it was accepted at. Host rules stay in the
+# Store: the Microsoft Learn title suffix, and LangChain's `source-links` footer, which Mintlify's
+# other host there (modelcontextprotocol.io) does not carry.
+
+# Fern's llms.txt banner before the title (55 Versions on docs.nvidia.com, 813 lines).
+[[readings]]
+engine = "fern"
+drop_leading = "llms\\.txt|For clean Markdown|/_mcp/server"
+accepted = 2026-10-17
+removes = "26 lines"
+
+# Mintlify's `Documentation Index` banner (24 Versions on docs.langchain.com and
+# modelcontextprotocol.io, 4 lines each).
+[[readings]]
+engine = "mintlify"
+drop_leading = "before exploring further\\.$"
+accepted = 2026-10-17
+removes = "4 lines"
+
+# A heading before each article of a EUR-Lex act (2 Versions, 212 headings).
+[[readings]]
+engine = "eur-lex"
+heading_before = "^Article \\d+$"
+level = 2
+accepted = 2026-10-17

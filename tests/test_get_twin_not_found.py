@@ -89,7 +89,8 @@ def test_a_page_that_moved_is_stored_from_the_twin_at_its_new_address(tmp_path: 
 
     assert again.exit_code == 0, again.stderr
     assert json.loads(again.stdout)["outcome"] == "fresh"
-    assert json.loads(again.stdout)["path"] == str(version)
+    # The Fern banner rule of the package makes a Reading; the Version stays the one stored.
+    assert json.loads(again.stdout)["version"] == str(version)
 
 
 def test_a_moved_page_whose_new_twin_is_missing_is_converted_from_its_html(

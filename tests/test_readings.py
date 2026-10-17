@@ -5,7 +5,7 @@ a rule that removes far more than when it was accepted.
 
 Each test names its fixture: the Fern Twin with the llms.txt banner, the Microsoft Learn Twin of
 the Retry pattern, the AI Act cut from the first Store's Version, and one synthesised page with a
-fence and a table.
+fence and a table; the package's engine rules (v1.3 ticket 03) add a Mintlify Twin of LangChain.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ RAIL_TYPES = (
     "https://docs.nvidia.com/nemo/guardrails/latest/about-nemo-guardrails-library/rail-types"
 )
 RETRY = "https://learn.microsoft.com/en-us/azure/architecture/patterns/retry"
+LANGCHAIN_TOOLS = "https://docs.langchain.com/oss/python/langchain/tools"
 AI_ACT = "https://eur-lex.europa.eu/eli/reg/2024/1689/oj"
 FENCES = "https://docs.example.test/guide/fences-and-tables"
 
@@ -278,6 +279,82 @@ def test_an_engine_rule_applies_to_the_versions_that_engine_made(tmp_path: Path)
     [reading] = readings_of(store)
     assert reading.name.startswith("docs.nvidia.com--")
     assert read_version(reading)[1].startswith(b"# Guardrail Types\n")
+
+
+def test_the_package_fern_rule_drops_the_banner_of_a_fern_twin(tmp_path: Path) -> None:
+    """`guardrails-rail-types.twin` in a Store without rules: the package's Fern rule drops its
+    12-line banner (31 such Versions of NeMo Guardrails on the first Store, 12 lines each)."""
+    store = make_store(tmp_path)
+    edges, _ = edges_over("guardrails-rail-types.twin")
+
+    printed = json.loads(get(store, edges, "--json", RAIL_TYPES, tag="nvidia").stdout)
+
+    [reading] = readings_of(store)
+    assert printed["path"] == str(reading)
+    reading_head, reading_body = read_version(reading)
+    _, body = read_version(Path(printed["version"]))
+    assert reading_body.startswith(b"# Guardrail Types\n")
+    assert len(lines_of(body)) - len(lines_of(reading_body)) == 12
+    assert lines_of(reading_body) == lines_of(body)[12:]
+    assert b"llms.txt" not in reading_body
+    assert "warnings" not in reading_head
+
+
+def test_the_package_mintlify_rule_drops_the_banner_and_keeps_the_footer(tmp_path: Path) -> None:
+    """`langchain-tools.twin` in a Store without rules: the package's Mintlify rule drops the
+    4-line `Documentation Index` banner; LangChain's `source-links` footer is a Store rule, since
+    the other Mintlify host of the first Store (modelcontextprotocol.io) has none."""
+    store = make_store(tmp_path)
+    edges, _ = edges_over("langchain-tools.twin")
+
+    printed = json.loads(get(store, edges, "--json", LANGCHAIN_TOOLS, tag="langchain").stdout)
+
+    [reading] = readings_of(store)
+    assert printed["path"] == str(reading)
+    _, reading_body = read_version(reading)
+    _, body = read_version(Path(printed["version"]))
+    assert body.startswith(b"> ## Documentation Index\n")
+    assert reading_body.startswith(b"# Tools\n")
+    assert lines_of(reading_body) == lines_of(body)[4:]
+    assert b'<div className="source-links">\n' in reading_body
+
+
+def test_the_package_eur_lex_rule_puts_a_heading_before_each_article(tmp_path: Path) -> None:
+    """`eur-lex-ai-act.v1` converted by Trafilatura in a Store without rules: the package's EUR-Lex
+    rule heads Articles 1, 2 and 3 at level 2 (212 headings over the first Store's two acts)."""
+    store = make_store(tmp_path)
+    version = stored(store, "eur-lex-ai-act.v1", converter="trafilatura 2.3.1")
+
+    printed = get_json(store, AI_ACT)
+
+    [reading] = readings_of(store)
+    assert printed["path"] == str(reading)
+    _, body = read_version(version)
+    _, reading_body = read_version(reading)
+    added = [line for line in lines_of(reading_body) if line not in set(lines_of(body))]
+    assert added == [b"## Article 1\n", b"## Article 2\n", b"## Article 3\n"]
+    assert len(lines_of(reading_body)) == len(lines_of(body)) + 3
+
+
+def test_a_store_rule_with_the_same_engine_and_operation_replaces_the_default(
+    tmp_path: Path,
+) -> None:
+    """`guardrails-rail-types.twin` under a Store `engine = "fern"` `drop_leading` that stops at
+    the banner's `For clean Markdown` line: the package's rule, which reaches its last line, is
+    not applied, and `status` counts three rules, not four."""
+    rule = '[[readings]]\nengine = "fern"\ndrop_leading = "^> For clean Markdown"\n'
+    store = store_with(tmp_path, rule)
+    edges, _ = edges_over("guardrails-rail-types.twin")
+
+    printed = json.loads(get(store, edges, "--json", RAIL_TYPES, tag="nvidia").stdout)
+    status = json.loads(lorekeep(store, edges_over()[0], "status", "--json").stdout)
+
+    [reading] = readings_of(store)
+    _, reading_body = read_version(reading)
+    _, body = read_version(Path(printed["version"]))
+    assert reading_body.startswith(b"> For a complete documentation index, see ")
+    assert lines_of(reading_body) == lines_of(body)[9:]
+    assert status["rules"] == 3
 
 
 def test_a_reading_rule_that_cannot_be_used_is_a_usage_error(tmp_path: Path) -> None:

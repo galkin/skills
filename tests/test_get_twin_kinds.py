@@ -247,9 +247,11 @@ def changed(fixture: str, body: bytes, tmp_path: Path, **headers: str) -> Edges:
 
 def stored_then_aged(store: Path, url: str, fixture: str) -> Path:
     edges, _ = edges_over(fixture)
-    result = get(store, edges, url, tag="nvidia")
+    result = get(store, edges, "--json", url, tag="nvidia")
     assert result.exit_code == 0, result.stderr
-    path = Path(result.stdout.splitlines()[-1])
+    printed = json.loads(result.stdout)
+    # `path` is the Reading when a rule of the package reaches the page (a Fern Twin's banner).
+    path = Path(printed.get("version", printed["path"]))
     age_version(path, days=40)
     return path
 

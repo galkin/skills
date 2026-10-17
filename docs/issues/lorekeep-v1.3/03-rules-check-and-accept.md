@@ -4,13 +4,13 @@
 
 **Blocked by:** 01, 02
 
-**Status:** done, but the fifth criterion: the live run is the orchestrator's
+**Status:** done
 
 - [x] `rules sample docs.nvidia.com/` over five Fern Twin fixtures prints five paths, shortest and longest first; `--sample 2` prints two
 - [x] `rules check` with a fixture file of candidates (the TOML a proposer returned for `docs.nvidia.com/` on the first live run, kept as `tests/fixtures/readings-candidates-fern.toml`) prints each candidate with its measurements and verdict and writes nothing; a candidate that removes 40% of one Version, or a fence line, or a leading block after the first heading, is `fail` with the reason
 - [x] `removes` is written with its unit (`"31 lines"` for `drop_leading`/`drop_trailing`, `"4%"` for `drop_lines`, absent for the other two) and the guard of ticket 01 compares in that unit: on the first Store's rule `drop_leading = "llms\\.txt|For clean Markdown|/_mcp/server"` for `docs.nvidia.com/` every one of the 55 banner Versions gets a Reading (the 79-line Dynamo router guide with its 31-line banner included), and a Version where the block is more than twice the accepted count is held back with `rule <name> removed N lines (accepted at M lines)`
 - [x] `rules accept` with that file appends only the passing rules to `lorekeep.toml`, with `accepted` and `removes`, prints `Accepted N rules, M failed`, and `lorekeep read` has then built the Readings under the prefix; `--all` appends the failing ones too; a rule already present (same prefix and operation) is replaced, not duplicated
-- [ ] run live by the orchestrator on the first Store with a Haiku-tier subagent for `docs.nvidia.com/`, `eur-lex.europa.eu/`, `learn.microsoft.com/` and `docs.nvidia.com/rag/latest/`: the ticket Comment records every candidate, its measurements and the verdict; the accepted engine-level rules (Fern banner, EUR-Lex articles, Microsoft Learn suffix) go into `src/lorekeep/readings.toml` with a test each; the Store's `lorekeep.toml` holds the rest
+- [x] run live by the orchestrator on the first Store with a Haiku-tier subagent for `docs.nvidia.com/`, `eur-lex.europa.eu/`, `learn.microsoft.com/` and `docs.nvidia.com/rag/latest/`: the ticket Comment records every candidate, its measurements and the verdict; the accepted engine-level rules (Fern banner, EUR-Lex articles, Microsoft Learn suffix) go into `src/lorekeep/readings.toml` with a test each; the Store's `lorekeep.toml` holds the rest
 - [x] `references/owner.md` documents `rules sample`, `rules check`, `rules accept`, the `[[readings]]` keys with one example, the limits, and the proposer brief (model tier, input, the exact output format, what the orchestrator does with it) in under 30 lines; the flag test covers the three commands and passes
 
 ## Comments
@@ -125,3 +125,37 @@ hosts; second check 3 pass; `rules accept`: `Accepted 3 rules, 0 failed`, `Built
 6 rules`. Engine candidates for `readings.toml`: `fern` (the banner), `mintlify` (the banner and,
 if it measures on both hosts, the source-links footer), `eur-lex` (articles), and the Microsoft
 Learn suffix, which is a host rule rather than an engine.
+
+**2026-10-17 — engine rules into `readings.toml` (branch `galkin/lorekeep-v13-03b`).** Three
+rules, each `accepted = 2026-10-17`, with what the live runs measured; before writing them, each was
+measured again as an `engine` rule (engine detection and `readings.measure`, reading the first
+Store only) to check that the engine reaches the Versions the prefix rules did:
+
+| rule | `removes` | on the first Store, as an engine rule |
+| --- | --- | --- |
+| `engine = "fern"`, `drop_leading = "llms\\.txt\|For clean Markdown\|/_mcp/server"` | `"26 lines"` | 55 Versions, all on `docs.nvidia.com/`, 813 lines, at most 26 |
+| `engine = "mintlify"`, `drop_leading = "before exploring further\\.$"` | `"4 lines"` | 24 Versions (22 `docs.langchain.com/`, 2 `modelcontextprotocol.io/`), 4 lines each |
+| `engine = "eur-lex"`, `heading_before = "^Article \\d+$"`, `level = 2` | none | 2 Versions, 212 headings |
+
+Left out, and why. Mintlify's `drop_trailing = "^<div className=\"source-links\">"` is
+LangChain's footer, not Mintlify's: neither `modelcontextprotocol.io` Version carries it (the
+engine rule would change 22 of its 24 Versions), so it stays the Store's `docs.langchain.com/`
+rule. The Microsoft Learn suffix is a host, not an engine, and stays the Store's rule, so the
+criterion's "Fern banner, EUR-Lex articles, Microsoft Learn suffix" is read as Fern, Mintlify and
+EUR-Lex. The Store's six prefix rules still win over these for the same operation, so nothing
+changes there.
+
+Tests in `tests/test_readings.py`, each in a Store without rules: the Fern rule on
+`guardrails-rail-types.twin` (the 12-line banner gone, the rest line for line), the Mintlify rule
+on `langchain-tools.twin` (the 4-line banner gone, the `source-links` footer kept), the EUR-Lex rule
+on `eur-lex-ai-act.v1` converted by Trafilatura (`## Article 1` to `3`); and a Store `engine =
+"fern"` `drop_leading` stopping at `For clean Markdown` that replaces the default (the Reading
+starts at the banner's next line, `status` counts 3 rules). All four fail with an empty
+`readings.toml`. No new fixture. With rules by default, five existing tests had assumed none: a
+Fern Twin's `get` now returns its Reading, so `stored_then_aged` ages the Version (`version` in
+JSON) and the moved-page test compares `version`; the "rule added" index test stores the page as a
+conversion, which no engine rule reaches; `status` counts the package's three rules. `SKILL.md`'s
+search examples were re-captured (the Reading's path, lines 21 up), and its `status` examples from
+a Store of five fixtures (`helm`, `owasp`, the two Guardrails pages, NIM overview): `Readings: 1 of 5
+Versions, 3 rules`. `owner.md` names what `readings.toml` ships and no longer calls Microsoft Learn
+an engine.
