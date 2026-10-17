@@ -236,9 +236,9 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 
 - Iterates the latest Version per Source in scope, performs the conditional request or full fetch
   as in `get`, appends to `checks.csv`, stores new Versions. `--citations` joins `citations.csv`
-  with `versions` and `checks` and prints `work_id, url, old sha8 → new sha8` for every work whose
-  cited Source has a Version newer than the Version current when… (the Version current at the time
-  recorded in `citations.csv`'s optional third column `as_of`, else the oldest Version).
+  with `versions` and prints `work_id, url, old sha8 → new sha8` for every work whose cited Source
+  has a Version newer than the one the work was written from: the Version current at the time in
+  `citations.csv`'s optional third column `as_of`, or the oldest Version when `as_of` is absent.
 
 ### Backup
 
