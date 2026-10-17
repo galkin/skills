@@ -174,7 +174,8 @@ These restate the ADRs in `docs/adr/` where a builder needs the detail; the ADRs
 
 ### Commands and layout
 
-- A Python 3.12 package managed by `uv`; runtime dependencies are `httpx`, `trafilatura` (which
+- A Python 3.12–3.13 package managed by `uv` (`requires-python = ">=3.12,<3.14"`; the owner's
+  machine has 3.13, and 3.14 lacks an `onnxruntime` wheel); runtime dependencies are `httpx`, `trafilatura` (which
   brings `lxml`), `markitdown[pdf]`, `cssselect` (what `lxml` needs for CSS selectors; it comes with
   neither `lxml` nor Trafilatura), `PyYAML` (frontmatter is read with `yaml.BaseLoader`, which
   yields strings only — `safe_load` turns `2026-08-13T00:00:00.0000000Z` into a `datetime`;

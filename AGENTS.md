@@ -17,7 +17,8 @@ the owner is in Russian.
 
 ## Commands
 
-Python 3.12 managed by `uv`. `uv sync` installs everything; then:
+Python 3.12 or 3.13 managed by `uv` (`requires-python = ">=3.12,<3.14"`: 3.14 has no wheel for a
+transitive dependency of `markitdown[pdf]`). `uv sync` installs everything; then:
 
 - `uv run pytest` — the test suite. Tests never touch the network: fetching is tested against pages
   saved under `tests/fixtures/`.

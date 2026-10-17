@@ -14,7 +14,8 @@ defined in [`GLOSSARY.md`](GLOSSARY.md); the decisions behind them are in [`docs
 ## Install
 
 lorekeep is a Python package managed by [`uv`](https://docs.astral.sh/uv/); it is not on PyPI.
-From a checkout of this repository:
+It needs Python 3.12 or 3.13 (3.14 has no wheel for a dependency of the PDF converter); `uv`
+picks an installed one. From a checkout of this repository:
 
 ```sh
 uv tool install --editable .             # the `lorekeep` command, on your PATH
