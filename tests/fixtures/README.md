@@ -100,6 +100,9 @@ synthesised: `v3.helm.sh` answered `200` itself on that day, not a redirect.
 | `ai-act-service-desk-article-26.html`  | AI Act Service Desk: the only `<h1>` is the site's banner `AI Act Explorer`, which the `<title>` does not begin with |
 | `nist-ai-600-1.pdf`                    | page 5 of NIST AI 600-1 with the document's metadata `Title`; its text spells `proﬁle` with U+FB01 |
 | `eur-lex-ai-act.html`                  | EUR-Lex AI Act: the head, the title block and the first 30 recitals (60 KB, 28,000 characters of Markdown), and the footer whose `Need help?` is the one heading |
+| `build-safety-for-agentic-ai.twin`     | the `build.nvidia.com` Twin `nvidia/safety-for-agentic-ai.md` (`text/markdown`), cut from the first Store's Version to the text before `## Minimum System Requirements` (v1.2 ticket 07) |
+| `build-nemotron-nano.twin`             | synthesised: a Twin at `nvidia/nvidia-nemotron-nano-9b-v2.md`, read for the `…/modelcard` page |
+| `build-safety-for-agentic-ai.301`      | synthesised: `nvidia/agentic-ai-safety.md`, a `301` to `nvidia/safety-for-agentic-ai.md` |
 
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and
@@ -135,3 +138,6 @@ attributes and keep only the subtrees a test reads, under the original `<title>`
 `<meta>` tags (EUR-Lex keeps only its `og:` and `description` ones of 107 KB). The PDF is the
 Original's fifth page, cut with `qpdf --pages . 5`, which keeps the information dictionary. Their
 headers are the ones the Store's frontmatter records.
+The v1.2 ticket 07 Twin is the first Store's Version body (2026-10-17): a Twin keeps no Original,
+so the body is the text received after its frontmatter. Of that frontmatter only `title` (the
+Version's) is put back; the rest, and the response headers, were never kept.

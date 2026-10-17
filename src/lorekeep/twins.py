@@ -51,6 +51,17 @@ def to_page(path: str, pieces: list[str], rule: HostRule) -> tuple[str, list[str
     return path, pieces
 
 
+def to_asked_page(path: str, asked: str, rule: HostRule) -> str:
+    """The page's path from a Twin's, in the form of the page path `asked`: under `md-suffix`
+    with a `page_suffix`, the suffix goes back on only when `asked` carried it (both `<model>` and
+    `<model>/modelcard` have the Twin `<model>.md`); any other path as `to_page` gives it."""
+    if rule.twin == "md-suffix" and rule.page_suffix and path.endswith(MD):
+        page = asked.rstrip("/")
+        if not page.endswith(MD) and not page.endswith(rule.page_suffix):
+            return path.removesuffix(MD)
+    return to_page(path, [], rule)[0]
+
+
 def to_raw(host: str, path: str) -> tuple[str, str] | None:
     """The raw file's host and path for a GitHub `blob` page's; `None` for any other address."""
     pieces = path.split("/")
