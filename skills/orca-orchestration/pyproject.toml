@@ -1,0 +1,12 @@
+[project]
+name = "orca-orchestration"
+version = "0.1.0"
+description = "Runner for a subset of the Dagu YAML workflow syntax, plus Orca adapter actions"
+requires-python = ">=3.11"
+dependencies = ["pyyaml>=6", "jsonschema>=4"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

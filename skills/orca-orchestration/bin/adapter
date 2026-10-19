@@ -1,0 +1,12 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.11"
+# ///
+"""Entry point: `bin/adapter <command> ...`. No dependencies beyond the standard library."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from adapter.cli import main  # noqa: E402
+
+sys.exit(main())

@@ -1,0 +1,195 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Dagu DAG, subset v1",
+  "description": "The subset of the Dagu 2.21 DAG schema (dagucloud/dagu internal/cmn/schema/dag.schema.json) that this runner executes. Every field keeps Dagu's name and meaning; fields outside the subset are rejected (additionalProperties: false) rather than ignored. Stricter than Dagu in two places: every step needs an id, and params use the rich list form only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["steps"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Name of the DAG. If omitted, defaults to the YAML filename without extension."
+    },
+    "description": { "type": "string" },
+    "params": {
+      "type": "array",
+      "description": "Ordered rich parameter definitions. Each needs a name; runtime values come from the CLI and fall back to default.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
+          "type": { "type": "string", "enum": ["string", "integer", "boolean"], "default": "string" },
+          "default": { "type": ["string", "number", "boolean"] },
+          "required": { "type": "boolean" },
+          "enum": { "type": "array", "items": { "type": ["string", "number", "boolean"] }, "minItems": 1 },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "env": { "$ref": "#/definitions/env" },
+    "working_dir": {
+      "type": "string",
+      "description": "Working directory for the DAG. A relative value resolves from the DAG file directory."
+    },
+    "timeout_sec": { "type": "integer", "minimum": 0 },
+    "handler_on": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Lifecycle hooks: success, failure, and exit (always runs last). Handler steps have no step-output lookup scope.",
+      "properties": {
+        "success": { "$ref": "#/definitions/handlerStep" },
+        "failure": { "$ref": "#/definitions/handlerStep" },
+        "exit": { "$ref": "#/definitions/handlerStep" }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/step" }
+    }
+  },
+  "definitions": {
+    "env": {
+      "description": "Environment variables: a map {KEY: value} or a list of KEY=value strings / single-key maps. Values may use ${params.x}, ${env.X} and ${steps.id.outputs.name}.",
+      "oneOf": [
+        { "type": "object", "additionalProperties": { "type": ["string", "number", "boolean"] } },
+        {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*=.*$" },
+              { "type": "object", "additionalProperties": { "type": ["string", "number", "boolean"] }, "minProperties": 1, "maxProperties": 1 }
+            ]
+          }
+        }
+      ]
+    },
+    "condition": {
+      "description": "Spec 023. With expected: a value-match condition (condition text is data). Without expected: a command check (exit 0 = met). Exactly one of condition is required; eval is outside the subset.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["condition"],
+          "properties": {
+            "condition": { "type": "string", "minLength": 1 },
+            "expected": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Literal line match, 're:<pattern>' (any line matches), or 'num:<op><number>' with op in > >= < <=; the number may be one whole value reference."
+            },
+            "negate": { "type": "boolean" }
+          }
+        }
+      ]
+    },
+    "continueOn": {
+      "oneOf": [
+        { "type": "string", "enum": ["skipped", "failed"] },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "failure": { "type": "boolean" },
+            "skipped": { "type": "boolean" },
+            "exit_code": {
+              "oneOf": [
+                { "type": "integer" },
+                { "type": "array", "items": { "type": "integer" } }
+              ]
+            },
+            "output": {
+              "oneOf": [
+                { "type": "string" },
+                { "type": "array", "items": { "type": "string" } }
+              ],
+              "description": "Literal substrings or 're:' patterns matched line by line against stdout; 'num:' is rejected here."
+            },
+            "mark_success": { "type": "boolean" }
+          }
+        }
+      ]
+    },
+    "retryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "limit": { "type": "integer", "minimum": 0, "description": "Maximum number of retry attempts after the first failure. 0 disables retries." },
+        "interval_sec": { "type": "number", "minimum": 0 },
+        "backoff": { "oneOf": [ { "type": "boolean" }, { "type": "number", "exclusiveMinimum": 1.0 } ] },
+        "max_interval_sec": { "type": "number", "minimum": 0 },
+        "exit_code": { "type": "array", "items": { "type": "integer" }, "description": "Only these exit codes trigger a retry; omitted means every non-zero code." }
+      }
+    },
+    "repeatPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repeat"],
+      "properties": {
+        "repeat": { "type": "string", "enum": ["while", "until"] },
+        "condition": { "type": "string", "minLength": 1, "description": "Spec 023 condition model: with expected a value match, without it a command check." },
+        "expected": { "type": "string", "minLength": 1 },
+        "interval_sec": { "type": "number", "minimum": 0 },
+        "backoff": { "oneOf": [ { "type": "boolean" }, { "type": "number", "exclusiveMinimum": 1.0 } ] },
+        "max_interval_sec": { "type": "number", "minimum": 0 },
+        "limit": { "type": "integer", "minimum": 1, "description": "Maximum number of executions, counting the first attempt." }
+      }
+    },
+    "declaredOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
+        "type": { "type": "string", "enum": ["string", "json"], "default": "string" }
+      }
+    },
+    "handlerStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run"],
+      "properties": {
+        "run": { "type": "string", "minLength": 1 },
+        "env": { "$ref": "#/definitions/env" },
+        "working_dir": { "type": "string" },
+        "timeout_sec": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "run"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$", "description": "Step identifier, unique within the DAG; used by depends and ${steps.<id>.outputs.<name>}." },
+        "description": { "type": "string" },
+        "depends": {
+          "oneOf": [ { "type": "string" }, { "type": "array", "items": { "type": "string" } } ]
+        },
+        "run": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "description": "Shell command (one line) or script (multi-line). Dagu-owned references are resolved first; $NAME, $() and operators belong to the shell." },
+            { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "description": "Commands run in order; execution stops at the first failure." }
+          ]
+        },
+        "env": { "$ref": "#/definitions/env" },
+        "working_dir": { "type": "string" },
+        "timeout_sec": { "type": "integer", "minimum": 0, "description": "Per-step cap; on expiry the process tree is killed and the step fails with exit code 124." },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/declaredOutput" },
+          "description": "Declared outputs, published from name=value (or name<<EOF … EOF) records the command appends to $DAGU_OUTPUT_FILE."
+        },
+        "preconditions": {
+          "oneOf": [ { "type": "string", "minLength": 1 }, { "type": "array", "items": { "$ref": "#/definitions/condition" } } ]
+        },
+        "continue_on": { "$ref": "#/definitions/continueOn" },
+        "retry_policy": { "$ref": "#/definitions/retryPolicy" },
+        "repeat_policy": { "$ref": "#/definitions/repeatPolicy" }
+      }
+    }
+  }
+}
