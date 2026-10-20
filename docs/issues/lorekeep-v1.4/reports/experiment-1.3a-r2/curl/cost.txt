@@ -1,0 +1,4 @@
+vendor item       step         session              calls    ctx   fresh   cached    out window
+codex  1.3a       author       2026-10-20T16-52-18     40   156k    151k    4349k    25k  22.0%
+claude 1.3a       review1      86ec4c7d                38   100k     95k    2470k    20k      -
+total fresh 246k · cached 6819k · out 45k
