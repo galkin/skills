@@ -279,7 +279,9 @@ def test_build_writes_the_skill_its_references_and_an_entry_point_pinned_to_the_
     script = target / "bin" / "lorekeep"
     assert script.stat().st_mode & 0o111 == 0o111
     version = metadata.version("lorekeep")
-    assert script.read_text() == entry_point(version, COMMIT)
+    python = metadata.metadata("lorekeep")["Requires-Python"]
+    assert script.read_text() == entry_point(version, COMMIT, python)
+    assert f'--python "{python}"' in script.read_text()
     assert (
         f'--from "lorekeep[browser] @ git+https://github.com/galkin/skills@{COMMIT}'
         '#subdirectory=lorekeep"' in script.read_text()

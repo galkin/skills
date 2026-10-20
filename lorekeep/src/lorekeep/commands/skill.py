@@ -50,9 +50,11 @@ def release_commit(version: str) -> str | None:
     return found if done.returncode == 0 and COMMIT_HASH.fullmatch(found) else None
 
 
-def entry_point(version: str, commit: str) -> str:
+def entry_point(version: str, commit: str, python: str) -> str:
     """`bin/lorekeep` of the installable skill: run `version`, browser extra included, from the
-    commit of its release tag."""
+    commit of its release tag, on an interpreter `python` (the package's `Requires-Python`)
+    admits. A `name[extra] @ url` source is resolved on uv's default interpreter, which is not
+    read from the package, so the request is spelled out."""
     source = f"lorekeep[browser] @ git+{REPOSITORY}@{commit}#subdirectory={SUBDIRECTORY}"
     return (
         "#!/bin/sh\n"
@@ -61,7 +63,7 @@ def entry_point(version: str, commit: str) -> str:
         "# uv builds it once per machine into its cache; every checkout that vendors this skill\n"
         "# shares that environment, and nothing is installed into the repository. Chromium is\n"
         "# not part of it: `lorekeep status` says when it is missing and how to install it.\n"
-        f'exec uvx --quiet --from "{source}" lorekeep "$@"\n'
+        f'exec uvx --quiet --python "{python}" --from "{source}" lorekeep "$@"\n'
     )
 
 
@@ -76,12 +78,13 @@ def run(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
-        return build(Path(args.build).expanduser(), version, commit)
+        python = metadata.metadata("lorekeep")["Requires-Python"]
+        return build(Path(args.build).expanduser(), version, commit, python)
     print((skill_folder() / "SKILL.md").read_text(encoding="utf-8"), end="")
     return 0
 
 
-def build(target: Path, version: str, commit: str) -> int:
+def build(target: Path, version: str, commit: str, python: str) -> int:
     """Replace `target` with the installable skill folder of `version`."""
     if not target.parent.is_dir():
         print(f"lorekeep: error: the folder {target.parent} does not exist", file=sys.stderr)
@@ -94,7 +97,7 @@ def build(target: Path, version: str, commit: str) -> int:
             shutil.copytree(source, staging, ignore=shutil.ignore_patterns("__pycache__"))
         script = staging / "bin" / "lorekeep"
         script.parent.mkdir()
-        script.write_text(entry_point(version, commit), encoding="utf-8")
+        script.write_text(entry_point(version, commit, python), encoding="utf-8")
         script.chmod(script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         if target.is_dir():
             shutil.rmtree(target)

@@ -1,6 +1,6 @@
 [project]
 name = "lorekeep"
-version = "0.2.1"
+version = "0.2.2"
 description = "Collects the Sources an LLM task reads, keeps them as Markdown with their Provenance, and makes them searchable."
 requires-python = ">=3.13,<3.14"
 dependencies = [
