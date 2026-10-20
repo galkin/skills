@@ -221,13 +221,14 @@ A rule that holds for every Version an engine made, not for one host, belongs in
 
 ## `lorekeep skill`
 
-`lorekeep skill [--install REPO [--force]]`
+`lorekeep skill [--build DIR]`
 
 Prints `SKILL.md`. Needs no Store and no Tag.
 
-- `--install REPO` — copy the skill folder into `REPO/.agents/skills/lorekeep/` and remind that
-  the repository's skill lock, if any, needs the new hash; refuses when the folder exists.
-- `--force` — with `--install`, replace an installed copy.
+- `--build DIR` — replace `DIR` with the installable skill: `SKILL.md`, `references/` and
+  `bin/lorekeep`, which runs this version from its release tag `lorekeep-v<version>` in
+  galkin/skills. A release builds into `skills/lorekeep/` of that repository, commits, tags and
+  pushes; a repository then vendors it with `npx skills add galkin/skills`.
 
 ## `lorekeep.toml`
 

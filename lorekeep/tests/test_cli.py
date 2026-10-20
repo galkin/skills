@@ -132,7 +132,7 @@ def test_every_subcommand_declares_its_own_flags() -> None:
         "backup": ["--dry-run", "--store"],
         "restore": ["--generation", "--store"],
         "status": ["--rules", "--json", "--store"],
-        "skill": ["--install", "--force"],
+        "skill": ["--build"],
     }
     for command, flags in expected.items():
         help_text = run_cli([command, "--help"]).stdout

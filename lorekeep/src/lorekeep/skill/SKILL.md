@@ -21,8 +21,8 @@ commands (`recheck`, `tag add`, `backup`, `restore`, `index`, `skill`, host rule
 
 ## Before you start
 
-- Run `lorekeep` from the `PATH` the orchestrator gives you; it is installed already, so
-  install nothing. `lorekeep --version` names the version.
+- `lorekeep` below is `bin/lorekeep` in this skill's folder (vendored:
+  `.agents/skills/lorekeep/bin/lorekeep`) or the one on your `PATH`; it needs only `uv`.
 - `LOREKEEP_STORE` names the Store (or `--store DIR`). A missing folder is an error; lorekeep never
   creates one.
 - `LOREKEEP_TAG` names the **Tag** (or `--tag TAG`): one per guide, shared by every worker of that

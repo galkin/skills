@@ -211,9 +211,8 @@ def build_parser() -> argparse.ArgumentParser:
     _json_flag(status)
     _store_flag(status)
 
-    skill = command("skill", "print or install the lorekeep skill")
-    skill.add_argument("--install", metavar="REPO", help="copy the skill into REPO/.agents/skills/")
-    skill.add_argument("--force", action="store_true", help="replace an installed copy")
+    skill = command("skill", "print the lorekeep skill or build its installable folder")
+    skill.add_argument("--build", metavar="DIR", help="replace DIR with the installable skill")
 
     return parser
 

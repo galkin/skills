@@ -17,8 +17,8 @@ the owner is in Russian.
 
 ## Commands
 
-Python 3.12 or 3.13 managed by `uv` (`requires-python = ">=3.12,<3.14"`: 3.14 has no wheel for a
-transitive dependency of `markitdown[pdf]`). `uv sync` installs everything; then:
+Python 3.13 managed by `uv` (`requires-python = ">=3.13,<3.14"`: 3.12's bundled SQLite 3.50 fails
+the Index's search queries, and 3.14 has no wheel for a transitive dependency of `markitdown[pdf]`). `uv sync` installs everything; then:
 
 - `uv run pytest` — the test suite. Tests never touch the network: fetching is tested against pages
   saved under `tests/fixtures/`.
@@ -35,7 +35,7 @@ Run all three before reporting work complete.
   the old one; the few files that grow (`tags.csv`, `checks.csv`, `datapackage.json`) are appended
   or regenerated, and the index is always rebuildable from the files.
 - **The tool never changes the machine it runs on** beyond the store it was pointed at and the
-  repository `skill --install <repo>` was pointed at — no installs, no profiles, no services.
+  folder `skill --build <dir>` was pointed at — no installs, no profiles, no services.
   Anything else is shown to the owner as a command to run.
 
 ## Agent skills

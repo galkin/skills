@@ -14,8 +14,19 @@ defined in [`GLOSSARY.md`](GLOSSARY.md); the decisions behind them are in [`docs
 ## Install
 
 lorekeep is a Python package managed by [`uv`](https://docs.astral.sh/uv/); it is not on PyPI.
-It needs Python 3.12 or 3.13 (3.14 has no wheel for a dependency of the PDF converter); `uv`
-picks an installed one. From a checkout of this repository:
+It lives in the `lorekeep/` folder of [galkin/skills](https://github.com/galkin/skills), and its
+installable skill in `skills/lorekeep/`. It needs Python 3.13 (3.12's bundled SQLite fails the
+Index's search; 3.14 has no wheel for a dependency of the PDF converter); `uv` picks or fetches
+one.
+
+A repository that runs agents vendors the skill, whose `bin/lorekeep` runs the released version
+from its tag with `uvx`, so nothing is installed and every checkout shares one environment:
+
+```sh
+npx skills add galkin/skills    # choose lorekeep; then .agents/skills/lorekeep/bin/lorekeep …
+```
+
+For the command on your own `PATH`, from this folder:
 
 ```sh
 uv tool install --editable .             # the `lorekeep` command, on your PATH
@@ -154,15 +165,16 @@ references sit beside it: [`references/store.md`](src/lorekeep/skill/references/
 Store's layout, frontmatter and `citations.csv`; and
 [`references/owner.md`](src/lorekeep/skill/references/owner.md), the owner's commands (`recheck`,
 `tag add`, `backup`, `restore`, `index`, `skill`) and how to write `[[hosts]]` rules. It ships
-inside the package, so it always matches the installed version. To vendor it into a repository:
+inside the package, so it always matches the version. A release, from this folder:
 
 ```sh
-lorekeep skill --install path/to/repo          # writes path/to/repo/.agents/skills/lorekeep/
-lorekeep skill --install path/to/repo --force  # replaces an installed copy
+# bump `version` in pyproject.toml, then:
+uv run lorekeep skill --build ../skills/lorekeep   # SKILL.md, references/, bin/lorekeep pinned to the tag
+git commit -am "Release lorekeep <version>" && git tag lorekeep-v<version> && git push --follow-tags
 ```
 
-If the repository keeps a skill lock (such as `skills-lock.json`), record the new hash of the
-skill there; lorekeep reminds you and leaves the lock alone.
+A repository then updates its copy with `npx skills add galkin/skills` and records the new hash in
+its skill lock (such as `skills-lock.json`).
 
 ## Backup and recovery
 

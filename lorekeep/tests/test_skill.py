@@ -4,6 +4,7 @@ import re
 import shlex
 import shutil
 from collections.abc import Callable
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +12,7 @@ import pytest
 import yaml
 
 from lorekeep import cli
-from lorekeep.commands.skill import skill_folder
+from lorekeep.commands.skill import entry_point, skill_folder
 from tests.support import edges_over, get, lorekeep, make_store, run_cli
 
 # A command section of SKILL.md or references/owner.md is headed "## `lorekeep <command>`"; each
@@ -260,69 +261,47 @@ def test_a_command_without_a_section_is_drift() -> None:
     assert drift(skill, edited) == ["restore: no section in SKILL.md or owner.md"]
 
 
-def installed(repo: Path) -> Path:
-    return repo / ".agents" / "skills" / "lorekeep"
-
-
-def test_install_copies_the_skill_folder_into_the_repo_and_reminds_of_the_lock(
+def test_build_writes_the_skill_its_references_and_an_entry_point_pinned_to_the_version(
     tmp_path: Path,
 ) -> None:
-    printed = run_cli(["skill"]).stdout
+    target = tmp_path / "lorekeep"
 
-    result = run_cli(["skill", "--install", str(tmp_path)])
-
-    assert result.exit_code == 0
-    folder = installed(tmp_path)
-    assert (folder / "SKILL.md").read_text() == printed
-    assert (folder / "references" / "store.md").read_text().startswith("# The Store")
-    assert (folder / "references" / "owner.md").read_text() == owner_reference()
-    assert str(folder) in result.stdout
-    assert "skill lock" in result.stdout.splitlines()[-1]
-    assert "hash" in result.stdout.splitlines()[-1]
-
-
-def test_install_names_the_repos_skills_lock_when_it_keeps_one(tmp_path: Path) -> None:
-    (tmp_path / "skills-lock.json").write_text('{"version": 1, "skills": {}}\n')
-
-    result = run_cli(["skill", "--install", str(tmp_path)])
+    result = run_cli(["skill", "--build", str(target)])
 
     assert result.exit_code == 0
-    assert "skills-lock.json" in result.stdout.splitlines()[-1]
-    assert (tmp_path / "skills-lock.json").read_text() == '{"version": 1, "skills": {}}\n'
+    assert (target / "SKILL.md").read_text() == run_cli(["skill"]).stdout
+    assert (target / "references" / "store.md").read_text().startswith("# The Store")
+    assert (target / "references" / "owner.md").read_text() == owner_reference()
+    script = target / "bin" / "lorekeep"
+    assert script.stat().st_mode & 0o111 == 0o111
+    version = metadata.version("lorekeep")
+    assert script.read_text() == entry_point(version)
+    assert (
+        f"git+https://github.com/galkin/skills@lorekeep-v{version}#subdirectory=lorekeep"
+        in script.read_text()
+    )
+    assert f"lorekeep-v{version}" in result.stdout
 
 
-def test_a_second_install_exits_non_zero_and_changes_nothing(tmp_path: Path) -> None:
-    run_cli(["skill", "--install", str(tmp_path)])
-    skill = installed(tmp_path) / "SKILL.md"
-    skill.write_text("edited by hand\n")
-    (installed(tmp_path) / "local.md").write_text("kept\n")
+def test_build_replaces_what_the_folder_held(tmp_path: Path) -> None:
+    target = tmp_path / "lorekeep"
+    target.mkdir()
+    (target / "SKILL.md").write_text("edited by hand\n")
+    (target / "stale.md").write_text("stale\n")
 
-    result = run_cli(["skill", "--install", str(tmp_path)])
-
-    assert result.exit_code != 0
-    assert "--force" in result.stderr
-    assert skill.read_text() == "edited by hand\n"
-    assert (installed(tmp_path) / "local.md").read_text() == "kept\n"
-
-
-def test_install_with_force_replaces_the_installed_folder(tmp_path: Path) -> None:
-    run_cli(["skill", "--install", str(tmp_path)])
-    (installed(tmp_path) / "SKILL.md").write_text("edited by hand\n")
-    (installed(tmp_path) / "local.md").write_text("stale\n")
-
-    result = run_cli(["skill", "--install", str(tmp_path), "--force"])
+    result = run_cli(["skill", "--build", str(target)])
 
     assert result.exit_code == 0
-    assert (installed(tmp_path) / "SKILL.md").read_text() == run_cli(["skill"]).stdout
-    assert not (installed(tmp_path) / "local.md").exists()
-    assert (installed(tmp_path) / "references" / "store.md").is_file()
+    assert (target / "SKILL.md").read_text() == run_cli(["skill"]).stdout
+    assert not (target / "stale.md").exists()
 
 
-def test_an_install_that_fails_half_way_leaves_no_staging_folder_and_the_old_copy_intact(
+def test_a_build_that_fails_half_way_leaves_no_staging_folder_and_the_old_copy_intact(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    assert run_cli(["skill", "--install", str(tmp_path)]).exit_code == 0
-    before = (installed(tmp_path) / "SKILL.md").read_bytes()
+    target = tmp_path / "lorekeep"
+    assert run_cli(["skill", "--build", str(target)]).exit_code == 0
+    before = (target / "SKILL.md").read_bytes()
     copytree = shutil.copytree
     depth = 0
 
@@ -341,30 +320,22 @@ def test_an_install_that_fails_half_way_leaves_no_staging_folder_and_the_old_cop
 
     monkeypatch.setattr(shutil, "copytree", copy_then_fail)
 
-    result = run_cli(["skill", "--install", str(tmp_path), "--force"])
+    result = run_cli(["skill", "--build", str(target)])
 
     assert result.exit_code == 1
     assert result.stderr.startswith("lorekeep: error: ")
     assert "No space left on device" in result.stderr
-    assert sorted(path.name for path in installed(tmp_path).parent.iterdir()) == ["lorekeep"]
-    assert (installed(tmp_path) / "SKILL.md").read_bytes() == before
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["lorekeep"]
+    assert (target / "SKILL.md").read_bytes() == before
 
 
-def test_install_into_a_repo_that_does_not_exist_is_an_error_and_creates_nothing(
+def test_build_into_a_folder_that_does_not_exist_is_an_error_and_creates_nothing(
     tmp_path: Path,
 ) -> None:
-    missing = tmp_path / "nowhere"
+    missing = tmp_path / "nowhere" / "lorekeep"
 
-    result = run_cli(["skill", "--install", str(missing)])
-
-    assert result.exit_code != 0
-    assert str(missing) in result.stderr
-    assert not missing.exists()
-
-
-def test_force_without_install_is_a_usage_error() -> None:
-    result = run_cli(["skill", "--force"])
+    result = run_cli(["skill", "--build", str(missing)])
 
     assert result.exit_code == 2
-    assert "--install" in result.stderr
-    assert result.stdout == ""
+    assert str(missing.parent) in result.stderr
+    assert not missing.parent.exists()
