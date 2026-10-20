@@ -129,6 +129,7 @@ def test_backup_runs_one_no_clobber_rsync_and_one_cp_of_the_growing_files(tmp_pa
     assert rsync[:3] == ["gcloud", "storage", "rsync"]
     assert "--recursive" in rsync
     assert "--no-clobber" in rsync
+    assert "--gzip-in-flight-all" in rsync
     assert not any(arg.startswith("--delete") for arg in rsync)
     assert "--dry-run" not in rsync
     assert rsync[-2:] == [str(store), f"gs://{BUCKET}"]
@@ -138,8 +139,9 @@ def test_backup_runs_one_no_clobber_rsync_and_one_cp_of_the_growing_files(tmp_pa
     for name in KEPT + sorted(path.name for path in store.iterdir() if path.suffix == ".md"):
         assert not pattern.search(name), name
     assert cp[:3] == ["gcloud", "storage", "cp"]
+    assert cp[3] == "--gzip-in-flight-all"
     assert cp[-1] == f"gs://{BUCKET}/"
-    assert cp[3:-1] == [
+    assert cp[4:-1] == [
         str(store / "tags.csv"),
         str(store / "datapackage.json"),
         str(store / "lorekeep.toml"),

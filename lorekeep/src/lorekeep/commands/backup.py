@@ -23,6 +23,10 @@ if TYPE_CHECKING:
 
 GCLOUD = ("gcloud", "storage")
 
+# Every upload is gzipped on the wire only: the Store's HTML and Markdown shrink about fivefold, the
+# upload is what a backup waits on, and the objects in the bucket stay byte for byte the files.
+GZIP_IN_FLIGHT = "--gzip-in-flight-all"
+
 # The files that grow, in the order they are copied: the bucket's versioning keeps their history.
 GROWING_FILES = (*WATCHED_FILES, package.PACKAGE_FILE, PROJECT_FILE)
 
@@ -73,7 +77,8 @@ def run_backup(args: argparse.Namespace, ctx: Context) -> int:
     if bucket is None:
         return 2
     package.regenerate(ctx.store)
-    rsync = [*GCLOUD, "rsync", "--recursive", "--no-clobber", f"--exclude={EXCLUDE}"]
+    rsync = [*GCLOUD, "rsync", "--recursive", "--no-clobber", GZIP_IN_FLIGHT]
+    rsync += [f"--exclude={EXCLUDE}"]
     rsync += ["--dry-run"] if args.dry_run else []
     if not _call(ctx.edges.runner, [*rsync, str(ctx.store), f"gs://{bucket}"]):
         return 1
@@ -83,7 +88,7 @@ def run_backup(args: argparse.Namespace, ctx: Context) -> int:
         for path in growing:
             print(f"Would copy {path} to gs://{bucket}/ (replacing; the bucket keeps the old one)")
         return 0
-    if not _call(ctx.edges.runner, [*GCLOUD, "cp", *growing, f"gs://{bucket}/"]):
+    if not _call(ctx.edges.runner, [*GCLOUD, "cp", GZIP_IN_FLIGHT, *growing, f"gs://{bucket}/"]):
         return 1
     return 0
 
