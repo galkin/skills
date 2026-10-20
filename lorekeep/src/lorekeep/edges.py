@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import subprocess
+import sys
 import tempfile
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
@@ -17,6 +18,31 @@ from typing import Any, Protocol
 import httpx
 
 BROWSER_EXTRA = "lorekeep[browser]"
+
+BROWSER_INSTALL = (
+    f"run lorekeep through the skill's bin/lorekeep, which carries {BROWSER_EXTRA} "
+    "(in a lorekeep checkout: uv sync --extra browser)"
+)
+"""What makes Crawl4AI importable: the skill's entry point always has the extra, so only a
+checkout or a tool installed without it can miss it."""
+
+
+def chromium_install_command() -> str:
+    """The command that downloads Chromium for this very environment's Playwright: the
+    interpreter running lorekeep, so it is right however lorekeep was launched (`uvx`, a
+    checkout, a tool install)."""
+    return f"{sys.executable} -m playwright install chromium"
+
+
+@dataclass(frozen=True)
+class BrowserReadiness:
+    """Whether the browser step can run here: Crawl4AI importable and Chromium launchable.
+    `fix` is the one command that makes it ready, for the owner to run; `None` when ready."""
+
+    ready: bool
+    crawl4ai: str | None
+    detail: str
+    fix: str | None
 
 
 @dataclass(frozen=True)
@@ -48,8 +74,7 @@ class FetcherNotInstalled(Exception):
 
     def __init__(self) -> None:
         super().__init__(
-            f"this page needs a browser and Crawl4AI is not installed: "
-            f"install the extra {BROWSER_EXTRA} (uv sync --extra browser)"
+            f"this page needs a browser and Crawl4AI is not installed: {BROWSER_INSTALL}"
         )
 
 
@@ -65,6 +90,10 @@ class PageFetcher(Protocol):
 
     def version(self) -> str:
         """The browser tool's version string, for the `converter` field."""
+        ...
+
+    def readiness(self) -> BrowserReadiness:
+        """Whether `fetch` can work on this machine, checked without fetching a page."""
         ...
 
 
@@ -111,7 +140,7 @@ class Crawl4AIFetcher:
             if "Executable doesn't exist" in message:
                 raise PageFetchError(
                     f"the browser could not render {url}: Chromium is not installed for "
-                    f"Crawl4AI; to install it, run: uv run playwright install chromium"
+                    f"Crawl4AI; the owner installs it with: {chromium_install_command()}"
                 )
             raise PageFetchError(f"the browser could not render {url}: {message}")
         return RenderedPage(html=result.html, final_url=result.redirected_url or result.url or url)
@@ -125,6 +154,30 @@ class Crawl4AIFetcher:
                 return metadata.version("crawl4ai")
             except metadata.PackageNotFoundError as error:
                 raise FetcherNotInstalled() from error
+
+    def readiness(self) -> BrowserReadiness:
+        """Import Crawl4AI and start its browser once, exactly as `fetch` does, then close it."""
+        try:
+            crawl4ai: Any = importlib.import_module("crawl4ai")
+            version = self.version()
+        except (ImportError, FetcherNotInstalled):
+            return BrowserReadiness(False, None, "Crawl4AI is not installed", BROWSER_INSTALL)
+
+        async def start(workdir: str) -> None:
+            browser = crawl4ai.BrowserConfig(headless=True, verbose=False)
+            async with crawl4ai.AsyncWebCrawler(config=browser, base_directory=workdir):
+                return None
+
+        try:
+            with tempfile.TemporaryDirectory(prefix="lorekeep-crawl4ai-") as workdir:
+                asyncio.run(start(workdir))
+        except Exception as error:  # Playwright raises its own Error for a missing Chromium
+            text = str(error).strip()
+            first = text.splitlines()[0] if text else type(error).__name__
+            return BrowserReadiness(
+                False, version, f"Chromium cannot start: {first}", chromium_install_command()
+            )
+        return BrowserReadiness(True, version, "Chromium starts", None)
 
 
 class SubprocessRunner:

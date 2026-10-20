@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from importlib import metadata
 from pathlib import Path
 
 from lorekeep import index
@@ -282,14 +283,14 @@ def test_version_prints_the_package_version() -> None:
     result = run_cli(["--version"])
 
     assert result.exit_code == 0
-    assert result.stdout == "lorekeep 0.1.1\n"
+    assert result.stdout == f"lorekeep {metadata.version('lorekeep')}\n"
 
 
 def test_status_prints_host_rules_only_with_rules(tmp_path: Path) -> None:
     plain = run_cli(["status", "--store", str(tmp_path)])
     with_rules = run_cli(["status", "--rules", "--store", str(tmp_path)])
 
-    assert plain.stdout.splitlines()[-1].startswith("Freshness window: ")
+    assert plain.stdout.splitlines()[-1].startswith("Browser: ")
     assert "Host rules" not in plain.stdout
     assert with_rules.stdout.startswith(plain.stdout)
     rules = with_rules.stdout[len(plain.stdout) :].splitlines()

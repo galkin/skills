@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from lorekeep import index
 from lorekeep.commands import plural
+from lorekeep.edges import BrowserReadiness
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
@@ -21,13 +22,26 @@ def size_on_disk(store: Path) -> int:
     return sum(path.stat().st_size for path in store.iterdir() if path.is_file())
 
 
+def browser_line(browser: BrowserReadiness) -> str:
+    """`ready (Crawl4AI 0.9.5)`, or `not ready: <why>; fix: <what the owner does>`."""
+    if browser.ready:
+        return f"ready (Crawl4AI {browser.crawl4ai})"
+    return f"not ready: {browser.detail}; fix: {browser.fix}"
+
+
 def run(args: argparse.Namespace, ctx: Context) -> int:
     with index.ensured(ctx.store, ctx.project) as reader:
         found = reader.summary()
     size = size_on_disk(ctx.store)
+    browser = ctx.edges.fetcher.readiness()
     if args.json:
         rules = len(ctx.project.readings)
-        print(json.dumps({**asdict(found), "rules": rules, "bytes": size}, ensure_ascii=False))
+        print(
+            json.dumps(
+                {**asdict(found), "rules": rules, "bytes": size, "browser": asdict(browser)},
+                ensure_ascii=False,
+            )
+        )
         return 0
     print(f"Store: {ctx.store}")
     print(f"{plural(found.versions, 'Version')} of {plural(found.sources, 'Source')}")
@@ -45,6 +59,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     print(f"Size on disk: {size} bytes")
     print(f"Bucket: {ctx.project.bucket or 'none'}")
     print(f"Freshness window: {ctx.project.freshness_days} days")
+    print(f"Browser: {browser_line(browser)}")
     if not args.rules:
         return 0
     print(f"Host rules ({len(ctx.project.hosts)}):")

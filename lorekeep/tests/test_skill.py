@@ -12,6 +12,7 @@ import pytest
 import yaml
 
 from lorekeep import cli
+from lorekeep.commands import skill as skill_command
 from lorekeep.commands.skill import entry_point, skill_folder
 from tests.support import edges_over, get, lorekeep, make_store, run_cli
 
@@ -261,12 +262,15 @@ def test_a_command_without_a_section_is_drift() -> None:
     assert drift(skill, edited) == ["restore: no section in SKILL.md or owner.md"]
 
 
-def test_build_writes_the_skill_its_references_and_an_entry_point_pinned_to_the_version(
+COMMIT = "a32219fd68e06afbb372ce3491786ff343d6eadd"
+
+
+def test_build_writes_the_skill_its_references_and_an_entry_point_pinned_to_the_commit(
     tmp_path: Path,
 ) -> None:
     target = tmp_path / "lorekeep"
 
-    result = run_cli(["skill", "--build", str(target)])
+    result = run_cli(["skill", "--build", str(target), "--rev", COMMIT])
 
     assert result.exit_code == 0
     assert (target / "SKILL.md").read_text() == run_cli(["skill"]).stdout
@@ -275,12 +279,36 @@ def test_build_writes_the_skill_its_references_and_an_entry_point_pinned_to_the_
     script = target / "bin" / "lorekeep"
     assert script.stat().st_mode & 0o111 == 0o111
     version = metadata.version("lorekeep")
-    assert script.read_text() == entry_point(version)
+    assert script.read_text() == entry_point(version, COMMIT)
     assert (
-        f"git+https://github.com/galkin/skills@lorekeep-v{version}#subdirectory=lorekeep"
-        in script.read_text()
+        f'--from "lorekeep[browser] @ git+https://github.com/galkin/skills@{COMMIT}'
+        '#subdirectory=lorekeep"' in script.read_text()
     )
     assert f"lorekeep-v{version}" in result.stdout
+
+
+def test_build_pins_the_commit_the_release_tag_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(skill_command, "release_commit", lambda version: COMMIT)
+
+    result = run_cli(["skill", "--build", str(tmp_path / "lorekeep")])
+
+    assert result.exit_code == 0, result.stderr
+    assert f"@{COMMIT}#" in (tmp_path / "lorekeep" / "bin" / "lorekeep").read_text()
+
+
+def test_build_without_the_release_tag_or_a_full_hash_is_an_error_and_writes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(skill_command, "release_commit", lambda version: None)
+
+    untagged = run_cli(["skill", "--build", str(tmp_path / "lorekeep")])
+    short = run_cli(["skill", "--build", str(tmp_path / "lorekeep"), "--rev", "a32219f"])
+
+    assert (untagged.exit_code, short.exit_code) == (2, 2)
+    assert "tag it first" in untagged.stderr
+    assert not (tmp_path / "lorekeep").exists()
 
 
 def test_build_replaces_what_the_folder_held(tmp_path: Path) -> None:
@@ -289,7 +317,7 @@ def test_build_replaces_what_the_folder_held(tmp_path: Path) -> None:
     (target / "SKILL.md").write_text("edited by hand\n")
     (target / "stale.md").write_text("stale\n")
 
-    result = run_cli(["skill", "--build", str(target)])
+    result = run_cli(["skill", "--build", str(target), "--rev", COMMIT])
 
     assert result.exit_code == 0
     assert (target / "SKILL.md").read_text() == run_cli(["skill"]).stdout
@@ -300,7 +328,7 @@ def test_a_build_that_fails_half_way_leaves_no_staging_folder_and_the_old_copy_i
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "lorekeep"
-    assert run_cli(["skill", "--build", str(target)]).exit_code == 0
+    assert run_cli(["skill", "--build", str(target), "--rev", COMMIT]).exit_code == 0
     before = (target / "SKILL.md").read_bytes()
     copytree = shutil.copytree
     depth = 0
@@ -320,7 +348,7 @@ def test_a_build_that_fails_half_way_leaves_no_staging_folder_and_the_old_copy_i
 
     monkeypatch.setattr(shutil, "copytree", copy_then_fail)
 
-    result = run_cli(["skill", "--build", str(target)])
+    result = run_cli(["skill", "--build", str(target), "--rev", COMMIT])
 
     assert result.exit_code == 1
     assert result.stderr.startswith("lorekeep: error: ")
@@ -334,7 +362,7 @@ def test_build_into_a_folder_that_does_not_exist_is_an_error_and_creates_nothing
 ) -> None:
     missing = tmp_path / "nowhere" / "lorekeep"
 
-    result = run_cli(["skill", "--build", str(missing)])
+    result = run_cli(["skill", "--build", str(missing), "--rev", COMMIT])
 
     assert result.exit_code == 2
     assert str(missing.parent) in result.stderr

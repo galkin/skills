@@ -5,7 +5,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tests.support import FIXTURES, run_cli, write_version
+from lorekeep.edges import BROWSER_INSTALL, Edges
+from tests.support import (
+    FIXTURES,
+    FakeFetcher,
+    FakeRunner,
+    FakeTransport,
+    run_cli,
+    write_version,
+)
 
 NIM_OVERVIEW = (
     "https://docs.nvidia.com/nim/large-language-models/latest/about-nim-llm/overview.html"
@@ -84,6 +92,7 @@ def test_status_json_is_one_object_in_the_spec_shape(tmp_path: Path) -> None:
         "readings": 0,
         "rules": 6,
         "bytes": store_bytes(tmp_path),
+        "browser": {"ready": True, "crawl4ai": "0.9.5", "detail": "Chromium starts", "fix": None},
     }
 
 
@@ -101,6 +110,7 @@ def test_status_prints_every_figure_as_text(tmp_path: Path) -> None:
     assert "Rechecks: 3 unchanged, 1 changed, 1 gone, 1 error" in lines
     assert "Unknown hosts: cloud.google.com, docs.nvidia.com" in lines
     assert f"Size on disk: {store_bytes(tmp_path)} bytes" in lines
+    assert "Browser: ready (Crawl4AI 0.9.5)" in lines
 
 
 def test_status_on_a_store_without_an_index_builds_it_first(tmp_path: Path) -> None:
@@ -136,3 +146,30 @@ def test_status_of_an_empty_store_has_no_fetch_times(tmp_path: Path) -> None:
     assert found["oldest_fetched_at"] is None
     assert found["checks"] == {"unchanged": 0, "changed": 0, "gone": 0, "error": 0}
     assert found["tags"] == {}
+
+
+def browser_of(tmp_path: Path, fetcher: FakeFetcher) -> tuple[str, dict[str, object]]:
+    """The `Browser:` line and the JSON `browser` object `status` prints with this browser."""
+    edges = Edges(transport=FakeTransport.from_fixtures(), fetcher=fetcher, runner=FakeRunner())
+    text = run_cli(["status", "--store", str(tmp_path)], edges=edges).stdout.splitlines()
+    found = json.loads(run_cli(["status", "--json", "--store", str(tmp_path)], edges=edges).stdout)
+    return next(line for line in text if line.startswith("Browser: ")), found["browser"]
+
+
+def test_status_names_the_extra_when_crawl4ai_is_not_installed(tmp_path: Path) -> None:
+    line, browser = browser_of(tmp_path, FakeFetcher(installed=False))
+
+    assert line == f"Browser: not ready: Crawl4AI is not installed; fix: {BROWSER_INSTALL}"
+    assert browser["ready"] is False
+    assert browser["crawl4ai"] is None
+
+
+def test_status_gives_the_command_that_installs_chromium_when_it_cannot_start(
+    tmp_path: Path,
+) -> None:
+    line, browser = browser_of(tmp_path, FakeFetcher(chromium=False))
+
+    assert line.startswith("Browser: not ready: Chromium cannot start: ")
+    assert line.endswith("; fix: python -m playwright install chromium")
+    assert (browser["ready"], browser["crawl4ai"]) == (False, "0.9.5")
+    assert browser["fix"] == "python -m playwright install chromium"

@@ -23,13 +23,13 @@ commands (`recheck`, `tag add`, `backup`, `restore`, `index`, `skill`, host rule
 
 - `lorekeep` below is `bin/lorekeep` in this skill's folder (vendored:
   `.agents/skills/lorekeep/bin/lorekeep`) or the one on your `PATH`; it needs only `uv`.
-- `LOREKEEP_STORE` names the Store (or `--store DIR`). A missing folder is an error; lorekeep never
-  creates one.
-- `LOREKEEP_TAG` names the **Tag** (or `--tag TAG`): one per guide, shared by every worker of that
-  guide, set by the brief and never chosen by you. `get` and `add` refuse to run without it.
+- `LOREKEEP_STORE` names the Store (or `--store DIR`); lorekeep never creates a missing one.
+- `LOREKEEP_TAG` names the **Tag** (or `--tag TAG`), set by the brief or the Project's own docs,
+  never chosen by you; `get` and `add` refuse to run without it.
+- Run `lorekeep status` once first: `Browser: not ready: …; fix: …` means browser pages will
+  fail. Report that line to the owner, never run its fix yourself, and go on.
 - Every flag follows its subcommand: `lorekeep get --json URL`, never `lorekeep --json get URL`.
-- stdout carries only the result; stderr carries lines starting `lorekeep: error:`,
-  `lorekeep: warning:` or `lorekeep: note:`.
+- stdout carries only the result; stderr lines start `lorekeep: error:`, `warning:` or `note:`.
 - Exit `0` is success, `1` a failure of the work (nothing could be fetched), `2` a usage error
   (no Store, no Tag, a bad flag): fix the command.
 - Write to the Store only through `get` and `add`; never edit its files or `lorekeep.toml`.
@@ -55,8 +55,7 @@ commands (`recheck`, `tag add`, `backup`, `restore`, `index`, `skill`, host rule
 4. Cite the Version's `url` as far as its `authority` allows (below).
 5. Put everything this skill says to report in your final report to the owner, with its URL.
 
-Parallel `get`s against one Store are safe: writers take turns on a lock, and two workers fetching
-one page get one Version.
+Parallel `get`s against one Store are safe: writers take a lock; one page gets one Version.
 
 ## What to cite
 
@@ -102,8 +101,8 @@ On exit `1` nothing was stored:
   (`answered 503`).
 - Otherwise, or when the retry fails too, report the URL and the error line to the owner and move
   on: never fetch the page another way (`curl`, a web tool, a browser) and never `add` a page.
-- `thin content` (Markdown under 600 characters or 40 words from a page with five times as much
-  text) needs the browser (`lorekeep[browser]`), which waits longer before `rendered a shell`.
+- `thin content` (under 600 characters or 40 words from a page with five times the text) needs
+  the browser, which waits longer before `rendered a shell`; report it with `status`'s Browser line.
 - `unsupported media type` and `could not convert` errors are the owner's to fix.
 
 ## `lorekeep get`
@@ -125,8 +124,7 @@ fence; the browser, last. A PDF Version (`markitdown …`) may run words togethe
 - `--json` — print one JSON object instead of the path.
 - `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
 
-Text output: the absolute path of the Reading, else the Version, one line. `--json` output, here for a host no rule
-knows, asked with a fragment:
+Text output: the path of the Reading, else the Version. `--json`, for a host no rule knows:
 
 ```text
 $ lorekeep get --json https://helm.sh/docs/helm/helm_rollback/#synopsis
@@ -224,7 +222,8 @@ no matches
 `lorekeep status [--rules] [--json] [--store DIR]`
 
 Summarises the Store: Versions, Sources, Readings and reading rules, Tags, oldest and newest
-fetch, Recheck results, hosts no rule knows, size, and the Project's settings.
+fetch, Recheck results, hosts no rule knows, size, the Project's settings, and whether the browser
+(Crawl4AI and Chromium) can start here.
 
 - `--rules` — also print the host rules, merged (a Project's own marked `(lorekeep.toml)`).
 - `--json` — print one JSON object instead of lines (no settings, no host rules).
@@ -242,8 +241,9 @@ Unknown hosts: genai.owasp.org, helm.sh
 Size on disk: 303355 bytes
 Bucket: none
 Freshness window: 30 days
+Browser: ready (Crawl4AI 0.9.5)
 ```
 
 ```json
-{"versions": 5, "sources": 5, "tags": {"nvidia": 5}, "oldest_fetched_at": "2026-10-17T20:08:26Z", "newest_fetched_at": "2026-10-17T20:08:26Z", "checks": {"unchanged": 0, "changed": 0, "gone": 0, "error": 0}, "unknown_hosts": ["genai.owasp.org", "helm.sh"], "readings": 1, "rules": 6, "bytes": 303355}
+{"versions": 5, "sources": 5, "tags": {"nvidia": 5}, "oldest_fetched_at": "2026-10-17T20:08:26Z", "newest_fetched_at": "2026-10-17T20:08:26Z", "checks": {"unchanged": 0, "changed": 0, "gone": 0, "error": 0}, "unknown_hosts": ["genai.owasp.org", "helm.sh"], "readings": 1, "rules": 6, "bytes": 303355, "browser": {"ready": true, "crawl4ai": "0.9.5", "detail": "Chromium starts", "fix": null}}
 ```

@@ -169,8 +169,11 @@ inside the package, so it always matches the version. A release, from this folde
 
 ```sh
 # bump `version` in pyproject.toml, then:
-uv run lorekeep skill --build ../skills/lorekeep   # SKILL.md, references/, bin/lorekeep pinned to the tag
-git commit -am "Release lorekeep <version>" && git tag lorekeep-v<version> && git push --follow-tags
+uv lock && git add -A . && git commit -m "Release lorekeep <version>"
+git tag -a lorekeep-v<version> -m "lorekeep <version>"   # annotated, so --follow-tags pushes it
+uv run lorekeep skill --build ../skills/lorekeep         # bin/lorekeep pinned to the tag's commit
+git add -A ../skills/lorekeep && git commit -m "Build the lorekeep <version> skill"
+git push --follow-tags
 ```
 
 A repository then updates its copy with `npx skills add galkin/skills` and records the new hash in

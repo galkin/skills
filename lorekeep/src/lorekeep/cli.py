@@ -213,6 +213,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     skill = command("skill", "print the lorekeep skill or build its installable folder")
     skill.add_argument("--build", metavar="DIR", help="replace DIR with the installable skill")
+    skill.add_argument(
+        "--rev", metavar="COMMIT", help="pin bin/lorekeep to this commit, not the release tag's"
+    )
 
     return parser
 

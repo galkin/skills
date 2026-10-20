@@ -24,6 +24,8 @@ import httpx
 from lorekeep import frontmatter
 from lorekeep.cli import run
 from lorekeep.edges import (
+    BROWSER_INSTALL,
+    BrowserReadiness,
     CommandResult,
     Edges,
     FetcherNotInstalled,
@@ -125,6 +127,7 @@ class FakeFetcher:
         pages: Mapping[str, tuple[Path | str | Sequence[Path | str], str]] | None = None,
         *,
         installed: bool = True,
+        chromium: bool = True,
         version: str = "0.9.5",
     ) -> None:
         self.pages = {
@@ -135,6 +138,7 @@ class FakeFetcher:
             for url, (paths, final) in (pages or {}).items()
         }
         self.installed = installed
+        self.chromium = chromium
         self._version = version
         self.calls: list[str] = []
         self.configs: list[dict[str, Any]] = []
@@ -143,6 +147,18 @@ class FakeFetcher:
         if not self.installed:
             raise FetcherNotInstalled()
         return self._version
+
+    def readiness(self) -> BrowserReadiness:
+        if not self.installed:
+            return BrowserReadiness(False, None, "Crawl4AI is not installed", BROWSER_INSTALL)
+        if not self.chromium:
+            return BrowserReadiness(
+                False,
+                self._version,
+                "Chromium cannot start: Executable doesn't exist",
+                "python -m playwright install chromium",
+            )
+        return BrowserReadiness(True, self._version, "Chromium starts", None)
 
     def fetch(self, url: str, wait: Wait) -> RenderedPage:
         if not self.installed:
