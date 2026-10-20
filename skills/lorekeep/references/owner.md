@@ -221,14 +221,22 @@ A rule that holds for every Version an engine made, not for one host, belongs in
 
 ## `lorekeep skill`
 
-`lorekeep skill [--build DIR]`
+`lorekeep skill [--build DIR] [--rev COMMIT]`
 
 Prints `SKILL.md`. Needs no Store and no Tag.
 
 - `--build DIR` — replace `DIR` with the installable skill: `SKILL.md`, `references/` and
-  `bin/lorekeep`, which runs this version from its release tag `lorekeep-v<version>` in
-  galkin/skills. A release builds into `skills/lorekeep/` of that repository, commits, tags and
-  pushes; a repository then vendors it with `npx skills add galkin/skills`.
+  `bin/lorekeep`, which runs this version with its `browser` extra from the commit its release
+  tag `lorekeep-v<version>` names in galkin/skills (a full hash, which uv resolves without asking
+  GitHub on every call). The tag must exist here first: a release commits the code, tags it,
+  builds into `skills/lorekeep/` of that repository, commits that and pushes; a repository then
+  vendors it with `npx skills add galkin/skills`.
+- `--rev COMMIT` — pin `bin/lorekeep` to this full commit hash instead of the tag's.
+
+Chromium is not part of the environment: `status` starts Crawl4AI's browser once, as `get` does,
+and when it cannot start prints `fix:` with the command that installs Chromium for that very
+environment (`<python> -m playwright install chromium`). Running it is the owner's call; a Run
+only reports the line.
 
 ## `lorekeep.toml`
 
