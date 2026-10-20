@@ -1,0 +1,10 @@
+{
+  "url": "https://genai.owasp.org/llmrisk/llm06-sensitive-information-disclosure/",
+  "status": 301,
+  "headers": {
+    "content-type": "text/html; charset=UTF-8",
+    "location": "https://genai.owasp.org/llmrisk/llm062025-excessive-agency/",
+    "last-modified": "Sat, 17 Oct 2026 16:37:46 GMT",
+    "x-redirect-by": "WordPress"
+  }
+}

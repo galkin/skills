@@ -1,0 +1,9 @@
+{
+  "url": "https://docs.nvidia.com/dynamo/latest/knowledge-base/modular-components/router/router-guide.md",
+  "status": 200,
+  "headers": {
+    "content-type": "text/markdown; charset=utf-8",
+    "etag": "W/\"01d8eb885d5014cca0db9683ef576a89\""
+  },
+  "body": "body.md"
+}

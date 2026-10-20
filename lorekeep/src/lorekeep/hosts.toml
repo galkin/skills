@@ -1,0 +1,109 @@
+# The package's default host table: every host probed so far, with its Twin rule, publisher and
+# authority. A Project's `lorekeep.toml` extends it, and replaces a rule with the same prefix.
+
+[[hosts]]
+prefix = "platform.claude.com/"
+publisher = "anthropic"
+authority = "primary"
+twin = "md-suffix"
+
+[[hosts]]
+prefix = "docs.aws.amazon.com/"
+publisher = "aws"
+authority = "primary"
+twin = "md-suffix"
+page_suffix = ".html"
+
+[[hosts]]
+prefix = "learn.microsoft.com/"
+publisher = "microsoft"
+authority = "primary"
+twin = "accept-header"
+
+# docs.nvidia.com is many sites under one host. Probed live on 2026-10-17 by asking each section of
+# the NCP-AAI migration for `<page>.md` (`.html` replaced, trailing slash dropped):
+#   answer `200 text/markdown` (Fern, `x-fern-renderer: static`): cuvs/, dynamo/, nemo/curator/,
+#     nemo/guardrails/, nemo/gym/, openshell/ — each has its own md-suffix rule below.
+#   answer `404 text/html` (Sphinx or MkDocs): datacenter/cloud-native/, deeplearning/dali/,
+#     deeplearning/riva/, deeplearning/triton-inference-server/, nemo/agent-toolkit/,
+#     nemo/megatron-bridge/, nemo/retriever/ (MkDocs; one page of five answered, so no rule),
+#     nemo/rl/, nim/, nim-operator/, rag/, vss/ — left to the page step by the catch-all.
+# The catch-all names no Twin: a `.md` request there is a 404 on every page, and an md-suffix
+# rule with `page_suffix = ".html"` would file a Fern page of a section not listed here under an
+# `.html` address that does not exist. A Fern rule has no `page_suffix`: its pages have none.
+[[hosts]]
+prefix = "docs.nvidia.com/"
+publisher = "nvidia"
+authority = "primary"
+
+[[hosts]]
+prefix = "docs.nvidia.com/cuvs/"
+publisher = "nvidia"
+authority = "primary"
+twin = "md-suffix"
+
+[[hosts]]
+prefix = "docs.nvidia.com/dynamo/"
+publisher = "nvidia"
+authority = "primary"
+twin = "md-suffix"
+
+[[hosts]]
+prefix = "docs.nvidia.com/nemo/curator/"
+publisher = "nvidia"
+authority = "primary"
+twin = "md-suffix"
+
+[[hosts]]
+prefix = "docs.nvidia.com/nemo/guardrails/"
+publisher = "nvidia"
+authority = "primary"
+twin = "md-suffix"
+
+[[hosts]]
+prefix = "docs.nvidia.com/nemo/gym/"
+publisher = "nvidia"
+authority = "primary"
+twin = "md-suffix"
+
+[[hosts]]
+prefix = "docs.nvidia.com/openshell/"
+publisher = "nvidia"
+authority = "primary"
+twin = "md-suffix"
+
+# Mintlify: `<page>.md` answers `200 text/markdown` (probed 2026-10-17).
+[[hosts]]
+prefix = "docs.langchain.com/"
+publisher = "langchain"
+authority = "primary"
+twin = "md-suffix"
+
+[[hosts]]
+prefix = "cloud.google.com/"
+publisher = "google"
+authority = "primary"
+
+[[hosts]]
+prefix = "milvus.io/"
+publisher = "milvus"
+authority = "primary"
+
+[[hosts]]
+prefix = "claude.termidy.com/"
+publisher = "termidy"
+authority = "third-party"
+
+[[hosts]]
+prefix = "raw.githubusercontent.com/"
+publisher = "github"
+authority = "third-party"
+twin = "raw"
+
+# A `blob/` page is read from its raw file and filed under the `blob` address; a raw address
+# given directly stays under the `raw.githubusercontent.com` rule above.
+[[hosts]]
+prefix = "github.com/"
+publisher = "github"
+authority = "third-party"
+twin = "github-raw"

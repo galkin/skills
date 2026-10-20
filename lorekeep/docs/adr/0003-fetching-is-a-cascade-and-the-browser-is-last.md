@@ -1,0 +1,46 @@
+# Fetching is a cascade, and the browser is the last resort
+
+`get` tries, in order: the publisher's Twin over plain HTTP (`<page>.md`, `?accept=text/markdown`,
+or a raw file host answering plain text); the page's static HTML over plain HTTP through
+Trafilatura, with links made absolute; MarkItDown for PDF; and Crawl4AI only for pages that need a
+browser, with a per-site configuration of what to cut — the browser returns rendered HTML and
+Trafilatura converts it, because Crawl4AI's own Markdown measured larger. The
+Converter that succeeded is recorded, and the response's media type — never the URL's extension —
+decides which step converts. HTTP is plain `httpx` with no cache library: the Store is the cache,
+and the conditional requests are lorekeep's own (ADR 0007). The Twin rules and the publisher of
+every host probed so far ship inside the package as a default host table; a Project's
+`lorekeep.toml` extends or overrides it, so no Project rewrites what is true of `learn.microsoft.com`
+everywhere.
+
+Measured on five real pages (2026-10-17): Trafilatura's Markdown was 8–78% smaller than Crawl4AI's
+default `fit_markdown`, which kept cookie banners from the live page, and 0.7 s against 5.2 s per
+page; pandoc on full HTML left 443 `<div>` lines on one page. A Twin was the most complete of all —
+it carries every code-language tab the HTML hides. What an agent reads is what costs tokens, so the
+cheapest clean text wins, and the browser is used where nothing else can see the page.
+
+Probing the hosts of three finished Runs (2026-10-17) fixed four rules the cascade must follow:
+
+- **A Twin is accepted only when the response is `text/markdown`** (or plain text from a raw file
+  host). `cloud.google.com` answers `<page>.md` with `200` and HTML.
+- **The fetcher follows `<meta http-equiv="refresh">`**, which HTTP clients do not: NVIDIA NIM
+  pages are 98-byte redirect stubs.
+- **A `403` to a plain client is the signal for the browser step**, not a failure: Milvus refuses
+  `httpx` with a browser User-Agent, and only Crawl4AI sees it.
+- **A page without any Twin is the common case for a whole ecosystem**: NVIDIA, vLLM, Kubernetes,
+  A2A and Python's documentation have none, so Trafilatura is the main path there, not a fallback.
+
+**A Version's `url` is where the page was served** — the final address after redirects and
+meta refreshes, normalised and Twin-reduced — and never the page's `<link rel="canonical">` or a
+Twin's `canonicalUrl`; a canonical that differs is kept as frontmatter `canonical`, with a warning,
+and is not an alias (amended in v1.1, 2026-10-17). v1 stored a page under its canonical, and the
+first migration showed publishers get it wrong: `genai.owasp.org/llmrisk/llm062025-excessive-agency/`
+declares the 2023 `…/llm06-sensitive-information-disclosure` page as canonical, so the 2025
+Excessive Agency text was filed and cited under the other risk's address, and NVIDIA's
+`…/retriever/latest/…` pages became `…/26.8.1/…`, which a Recheck would then ask forever.
+
+## Considered Options
+
+- **Crawl4AI for everything.** Rejected: a browser per page, larger output, per-site tuning to
+  remove overlays.
+- **LLM-based extraction** (Crawl4AI or Firecrawl strategies). Rejected: it spends tokens on every
+  page and paraphrases, and facts are checked against verbatim text.

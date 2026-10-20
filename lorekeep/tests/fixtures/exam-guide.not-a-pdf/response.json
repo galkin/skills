@@ -1,0 +1,8 @@
+{
+  "url": "https://example.test/exam/broken",
+  "status": 200,
+  "headers": {
+    "content-type": "application/pdf"
+  },
+  "body": "body.pdf"
+}

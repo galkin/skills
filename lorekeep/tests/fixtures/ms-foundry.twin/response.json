@@ -1,0 +1,10 @@
+{
+  "url": "https://learn.microsoft.com/en-us/azure/foundry/what-is-foundry?accept=text/markdown",
+  "status": 200,
+  "headers": {
+    "content-type": "text/markdown; charset=utf-8",
+    "etag": "\"RYzzG3LLzfqUX6b79i4xKDnTE/w=\"",
+    "last-modified": "Tue, 13 Oct 2026 16:17:35 GMT"
+  },
+  "body": "body.md"
+}

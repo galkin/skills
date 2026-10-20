@@ -1,0 +1,18 @@
+# 10: `backup`, `restore` and the data package
+
+**What to build:** `backup` regenerates `datapackage.json` under the Store lock (a resource for each CSV that exists, with a typed schema, and a `sources` resource with inline `data`: one flat row per Version, `url, file, sha256, bytes, fetched_at, publisher, authority, converter`), then runs through the command runner: one `gcloud storage rsync --recursive --no-clobber` of the Store excluding the six growing files, the Index with its journals, `.lorekeep.lock` and `.tmp-*` files, and one `gcloud storage cp` of the growing files that exist (`tags.csv`, `checks.csv`, `aliases.csv`, `citations.csv`, `datapackage.json`, `lorekeep.toml`); `--dry-run` goes to `rsync` only (`gcloud storage cp` has no such flag): in dry-run the `cp` is not run and its file list is printed; nothing deletes. `restore <name> [--generation N]` copies one object from the bucket and refuses to overwrite a local file.
+
+**Blocked by:** 02
+
+**Status:** done
+
+- [x] `backup` on a Store with Versions, `tags.csv` and no `citations.csv` writes a `datapackage.json` that `frictionless validate` accepts, with one row per Version in `sources` and no resource for the absent CSV
+- [x] the runner fake records exactly two commands: an rsync with `--no-clobber`, without `--delete-unmatched-destination-objects`, whose exclude pattern matches `tags.csv`, `checks.csv`, `aliases.csv`, `citations.csv`, `datapackage.json`, `lorekeep.toml`, `sources.db`, `sources.db-wal`, `sources.db-shm`, `.lorekeep.lock` and `x.md.tmp-123` and does not match a Version or an Original; and a `cp` of the growing files that exist
+- [x] `--dry-run` adds the flag to the rsync, runs no `cp`, prints the files the `cp` would copy, and still regenerates the package
+- [x] the package's schema for `checks.csv` types `status` as a string
+- [x] `backup` without a `bucket` in `lorekeep.toml` exits non-zero with a message
+- [x] `restore <name>` runs one `cp` from the bucket; with `--generation N` the object path carries `#N` (Google's documented form; the smoke script in ticket 13 exercises it live); an existing local file makes it exit non-zero without running anything
+
+## Comments
+
+2026-10-17 — Decisions made while building this ticket. (1) The package is `lorekeep.package` (`regenerate(store)`, the only writer, under `store.lock`; written to `datapackage.json.tmp-<pid>` and renamed); `backup` and `restore` live in `lorekeep.commands.backup`. (2) Each CSV resource takes its fields from the file's own header, typed where the column is known (`added_at` and `checked_at` `datetime`, `result` an enum of the four results, `status` and `as_of` strings, everything else a string), so a `citations.csv` without the optional `as_of` column still validates. (3) `sources.bytes` is the size of the whole `.md` file. The package name is the Store folder's name in the allowed alphabet. (4) The rsync is `gcloud storage rsync --recursive --no-clobber --exclude=<regex> <store> gs://<bucket>` with an anchored regex (`^(…)$`), so it means the same whether gcloud matches or searches; a Version whose name merely contains `tags.csv` is not excluded. The cp is `gcloud storage cp <growing files that exist> gs://<bucket>/`. The bucket root is the Store's root, and `restore` copies `gs://<bucket>/<name>[#N]` into `<store>/`. (5) A failed rsync stops the backup before the cp and exits 1, with gcloud's own output passed on; a missing bucket exits 2 before anything is written or run. (6) `restore` accepts only a bare file name (no `/`) and a numeric `--generation`, refuses an existing local file (exit 1) before checking the bucket or running anything, and prints the restored path.

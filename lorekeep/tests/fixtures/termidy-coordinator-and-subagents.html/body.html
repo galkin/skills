@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- HEAD-META:START -->
+<title>Multi-agent orchestration: the coordinator and its subagents - CCAR-F study guide, lesson 1.2</title>
+<meta name="description" content="How a coordinator splits a research question, routes all messages through itself, briefs subagents that start blank, and loops until coverage is complete.">
+<link rel="canonical" href="https://claude.termidy.com/learn/ccar-f/agentic-architecture/coordinator-and-subagents/">
+<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
+<link rel="icon" type="image/png" href="../../../../assets/favicon.png">
+<link rel="apple-touch-icon" href="../../../../assets/logo.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="ClaudePrep">
+<meta property="og:url" content="https://claude.termidy.com/learn/ccar-f/agentic-architecture/coordinator-and-subagents/">
+<meta property="og:title" content="Multi-agent orchestration: the coordinator and its subagents - CCAR-F study guide, lesson 1.2">
+<meta property="og:description" content="How a coordinator splits a research question, routes all messages through itself, briefs subagents that start blank, and loops until coverage is complete.">
+<meta property="og:image" content="https://claude.termidy.com/assets/og-ccar-foundations.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Claude Certified Architect - Foundations study guide: Multi-agent orchestration: the coordinator and its subagents">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Multi-agent orchestration: the coordinator and its subagents - CCAR-F study guide, lesson 1.2">
+<meta name="twitter:description" content="How a coordinator splits a research question, routes all messages through itself, briefs subagents that start blank, and loops until coverage is complete.">
+<meta name="twitter:image" content="https://claude.termidy.com/assets/og-ccar-foundations.png">
+<meta name="twitter:image:alt" content="Claude Certified Architect - Foundations study guide: Multi-agent orchestration: the coordinator and its subagents">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":["LearningResource","Article"],"headline":"Multi-agent orchestration: the coordinator and its subagents","name":"Multi-agent orchestration: the coordinator and its subagents","description":"How a coordinator splits a research question, routes all messages through itself, briefs subagents that start blank, and loops until coverage is complete.","url":"https://claude.termidy.com/learn/ccar-f/agentic-architecture/coordinator-and-subagents/","mainEntityOfPage":"https://claude.termidy.com/learn/ccar-f/agentic-architecture/coordinator-and-subagents/","inLanguage":"en","isAccessibleForFree":true,"learningResourceType":"Lesson","educationalLevel":"Foundations","teaches":["1.2 Orchestrate multi-agent systems with coordinator-subagent patterns"],"timeRequired":"PT19M","wordCount":3398,"isPartOf":{"@type":"LearningResource","@id":"https://claude.termidy.com/learn/ccar-f/agentic-architecture/"},"author":{"@type":"Person","name":"Anton Pavelko","url":"https://www.linkedin.com/in/anton-pavelko/"},"publisher":{"@type":"Organization","name":"ClaudePrep","url":"https://claude.termidy.com/"},"datePublished":"2026-09-28","dateModified":"2026-09-28"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://claude.termidy.com/"},{"@type":"ListItem","position":2,"name":"Study guides","item":"https://claude.termidy.com/learn/"},{"@type":"ListItem","position":3,"name":"CCAR-F","item":"https://claude.termidy.com/learn/ccar-f/"},{"@type":"ListItem","position":4,"name":"Domain 1","item":"https://claude.termidy.com/learn/ccar-f/agentic-architecture/"},{"@type":"ListItem","position":5,"name":"Lesson 1.2","item":"https://claude.termidy.com/learn/ccar-f/agentic-architecture/coordinator-and-subagents/"}]}</script>
+<!-- HEAD-META:END -->
+<!-- CSSLINK:START -->
+<link rel="stylesheet" href="../../../../assets/site.css">
+<script>/* Light/dark theme for the whole site - Moodle and the static pages alike.
+ * Inlined into <head> by tools/lib/site_chrome.php (static pages, at build time)
+ * and theme/claudeprep/classes/output/core_renderer.php (Moodle, per request).
+ * The contract: a "darkmode" cookie (dark|light) is the visitor's choice; without
+ * one, the site is dark - an owner decision, not the OS setting. In Moodle a
+ * logged-in user's saved preference (data-bs-theme from local_boost_dark) comes
+ * between the two. Output is data-bs-theme on <html>. */
+(function () {
+  var d = document.documentElement;
+  function chosen() {
+    var m = document.cookie.match(/(?:^|; )darkmode=(dark|light)(?:;|$)/);
+    return m ? m[1] : null;
+  }
+  function apply(t) {
+    d.setAttribute('data-bs-theme', t);
+    d.style.colorScheme = t;
+  }
+  var t = chosen() || d.getAttribute('data-bs-theme');
+  apply(t === 'light' ? 'light' : 'dark');
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('.cp-theme-toggle');
+    if (!b) { return; }
+    e.preventDefault();
+    var next = d.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+    apply(next);
+    document.cookie = 'darkmode=' + next + '; path=/; max-age=31536000; SameSite=Lax';
+    document.dispatchEvent(new CustomEvent('cp:themechange', {detail: next}));
+  });
+})();</script>
+<!-- CSSLINK:END -->
+<!-- JSLINK:START -->
+<script src="../../../../assets/site.js" defer></script>
+<!-- JSLINK:END -->
+<!-- APPBANNER:START -->
+<script src="../../../../assets/appbanner.js" defer></script>
+<!-- APPBANNER:END -->
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-S8ZBNKNCLF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-S8ZBNKNCLF');
+</script>
+</head>
+<body>
+
+<!-- SITENAV:START -->
+<nav class="sitenav" aria-label="Site">
+  <div class="shell">
+    <a class="brand" href="../../../../">ClaudePrep</a>
+    <input type="checkbox" id="nav-toggle" class="nav-toggle">
+    <a class="login" href="../../../../login/index.php">Log in</a>
+    <label for="nav-toggle" class="nav-burger" aria-label="Menu"><span></span><span></span><span></span></label>
+    <div class="nav-links">
+      <a href="../../../../">Home</a>
+      <a href="../../../../my/courses.php">Practice</a>
+      <a href="../../../../learn/" aria-current="page">Study guides</a>
+      <a href="../../../../claude-certifications/">Compare exams</a>
+      <a href="../../../../about/">About</a>
+    </div>
+    <button type="button" class="cp-theme-toggle" aria-label="Switch between light and dark theme" title="Light / dark theme"><svg class="cp-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.2A8.5 8.5 0 1 1 9.8 3.5a6.8 6.8 0 0 0 10.7 10.7z"/></svg><svg class="cp-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg></button>
+  </div>
+</nav>
+<!-- SITENAV:END -->
+
+<!-- PROGRAMBAR:START -->
+<div class="programbar">
+  <div class="shell">
+    <span>Claude Certification Program</span>
+    <span class="sep">&middot;</span>
+    <span>v1.0</span>
+    <span class="sep">&middot;</span>
+    <span>Effective July 2026</span>
+    <span class="sep">&middot;</span>
+    <span>All four tracks open</span>
+  </div>
+</div>
+<!-- PROGRAMBAR:END -->
+
+<!-- EXAMSWITCH:START -->
+<nav class="examswitch" aria-label="Claude certifications">
+  <ul class="shell">
+    <li><span class="here" aria-current="page">CCAR-F</span></li>
+    <li><a href="../../../../learn/ccar-p/">CCAR-P</a></li>
+    <li><a href="../../../../learn/ccao-f/">CCAO-F</a></li>
+    <li><a href="../../../../learn/ccdv-f/">CCDV-F</a></li>
+  </ul>
+</nav>
+<!-- EXAMSWITCH:END -->
+
+<div class="shell examgrid">
+
+<!-- SIDENAV:START -->
+<aside class="sidenav" aria-label="CCAR-F study guide navigation">
+  <div class="acts">
+    <a class="btn" href="../../../../course/view.php?idnumber=claude_ccar_f">Practise Domain 1</a>
+  </div>
+  <input type="checkbox" id="toc-toggle" class="toc-toggle">
+  <label for="toc-toggle" class="toc-label"><span>Contents</span><span class="chev" aria-hidden="true"></span></label>
+  <div class="sidenav-body">
+  <nav class="navtree" aria-label="CCAR-F course structure">
+    <a class="tree-root" href="../../"><span>CCAR-F study guide</span><span class="meta">5 domains &middot; 30 lessons</span></a>
+    <ul class="tree">
+      <li class="tree-domain in-path">
+        <details open>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 1</span> Agentic Architecture &amp; Orchestration</span><span class="meta">27%</span></summary>
+        <ul>
+          <li><a href="../../agentic-architecture/"><span>Domain overview</span></a></li>
+          <li><a href="../../agentic-architecture/agentic-loops-and-stop-reason/"><span class="ln">1.1</span><span>Designing agentic loops</span></a></li>
+          <li><a href="#" aria-current="page"><span class="ln">1.2</span><span>Multi-agent orchestration: the coordinator and its subagents</span></a>
+          <ul class="tree-toc">
+            <li><a href="#why-one-agent-cannot-research-a-big-question-alone">1.2.1 Why one agent cannot research a big question alone</a></li>
+            <li><a href="#hub-and-spoke-every-message-passes-through-the-coordinator">1.2.2 Hub and spoke: every message passes through the coordinator</a></li>
+            <li><a href="#subagents-know-only-what-the-brief-says-isolated-context">1.2.3 Subagents know only what the brief says: isolated context</a></li>
+            <li><a href="#the-coordinator-chooses-who-works-dynamic-selection">1.2.4 The coordinator chooses who works: dynamic selection</a></li>
+            <li><a href="#partition-the-scope-and-cover-all-of-it">1.2.5 Partition the scope, and cover all of it</a></li>
+            <li><a href="#the-refinement-loop-evaluate-re-delegate-re-synthesise">1.2.6 The refinement loop: evaluate, re-delegate, re-synthesise</a></li>
+            <li><a href="#the-exam-traps">1.2.7 The exam traps</a></li>
+            <li><a href="#put-it-together-orchestrate-a-research-run-and-break-it">1.2.8 Put it together: orchestrate a research run and break it</a></li>
+            <li><a href="#key-takeaways">Key takeaways</a></li>
+            <li><a href="#check">Check your understanding</a></li>
+            <li><a href="#sources">Sources</a></li>
+          </ul>
+        </li>
+          <li><a href="../../agentic-architecture/spawning-subagents-with-the-task-tool/"><span class="ln">1.3</span><span>Spawning subagents: the Task tool, context passing and forking</span></a></li>
+          <li><a href="../../agentic-architecture/workflow-enforcement-and-handoff/"><span class="ln">1.4</span><span>Workflow enforcement and handoff: guarantees, not good intentions</span></a></li>
+          <li><a href="../../agentic-architecture/agent-sdk-hooks/"><span class="ln">1.5</span><span>Agent SDK hooks: intercepting tool calls and normalising data</span></a></li>
+          <li><a href="../../agentic-architecture/task-decomposition-patterns/"><span class="ln">1.6</span><span>Task decomposition: fixed pipelines versus adaptive plans</span></a></li>
+          <li><a href="../../agentic-architecture/sessions-resume-and-fork/"><span class="ln">1.7</span><span>Sessions: resuming, forking and starting fresh</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 2</span> Tool Design &amp; MCP Integration</span><span class="meta">18%</span></summary>
+        <ul>
+          <li><a href="../../tool-design-mcp/"><span>Domain overview</span></a></li>
+          <li><a href="../../tool-design-mcp/tool-descriptions-that-route-correctly/"><span class="ln">2.1</span><span>Tool descriptions that route correctly</span></a></li>
+          <li><a href="../../tool-design-mcp/structured-error-responses/"><span class="ln">2.2</span><span>Structured error responses for MCP tools</span></a></li>
+          <li><a href="../../tool-design-mcp/distributing-tools-and-tool-choice/"><span class="ln">2.3</span><span>Distributing tools across agents and configuring tool_choice</span></a></li>
+          <li><a href="../../tool-design-mcp/mcp-servers-scopes-and-resources/"><span class="ln">2.4</span><span>Integrating MCP servers: scopes, secrets and resources</span></a></li>
+          <li><a href="../../tool-design-mcp/built-in-tools-read-write-edit-bash-grep-glob/"><span class="ln">2.5</span><span>Selecting built-in tools: Read, Write, Edit, Bash, Grep, Glob</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 3</span> Claude Code Configuration &amp; Workflows</span><span class="meta">20%</span></summary>
+        <ul>
+          <li><a href="../../claude-code-configuration/"><span>Domain overview</span></a></li>
+          <li><a href="../../claude-code-configuration/claude-md-hierarchy/"><span class="ln">3.1</span><span>CLAUDE.md: hierarchy, scoping and modular organisation</span></a></li>
+          <li><a href="../../claude-code-configuration/slash-commands-and-skills/"><span class="ln">3.2</span><span>Custom slash commands and skills</span></a></li>
+          <li><a href="../../claude-code-configuration/path-specific-rules/"><span class="ln">3.3</span><span>Path-specific rules: conventions that follow the file</span></a></li>
+          <li><a href="../../claude-code-configuration/plan-mode-vs-direct-execution/"><span class="ln">3.4</span><span>Plan mode versus direct execution</span></a></li>
+          <li><a href="../../claude-code-configuration/iterative-refinement/"><span class="ln">3.5</span><span>Iterative refinement: examples, tests and the interview pattern</span></a></li>
+          <li><a href="../../claude-code-configuration/claude-code-in-ci-cd/"><span class="ln">3.6</span><span>Claude Code in CI/CD pipelines</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 4</span> Prompt Engineering &amp; Structured Output</span><span class="meta">20%</span></summary>
+        <ul>
+          <li><a href="../../prompt-engineering-structured-output/"><span>Domain overview</span></a></li>
+          <li><a href="../../prompt-engineering-structured-output/explicit-criteria-and-false-positives/"><span class="ln">4.1</span><span>Explicit criteria: precision and false positives</span></a></li>
+          <li><a href="../../prompt-engineering-structured-output/few-shot-prompting/"><span class="ln">4.2</span><span>Few-shot prompting for consistent, well-judged output</span></a></li>
+          <li><a href="../../prompt-engineering-structured-output/structured-output-with-tool-use-and-json-schemas/"><span class="ln">4.3</span><span>Structured output with tool use and JSON schemas</span></a></li>
+          <li><a href="../../prompt-engineering-structured-output/validation-retry-and-feedback-loops/"><span class="ln">4.4</span><span>Validation, retry and feedback loops for extraction quality</span></a></li>
+          <li><a href="../../prompt-engineering-structured-output/batch-processing-with-the-message-batches-api/"><span class="ln">4.5</span><span>Batch processing with the Message Batches API</span></a></li>
+          <li><a href="../../prompt-engineering-structured-output/multi-instance-and-multi-pass-review/"><span class="ln">4.6</span><span>Multi-instance and multi-pass review</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 5</span> Context Management &amp; Reliability</span><span class="meta">15%</span></summary>
+        <ul>
+          <li><a href="../../context-management-reliability/"><span>Domain overview</span></a></li>
+          <li><a href="../../context-management-reliability/conversation-context-and-case-facts/"><span class="ln">5.1</span><span>Conversation context: keeping the facts that matter</span></a></li>
+          <li><a href="../../context-management-reliability/escalation-and-ambiguity/"><span class="ln">5.2</span><span>Escalation and ambiguity resolution</span></a></li>
+          <li><a href="../../context-management-reliability/error-propagation-in-multi-agent-systems/"><span class="ln">5.3</span><span>Error propagation across multi-agent systems</span></a></li>
+          <li><a href="../../context-management-reliability/context-in-large-codebase-exploration/"><span class="ln">5.4</span><span>Context in large codebase exploration</span></a></li>
+          <li><a href="../../context-management-reliability/human-review-and-confidence-calibration/"><span class="ln">5.5</span><span>Human review workflows and confidence calibration</span></a></li>
+          <li><a href="../../context-management-reliability/provenance-and-conflicting-sources/"><span class="ln">5.6</span><span>Provenance and uncertainty in multi-source synthesis</span></a></li>
+        </ul>
+        </details>
+      </li>
+    </ul>
+  </nav>
+  <h2>Prepare</h2>
+  <ul>
+      <li><a href="../../../../course/view.php?idnumber=claude_ccar_f"><span>Full question bank</span><span class="meta">360</span></a></li>
+      <li><a href="../../../../ccar-f/"><span>CCAR-F exam guide</span></a></li>
+      <li><a href="../../../../ccar-f/cheat-sheet/"><span>CCAR-F cheat sheet</span></a></li>
+  </ul>
+  </div>
+</aside>
+<!-- SIDENAV:END -->
+
+<div class="content">
+
+<main>
+
+<p class="crumb"><a href="../../../../">Home</a> &rsaquo; <a href="../../../../learn/">Study guides</a> &rsaquo; <a href="../../">CCAR-F</a> &rsaquo; <a href="../">Domain 1</a> &rsaquo; Lesson 1.2</p>
+
+<p class="eyebrow">CCAR-F &middot; Domain 1 &middot; 27% of the exam &middot; Lesson 1.2 &middot; 19 min read</p>
+
+<h1>Multi-agent orchestration: the coordinator and its subagents</h1>
+
+<p class="lede">How a coordinator splits a research question, routes all messages through itself, briefs subagents that start blank, and loops until coverage is complete.</p>
+
+<p class="independent">Written against task statement 1.2 of the official CCAR-F exam guide (Version 1.0, effective July 2026). An independent resource, not affiliated with Anthropic; the practice questions are written from scratch.</p>
+
+<h2 id="why-one-agent-cannot-research-a-big-question-alone"><span class="secnum">1.2.1</span> Why one agent cannot research a big question alone</h2>
+
+<p>Imagine a client asks your team for a report on how electric vehicles (EVs) are changing the economy. You would not hand the whole thing to one person. One colleague gathers sources, another reads the long industry reports, a third pulls the findings together, and someone writes it up. And one person, an editor, owns the question: hands out the pieces, reads what comes back, and sends people back out when something is missing.</p>
+
+<p>A single agent can try to do all of that in one conversation, and for a small question it will manage. For a broad one it hits a wall. Everything an agent works with sits in its <strong>context window</strong>, the text the model can take into account at once: its working memory. Every search result, every page read and every draft paragraph lands in that one window. As it fills, the model's accuracy and recall degrade, so quality falls exactly when the task gets interesting.</p>
+
+<p>The answer is to give the agent colleagues. A <strong>coordinator</strong> is an agent whose tools include starting other agents. The agents it starts are <strong>subagents</strong>: separate agents, each with its own instructions, its own tools and a fresh context window. Anthropic's engineering writing calls this the orchestrator-workers pattern; the exam calls the orchestrator the coordinator. This lesson follows one research system for that client, with four subagents: search, analysis, synthesis and report.</p>
+
+<aside class="callout idea">
+<p><strong>The one idea:</strong> A coordinator owns the question. It splits the work, briefs each subagent from scratch, routes every message through itself, and keeps delegating until the answer covers the whole question, not just the part it thought of first.</p>
+</aside>
+
+<h2 id="hub-and-spoke-every-message-passes-through-the-coordinator"><span class="secnum">1.2.2</span> Hub and spoke: every message passes through the coordinator</h2>
+
+<p>The coordinator has four jobs on every run, and each rule in this lesson protects one of them.</p>
+
+<ol>
+<li><strong>DECOMPOSE.</strong> Break the request into subtasks: which areas to research, which documents to read.</li>
+<li><strong>DELEGATE.</strong> Start the right subagent for each subtask, with a written brief.</li>
+<li><strong>AGGREGATE.</strong> Collect each result, check it, and pass on what the next subagent needs.</li>
+<li><strong>DECIDE.</strong> Judge whether the work so far answers the question, and what happens next.</li>
+</ol>
+
+<p>Now the first design question, and the exam likes it: when the search subagent finds something the analysis subagent needs, do they talk to each other? The tempting answer is yes; it looks efficient. The right answer is no. The search subagent returns its sources to the coordinator, which decides what the analysis subagent gets. This is the <strong>hub-and-spoke architecture</strong>: the coordinator is the hub, the subagents are the spokes, and spokes never talk to each other.</p>
+
+<figure class="diagram diagram-hub" role="group" aria-label="Hub and spoke: the coordinator is the only connection">
+<p class="dtitle">Hub and spoke: the coordinator is the only connection</p>
+<div class="dhub">
+<div class="dbox accent dcenter" style="--i:0"><span class="dl">Coordinator</span><span class="ds">decomposes, delegates, aggregates, decides</span></div>
+<div class="dspokes">
+<div class="dspoke"><div class="dbox" style="--i:1"><span class="dl">Search subagent</span><span class="ds">finds sources on the web</span></div></div>
+<div class="dspoke"><div class="dbox" style="--i:2"><span class="dl">Analysis subagent</span><span class="ds">reads documents, extracts findings</span></div></div>
+<div class="dspoke"><div class="dbox" style="--i:3"><span class="dl">Synthesis subagent</span><span class="ds">merges findings into one account</span></div></div>
+<div class="dspoke"><div class="dbox" style="--i:4"><span class="dl">Report subagent</span><span class="ds">writes the cited report</span></div></div>
+</div>
+</div>
+<figcaption>Every brief goes out from the coordinator and every result comes back to it. The four subagents never send anything to each other.</figcaption>
+</figure>
+
+<p>Why insist on this when a direct link would save a hop? Three reasons. <strong>Observability</strong>: when every message passes through one place, one log shows the whole run, who was briefed with what and what each returned. <strong>Consistent error handling</strong>: if the search subagent fails or returns nonsense, the coordinator sees it and applies the same rule every time (retry, rebrief or carry on without it). <strong>Controlled information flow</strong>: the coordinator decides what each subagent sees, so synthesis gets checked findings rather than every raw page the search turned up.</p>
+
+<p>Think of an air traffic controller. Pilots do not negotiate with each other about who lands first; each talks to the tower, and the tower holds the whole picture. Hub and spoke is a design choice, not a technical limit: some agent tools do let agents message each other directly. You keep the spokes apart because any side channel gives up all three benefits at once.</p>
+
+<aside class="callout key">
+<p><strong>Key concept:</strong> In hub-and-spoke orchestration all inter-subagent communication, error handling and information routing go through the coordinator. Subagents take their inputs from the hub and report back to it, never to each other, so the run keeps one point of observation and control.</p>
+</aside>
+
+<h2 id="subagents-know-only-what-the-brief-says-isolated-context"><span class="secnum">1.2.3</span> Subagents know only what the brief says: isolated context</h2>
+
+<p>Now the question behind the most surprising bugs. The coordinator has spent twenty turns on the client's request and has noted that the client cares most about jobs and the power grid. It starts a search subagent with the brief "search for the angles we discussed". The subagent comes back with generic results, because it has no idea what was discussed.</p>
+
+<p>Subagents run with <strong>isolated context</strong>. Each one starts in a fresh context window holding its own system prompt (its standing instructions) and its own list of tools. It does not inherit the coordinator's conversation history, the pages the coordinator has read, or the coordinator's system prompt. The only thing that passes from coordinator to subagent is the <strong>brief</strong>: the prompt the coordinator writes when it starts the subagent. The Claude Agent SDK (software development kit) documentation is blunt about it: anything the subagent needs, from decisions to file paths, goes directly into that prompt.</p>
+
+<p>Picture briefing a freelancer by email. They sat in none of your meetings; whatever the email does not say, they do not know. The precise statement: nothing from the coordinator's conversation reaches a subagent unless the coordinator writes it into the brief.</p>
+
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>The subagent starts with</th>
+  <th>The subagent never sees</th>
+  <th>What comes back to the coordinator</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Its own system prompt and tools, from its definition</td>
+  <td>The coordinator's conversation history and system prompt</td>
+  <td>Its final message, as the result of the call that started it</td>
+</tr>
+<tr>
+  <td>The brief the coordinator wrote for this task</td>
+  <td>Pages, results and decisions the coordinator has seen</td>
+  <td>Nothing else: its searches and page reads stay inside it</td>
+</tr>
+</tbody>
+</table></div>
+
+<p>The middle column is where the bugs come from. The right-hand column matters as much, because isolation is not only a limitation; it is the point. A search subagent may run thirty searches and read forty pages, and all of that stays in its own window; the coordinator receives one final message. That is how a multi-agent system researches far more than one context window could hold.</p>
+
+<p>So the brief has to be complete. Anthropic's research team found that vague briefs made subagents duplicate work, leave gaps or miss what they were sent to find. Their conclusion: each subagent needs an objective, an output format, guidance on which tools and sources to use, and clear task boundaries. For our search subagent that means one brief with the exact question, the area it owns, what to return, and what NOT to cover because another subagent has it.</p>
+
+<aside class="callout key">
+<p><strong>Key concept:</strong> Subagents operate with isolated context: they do not inherit the coordinator's conversation history automatically, and the only thing that passes from coordinator to subagent is the brief. In return, a subagent's intermediate work never enters the coordinator's context; only its final result comes back.</p>
+</aside>
+
+<h2 id="the-coordinator-chooses-who-works-dynamic-selection"><span class="secnum">1.2.4</span> The coordinator chooses who works: dynamic selection</h2>
+
+<p>Here is a failure that looks like diligence. A team wires the four subagents into a fixed chain: every request runs search, then analysis, then synthesis, then report. Someone asks "how many electric cars were sold in Norway last year?" The system launches four agents, reads a dozen documents and writes a two-page report to deliver one number. Cost and waiting time go up, and the answer is no better.</p>
+
+<p>The coordinator's first job on every request is to analyse what the query needs and <strong>dynamically select</strong> which subagents to invoke. That is what separates this pattern from a fixed pipeline: the subtasks are not set in advance; the coordinator decides them from the specific input.</p>
+
+<p>Anthropic's own research system gives its lead agent explicit scaling rules: one agent and a handful of tool calls for simple fact-finding, a few subagents for a comparison, more than ten for complex research. The numbers are not exam material; the principle is. Effort scales with query complexity, so the Norway question gets one search, while the client's question gets the full set with several searches in parallel. Selection cuts both ways: early versions of that lead agent spawned 50 subagents for simple queries.</p>
+
+<figure class="diagram diagram-columns" role="group" aria-label="Fixed pipeline versus coordinator selection">
+<p class="dtitle">Fixed pipeline versus coordinator selection</p>
+<div class="dcols">
+<div class="dcol bad" style="--i:0">
+<p class="dhead">Always the full pipeline</p>
+<div class="dstack arrows">
+<div class="dbox" style="--i:1"><span class="dl">&quot;How many EVs sold in Norway last year?&quot;</span></div>
+<div class="dbox" style="--i:2"><span class="dl">Search, analysis, synthesis, report</span><span class="ds">all four, every time</span></div>
+<div class="dbox bad" style="--i:3"><span class="dl">A two-page report for one number</span></div>
+</div>
+</div>
+<div class="dcol accent" style="--i:4">
+<p class="dhead">Coordinator selects by query</p>
+<div class="dstack arrows">
+<div class="dbox" style="--i:5"><span class="dl">&quot;How many EVs sold in Norway last year?&quot;</span></div>
+<div class="dbox ok" style="--i:6"><span class="dl">Search subagent only</span><span class="ds">one brief, one answer</span></div>
+<div class="dbox" style="--i:7"><span class="dl">&quot;How are EVs changing the economy?&quot;</span></div>
+<div class="dbox ok" style="--i:8"><span class="dl">Several searches, then analysis, synthesis, report</span></div>
+</div>
+</div>
+</div>
+<figcaption>The fixed pipeline runs every subagent on every request. The coordinator reads the query first and starts only the subagents this query needs.</figcaption>
+</figure>
+
+<p>How does the coordinator know which subagent fits? Each subagent carries a <strong>description</strong> that says when to use it, and Claude matches the work to those descriptions. The coordinator asks for a subagent by calling a tool, and the SDK starts that subagent. In the Agent SDK that tool is called <code>Agent</code>; older versions, and the exam, call it <code>Task</code>. A vague description gets picked badly or not at all. If the report subagent's description reads "writes the final cited report from a completed synthesis", the coordinator can see that a one-number question does not need it.</p>
+
+<aside class="callout key">
+<p><strong>Key concept:</strong> The coordinator analyses each query's requirements and selects which subagents to invoke, scaling the number and kind of subagents to the complexity of the request. Always routing through the full pipeline wastes cost and time on simple queries; the subtasks are decided per input, not fixed in advance.</p>
+</aside>
+
+<h2 id="partition-the-scope-and-cover-all-of-it"><span class="secnum">1.2.5</span> Partition the scope, and cover all of it</h2>
+
+<p>Suppose the coordinator has rightly decided the client's question needs several search subagents. It starts three of them with the same brief: "research how EVs are changing the economy". All three run much the same searches and return much the same sources, and the coordinator pays three times for one result. The fix is to <strong>partition the research scope</strong>: give each subagent a distinct slice, so their work adds up instead of overlapping.</p>
+
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Way to partition</th>
+  <th>Example briefs for the search subagents</th>
+  <th>When it fits</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>By subtopic</td>
+  <td>Car making; power grids; battery-metal mining; fuel stations and servicing</td>
+  <td>The question spans several distinct areas</td>
+</tr>
+<tr>
+  <td>By source type</td>
+  <td>Government statistics; industry and analyst reports; academic studies</td>
+  <td>The question is one area seen from several angles</td>
+</tr>
+<tr>
+  <td>By time or region</td>
+  <td>Before 2020 and since; Europe, China, North America</td>
+  <td>The question is about change or contrast</td>
+</tr>
+</tbody>
+</table></div>
+
+<p>Subtopic and source type are the two splits to know by name; time and region are the same idea along another axis. Pick the split that fits the question. What never works is several subagents with the same brief, or briefs so vague that they drift into the same corner.</p>
+
+<p>Now the failure this task statement singles out: decomposition that is <strong>too narrow</strong>. The coordinator reads "electric vehicles", thinks of car companies, and splits the work into three subtasks: EV sales by brand, car makers' factory investment, and EV prices against petrol cars. Each subagent does a fine job. The synthesis is coherent, well cited and confident. It is also incomplete, because it says nothing about power grids, mining or fuel stations.</p>
+
+<p>Notice where the fault sits. Every subagent covered its brief completely; the briefs were the problem. So when every subagent reports success and the report still misses whole areas, read the coordinator's list of subtasks before you blame search, analysis or synthesis. A narrow decomposition is more dangerous than a sloppy one, because it produces a polished answer to a smaller question than the one asked. It is like sending every surveyor to the same district: you get a beautiful, detailed map, and it is not a map of the city.</p>
+
+<p>The defence is to decompose against the FULL breadth of the question before delegating. First list the areas a complete answer must cover, then partition those areas among subagents. Partitioning decides who covers what; breadth decides whether everything is covered at all.</p>
+
+<aside class="callout key">
+<p><strong>Key concept:</strong> Partition research scope across subagents by distinct subtopics or source types, so each covers a different slice and duplication is minimised. Decompose against the full breadth of the question first: an overly narrow decomposition produces a complete-looking answer with whole areas of the topic missing.</p>
+</aside>
+
+<h2 id="the-refinement-loop-evaluate-re-delegate-re-synthesise"><span class="secnum">1.2.6</span> The refinement loop: evaluate, re-delegate, re-synthesise</h2>
+
+<p>So far the coordinator has been a good dispatcher. What makes it a good editor is what it does when the synthesis comes back. The weak design sends the first synthesis straight to the report subagent. The strong design treats it as a draft and asks one question of it: does this cover the whole question?</p>
+
+<p>That is the <strong>iterative refinement loop</strong>. The coordinator delegates search and analysis, invokes synthesis, then evaluates the synthesis for gaps: areas with no findings, claims with no source, conflicts left unresolved. If it finds a gap, it does not rerun the whole pipeline. It re-delegates to the search and analysis subagents with targeted briefs that name the missing area, then re-invokes synthesis so the new findings merge with the old. The loop repeats until coverage is sufficient, and only then does the report subagent run.</p>
+
+<figure class="diagram diagram-flow" role="group" aria-label="The refinement loop">
+<p class="dtitle">The refinement loop</p>
+<div class="dflow">
+<div class="dbox" style="--i:0"><span class="dl">DELEGATE</span><span class="ds">search and analysis briefs, one slice each</span></div>
+<span class="darrow" aria-hidden="true"></span>
+<div class="dbox" style="--i:1"><span class="dl">SYNTHESISE</span><span class="ds">merge findings into one account</span></div>
+<span class="darrow" aria-hidden="true"></span>
+<div class="dbox" style="--i:2"><span class="dl">CHECK FOR GAPS</span><span class="ds">areas missing, claims unsourced</span></div>
+<span class="darrow" aria-hidden="true"></span>
+<div class="dbox" style="--i:3"><span class="dl">RE-DELEGATE</span><span class="ds">targeted briefs for the gaps only</span></div>
+<span class="darrow" aria-hidden="true"></span>
+<div class="dbox ok" style="--i:4"><span class="dl">REPORT</span><span class="ds">write the cited report</span></div>
+</div>
+<div class="dloop" style="--i:5"><span class="dloopmark" aria-hidden="true">&#8635;</span> RE-DELEGATE &rarr; DELEGATE &middot; while the synthesis has gaps</div>
+<figcaption>The coordinator judges each synthesis for gaps and sends targeted briefs back out until the answer covers the question. Only a synthesis that passes the check reaches the report subagent.</figcaption>
+</figure>
+
+<p>Watch the loop rescue our narrow decomposition. The first synthesis is all about car makers. The coordinator checks it against the client's original question, not against its own first plan, and asks where the grid, mining and fuel effects are. They are nowhere. It starts three new search subagents, one per missing area, each told what to find and what is already covered. The analysis subagent reads the new sources, synthesis runs again over old and new findings, and the second synthesis covers the whole question.</p>
+
+<p>Two details make the loop work. The re-delegation must be targeted: "find what is missing" is useless to a subagent that never saw the synthesis, so the coordinator names the gap ("EVs and power grids: charging demand, grid upgrades, peak load"). And the coordinator must evaluate rather than trust. Anthropic describes its lead agent synthesising results and then deciding whether more research is needed, creating additional subagents if so. The word "deciding" is the whole loop.</p>
+
+<aside class="callout key">
+<p><strong>Key concept:</strong> In an iterative refinement loop the coordinator evaluates the synthesis for gaps, re-delegates to the search and analysis subagents with targeted queries that name what is missing, and re-invokes synthesis until coverage is sufficient. The report is written from the synthesis that passed the check, not the first one.</p>
+</aside>
+
+<h2 id="the-exam-traps"><span class="secnum">1.2.7</span> The exam traps</h2>
+
+<p>Every mistake in this lesson is the coordinator giving up one of its jobs: routing, briefing, selecting, partitioning or checking.</p>
+
+<ul>
+<li><strong>✗ Letting subagents pass results to each other directly.</strong> ✓ Route everything through the coordinator. A side channel loses the single log, the single error policy and control over what each subagent sees.</li>
+<li><strong>✗ Assuming a subagent knows what the coordinator has read or decided.</strong> ✓ Put everything the subagent needs into its brief. Subagents start in a fresh context and inherit nothing from the coordinator's history.</li>
+<li><strong>✗ Running the full search-analysis-synthesis-report pipeline on every request.</strong> ✓ Have the coordinator analyse the query and select the subagents it needs. A one-number question does not need a report subagent.</li>
+<li><strong>✗ Starting several subagents with the same or overlapping briefs.</strong> ✓ Partition the scope by subtopic or source type so each subagent owns a distinct slice.</li>
+<li><strong>✗ Decomposing narrowly, then blaming the subagents for the gaps.</strong> ✓ Map the full breadth of the question before delegating. Subagents that complete their briefs cannot cover areas nobody assigned; car makers alone are not the economy.</li>
+<li><strong>✗ Sending the first synthesis straight to the report subagent.</strong> ✓ Evaluate it for gaps, re-delegate with targeted briefs, and re-synthesise until coverage is sufficient.</li>
+</ul>
+
+<aside class="callout trap">
+<p><strong>Exam trap:</strong> A typical question describes a research system whose reports miss whole areas of the topic, or whose subagents return near-identical findings, and asks for the root cause or the fix. If every subagent completed its task, the fault is upstream, in the coordinator. Pick the option in which the coordinator decomposes against the full question, gives each subagent distinct scope, or checks the synthesis for gaps. Distractors blame a subagent that did exactly what it was told, or add a bigger model or a fixed pipeline "so nothing is skipped". Another lets subagents share results directly "to save round trips", which breaks the hub.</p>
+</aside>
+
+<h2 id="put-it-together-orchestrate-a-research-run-and-break-it"><span class="secnum">1.2.8</span> Put it together: orchestrate a research run and break it</h2>
+
+<p>You now have the coordinator's whole job. It routes every message, writes complete briefs, selects subagents per query, partitions scope against the full question, and loops on the synthesis until the question is covered. The best way to feel why each job matters is to build a small version and then take one job away at a time.</p>
+
+<aside class="callout exercise">
+<p><strong>Build exercise:</strong> About an hour with the Agent SDK in Python or TypeScript.</p>
+  
+  <ol>
+  <li>Define four subagents, each with a clear description: search (web search only), analysis (reading only), synthesis and report. In the coordinator's system prompt, tell it to list the areas a complete answer needs before delegating, and to check each synthesis against the original question.</li>
+  <li>Ask "how are electric vehicles changing the economy?" and log every <code>Agent</code> tool call with its brief and its result. You should see several search briefs, one per area, then analysis, synthesis and report.</li>
+  <li>Ask "how many electric cars were sold in Norway last year?". If all four subagents ran, tighten the coordinator's selection instructions until a simple question gets one search and nothing more.</li>
+  <li>Now break the briefing: make the coordinator delegate with only "search for the angles we discussed". Watch the search subagents return generic results, because none of them saw the discussion.</li>
+  <li>Restore the briefs, then break the coverage: remove the gap check and hard-code the first plan as three car-maker subtasks. The report will be fluent, cited and silent on grids, mining and fuel.</li>
+  <li>Put the gap check back, keeping the narrow plan, and watch the coordinator send targeted briefs for the missing areas. Then restore the full decomposition and compare the three reports area by area.</li>
+  </ol>
+</aside>
+
+<p>The rest of Domain 1 builds on this coordinator. Configuring subagent invocation (1.3) is about the spawning tool call itself: how each subagent is defined, what goes into the brief, and how to start several at once. Workflow enforcement (1.4) is how you guarantee, rather than hope, that the report subagent never runs before a synthesis has passed the gap check. Task decomposition (1.6) turns "decompose against the full breadth" into a method, and sessions (1.7) let a long research run pause and resume.</p>
+
+<aside class="callout exam">
+<p><strong>On the exam:</strong> Questions on task statement 1.2 describe a research system with a visible symptom. It might be duplicated findings, missing areas, a subagent missing context the coordinator never sent, or a trivial question that ran the whole pipeline. Match the symptom to the coordinator job that was skipped, and pick the option that restores it. The right answer keeps the coordinator in the middle and makes it decide more, not less.</p>
+</aside>
+
+<h2 id="key-takeaways">Key takeaways</h2>
+
+<ul>
+<li>✓ A coordinator is an agent that starts other agents: it decomposes the request, delegates to subagents, aggregates their results and decides what happens next.</li>
+<li>✓ In hub and spoke, all communication, error handling and information routing pass through the coordinator, giving one log, one error policy and one point of control.</li>
+<li>✓ Subagents run in isolated context and inherit nothing from the coordinator's history, so the brief must carry everything they need, and only their final result comes back.</li>
+<li>✓ The coordinator selects which subagents to invoke from the query's complexity instead of running the full pipeline every time.</li>
+<li>✓ Partition scope across subagents by subtopic or source type so that no two do the same work.</li>
+<li>✓ An overly narrow decomposition is the quiet failure: every subagent succeeds, yet the polished report answers a smaller question than the one asked.</li>
+<li>✓ The refinement loop evaluates the synthesis for gaps, re-delegates to search and analysis with targeted briefs, and re-synthesises before anything is reported.</li>
+</ul>
+
+<h2 id="check">Check your understanding</h2>
+
+<p class="note">4 questions written for this lesson, then one from the CCAR-F question bank on the same topic. Every answer option is explained, including the ones you did not pick. Nothing is stored.</p>
+
+<div class="quiz" id="quiz">
+  <p class="meta" id="meta"></p>
+  <p class="scenario" id="scenario"></p>
+  <p class="question" id="question"></p>
+  <div id="options"></div>
+  <div class="overall hidden" id="overall"></div>
+  <div class="quiznav">
+    <button id="prev" type="button">&#8592; Prev</button>
+    <button id="next" type="button">Next &#8594;</button>
+    <button id="reset" type="button">Reset answers</button>
+    <span class="score" id="score"></span>
+  </div>
+  <p class="score" id="progress" style="margin:.6rem 0 0"></p>
+</div>
+<script>
+const DATA = [{"id":"check-1","domain":"Lesson 1.2 check","scenario_full":"","question":"A coordinator discusses a client's priorities for twenty turns, then starts a search subagent with the brief \"search for the angles we agreed on\". The subagent returns generic results that ignore those priorities. What is the most effective fix?","options":[{"text":"Switch the search subagent to a more capable model so it can infer the intended angles.","correct":false,"explanation":"No model can infer content it was never sent. The problem is what reached the subagent, not how capable it is."},{"text":"Have the coordinator write the agreed angles, and what to return, explicitly into the brief.","correct":true,"explanation":"Subagents start with isolated context and do not inherit the coordinator's history. The brief is the only thing that passes from coordinator to subagent."},{"text":"Let the analysis subagent forward the earlier discussion to the search subagent.","correct":false,"explanation":"The analysis subagent never saw the discussion either, and a direct link between subagents bypasses the coordinator."},{"text":"Pass the coordinator's entire conversation history to every subagent it starts.","correct":false,"explanation":"That throws away the benefit of isolation: each subagent would wade through everything the coordinator saw. A complete, focused brief is the fix."}],"overall":""},{"id":"check-2","domain":"Lesson 1.2 check","scenario_full":"","question":"A research system is asked how EVs are changing the economy. Every subagent reports success and the final report is fluent and well cited, but it covers only car makers: nothing on power grids, mining or fuel stations. The coordinator's log shows three subtasks: EV sales by brand, car makers' factory investment, and EV prices. What is the most likely root cause?","options":[{"text":"The search subagent's queries were too narrow and should be widened to cover more sectors.","correct":false,"explanation":"The search subagent searched exactly what it was assigned. Widening its queries patches a subagent that was working correctly."},{"text":"The synthesis subagent dropped the missing areas to keep the report short.","correct":false,"explanation":"Synthesis can only merge findings that were gathered. Grids, mining and fuel were never researched in the first place."},{"text":"The coordinator decomposed the question too narrowly, so no subagent was ever assigned the missing areas.","correct":true,"explanation":"All three subtasks sit inside one area. Subagents that complete their briefs cannot cover areas nobody assigned; the fix is to decompose against the question's full breadth."},{"text":"Too few search subagents ran, so more should be started with the same brief.","correct":false,"explanation":"More subagents with the same brief duplicate the car-maker work. What is missing is distinct scope for the other areas."}],"overall":""},{"id":"check-3","domain":"Lesson 1.2 check","scenario_full":"","question":"A coordinator runs the search, analysis, synthesis and report subagents on every request. A user asks a one-line factual question and waits two minutes for a formatted report. What is the best change?","options":[{"text":"Have the coordinator analyse each query and select only the subagents it needs, so a simple fact gets one search.","correct":true,"explanation":"The coordinator decides the subtasks per input. Always routing through the full pipeline wastes cost and time on simple queries."},{"text":"Give every subagent a smaller, faster model so the full pipeline finishes sooner.","correct":false,"explanation":"A faster run of unnecessary work is still unnecessary work; this query never needed a report."},{"text":"Add a rule in front of the coordinator that skips the report subagent for any question under ten words.","correct":false,"explanation":"Length is a poor proxy for complexity: \"How is AI changing work?\" is short and broad. The coordinator should judge each query on what it needs."},{"text":"Cache the report subagent's output so repeated questions return faster.","correct":false,"explanation":"Caching helps only repeats, and the first answer still runs a pipeline this question never needed."}],"overall":""},{"id":"check-4","domain":"Lesson 1.2 check","scenario_full":"","question":"A coordinator checks the first synthesis against the client's question and finds that power grids, one of the areas the answer must cover, have no findings at all. What should it do next?","options":[{"text":"Send the synthesis to the report subagent and list power grids as a limitation.","correct":false,"explanation":"Flagging a gap fits an area that could not be researched, such as after a failed search. This area was never searched, so coverage is not yet sufficient."},{"text":"Rerun the whole pipeline from the start with the original briefs.","correct":false,"explanation":"The original briefs produced the gap, so running them again repeats it and redoes work that was already fine."},{"text":"Give the synthesis subagent the search tools so it can research power grids itself.","correct":false,"explanation":"That bypasses the hub and over-equips synthesis. A whole missing area is work for search and analysis, routed through the coordinator."},{"text":"Send targeted briefs on power grids to the search and analysis subagents, then re-invoke synthesis over old and new findings.","correct":true,"explanation":"That is the iterative refinement loop: evaluate, re-delegate with a brief that names the gap, re-synthesise, and report only once coverage is sufficient."}],"overall":""},{"id":"ComposedSet8_60Q.csv#29","domain":"From the CCAR-F question bank: Agentic Architecture & Orchestration","scenario_full":"Multi-Agent Research System You are building a multi-agent research system using the Claude Agent SDK. A coordinator agent delegates to specialized subagents: one searches the web, one analyzes documents, one synthesizes findings, and one generates reports. The system researches topics and produces comprehensive, cited reports.","question":"A Claude Agent SDK research workflow is producing uneven reports on emerging battery technologies. In several runs, the coordinator hands notes to the synthesis agent after the web researcher finds many recent articles, but later the report writer discovers that regulatory impacts and manufacturing constraints were barely addressed. What is the best way to make the transition from research to synthesis more reliable?","options":[{"text":"Have the coordinator poll the web-search, document-analysis, and report-writing agents, then move to synthesis whenever any two agents agree that the research phase is complete.","explanation":"This is wrong because a majority vote does not define the acceptance conditions for readiness. Agents may agree for different or poorly specified reasons, so the transition can remain inconsistent across runs.","correct":false},{"text":"Update the coordinator’s instructions with a “ready for synthesis” checklist, such as minimum cited sources per research question, required coverage of market, technical, and risk dimensions, unresolved-gap count below a threshold, and confidence scores above an agreed level.","explanation":"This is correct because it gives the orchestrating agent measurable criteria for deciding when to move from collection to synthesis. Criteria for evidence volume, coverage, gap closure, and confidence make the handoff reproducible rather than dependent on ad hoc judgment.","correct":true},{"text":"Allow the coordinator to start synthesis whenever it believes the deadline is at risk, and let it skip further input from the document-analysis agent if the available notes seem broadly useful.","explanation":"This is wrong because it gives the coordinator authority to bypass a specialist without clarifying what “enough research” means. Skipping the document-analysis agent may mask missing evidence instead of resolving the ambiguous readiness standard.","correct":false},{"text":"Instruct the synthesis agent to decide whether incoming material is sufficient, and require the coordinator to accept that decision before assigning any report-generation work.","explanation":"This is wrong because it makes a downstream specialist’s subjective assessment the only gate. The coordinator still lacks objective completion rules for evidence sufficiency, topic coverage, and unresolved gaps.","correct":false}],"overall":"The best approach is to encode explicit, measurable phase-transition criteria in the coordinator’s instructions. Objective gates such as source counts, coverage requirements, gap thresholds, and confidence levels reduce ambiguity and make handoffs between agents more reliable. Bypassing specialists, relying on votes, or deferring entirely to a downstream agent leaves the readiness standard underspecified."}];
+let filtered = DATA, idx = 0;
+const answers = {};   // question id -> chosen option index
+
+const $ = id => document.getElementById(id);
+
+function render() {
+  if (!filtered.length) { $("question").textContent = "No questions."; return; }
+  const q = filtered[idx];
+  $("progress").textContent = filtered.length > 1 ? `Question ${idx + 1} of ${filtered.length}` : "";
+  $("meta").textContent = q.domain;
+  $("scenario").textContent = q.scenario_full;
+  $("scenario").style.display = q.scenario_full ? "" : "none";
+  $("question").textContent = q.question;
+  const chosen = answers[q.id];
+  const revealed = chosen !== undefined;
+  const box = $("options");
+  box.innerHTML = "";
+  q.options.forEach((opt, i) => {
+    const b = document.createElement("button");
+    b.className = "opt";
+    b.type = "button";
+    b.textContent = String.fromCharCode(65 + i) + ". " + opt.text;
+    b.disabled = revealed;
+    if (revealed && opt.correct) b.classList.add("correct");
+    if (revealed && i === chosen && !opt.correct) b.classList.add("wrong");
+    b.onclick = () => { answers[q.id] = i; render(); };
+    box.appendChild(b);
+    if (revealed && opt.explanation) {
+      const e = document.createElement("div");
+      e.className = "optexp";
+      e.textContent = opt.explanation;
+      box.appendChild(e);
+    }
+  });
+  $("overall").classList.toggle("hidden", !revealed);
+  $("overall").textContent = q.overall;
+  const done = filtered.filter(x => answers[x.id] !== undefined);
+  const ok = done.filter(x => x.options[answers[x.id]].correct);
+  $("score").textContent = done.length ? `Score: ${ok.length}/${done.length}` : "";
+  $("prev").disabled = idx === 0;
+  $("next").disabled = idx >= filtered.length - 1;
+}
+
+$("prev").onclick = () => { if (idx > 0) { idx--; render(); } };
+$("next").onclick = () => { if (idx < filtered.length - 1) { idx++; render(); } };
+$("reset").onclick = () => { for (const k in answers) delete answers[k]; render(); };
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft") $("prev").onclick();
+  if (e.key === "ArrowRight") $("next").onclick();
+});
+render();
+</script>
+
+<div class="cta">
+  <h2>96 CCAR-F questions on Domain 1, free</h2>
+  <p>Every question in the bank is tagged to a domain, so you can drill 96 questions on Agentic Architecture &amp; Orchestration alone, or sit the full 60-question timed simulator.</p>
+  <p>
+    <a class="btn" href="../../../../course/view.php?idnumber=claude_ccar_f">Open the CCAR-F question bank &rarr;</a>
+    <a class="btn ghost" href="../">Back to Domain 1 &rarr;</a>
+  </p>
+  <p class="note" style="margin-bottom:0">
+    The question bank is free. It asks for an account only because the quiz engine has to store
+    answers to score them and show which domains are weak. The questions on this page need nothing.
+  </p>
+</div>
+
+<h2 id="sources">Sources</h2>
+<ul>
+  <li><a href="https://www.anthropic.com/engineering/multi-agent-research-system" rel="noopener">How we built our multi-agent research system</a></li>
+  <li><a href="https://code.claude.com/docs/en/agent-sdk/subagents" rel="noopener">Subagents in the Agent SDK</a></li>
+  <li><a href="https://code.claude.com/docs/en/sub-agents" rel="noopener">Claude Code subagents</a></li>
+  <li><a href="https://www.anthropic.com/engineering/building-effective-agents" rel="noopener">Building effective agents</a></li>
+  <li><a href="https://platform.claude.com/docs/en/build-with-claude/context-windows" rel="noopener">Context windows</a></li>
+  <li><a href="../../../../ccar-f/">The CCAR-F exam guide, summarised</a></li>
+</ul>
+
+<nav class="lessonnav" aria-label="Lesson navigation">
+  <a class="prev" href="../../agentic-architecture/agentic-loops-and-stop-reason/"><span class="lbl">&larr; Previous</span><span class="t">1.1 Designing agentic loops</span></a>
+  <a class="next" href="../../agentic-architecture/spawning-subagents-with-the-task-tool/"><span class="lbl">Next &rarr;</span><span class="t">1.3 Spawning subagents: the Task tool, context passing and forking</span></a>
+</nav>
+
+</main>
+
+<!-- SITEFOOT:START -->
+<footer class="sitefoot">
+  <div class="cols">
+    <div>
+      <h2>Certifications</h2>
+      <ul>
+        <li><a href="../../../../ccar-f/">CCAR-F &middot; Architect</a></li>
+        <li><a href="../../../../ccar-p/">CCAR-P &middot; Architect Pro</a></li>
+        <li><a href="../../../../ccao-f/">CCAO-F &middot; Associate</a></li>
+        <li><a href="../../../../ccdv-f/">CCDV-F &middot; Developer</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Study</h2>
+      <ul>
+        <li><a href="../../../../learn/">Study guides</a></li>
+        <li><a href="../../../../claude-certifications/">Compare the 4 exams</a></li>
+        <li><a href="../../../../ccar-f/cheat-sheet/">CCAR-F cheat sheet</a></li>
+        <li><a href="../../../../articles/">Articles</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Practice</h2>
+      <ul>
+        <li><a href="../../../../#certifications">All certifications</a></li>
+        <li><a href="../../../../course/index.php">All question banks</a></li>
+        <li><a href="#practice">Free questions</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Community</h2>
+      <ul>
+        <li><a href="../../../../about/">About this site</a></li>
+        <li><a href="mailto:admin@termidy.com">Report a correction</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Official</h2>
+      <ul>
+        <li><a href="https://anthropic-partners.skilljar.com/page/faq-certifications" rel="noopener">Partner Academy</a></li>
+        <li><a href="https://www.pearsonvue.com/us/en/anthropic.html" rel="noopener">Pearson VUE</a></li>
+        <li><a href="https://docs.claude.com/" rel="noopener">Anthropic docs</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="apps">
+    <a href="https://apps.apple.com/gb/app/claudeprep/id6794950689" rel="noopener">ClaudePrep for iOS</a>
+    <a href="https://play.google.com/store/apps/details?id=com.termidy.claude.dev" rel="noopener">ClaudePrep for Android</a>
+  </p>
+
+  <p class="maintainer">
+    Maintained by Anton Pavelko, Claude Certified
+    <a href="https://www.credly.com/badges/b58893ef-7864-408e-9f60-5ee30ad2e0ea" rel="noopener">Architect</a> &middot;
+    <a href="https://www.credly.com/badges/3e0fa70c-5795-44fc-8b5d-2ed6ed0972fc" rel="noopener">Associate</a> &middot;
+    <a href="https://www.credly.com/badges/478d6b2e-18e7-4e40-8443-1f341941e4c0/public_url" rel="noopener">Developer</a>.
+  </p>
+
+  <p class="legal">
+    An independent community resource. Not affiliated with, endorsed by, or sponsored by Anthropic.
+    Claude and Anthropic are trademarks of Anthropic, PBC. Practice questions are written from
+    scratch; none come from a real exam.
+  </p>
+  <p class="note" style="font-size:.8rem">
+    CCAR-F domains: Agentic Architecture and Orchestration &middot; Tool Design and MCP Integration &middot; Claude Code Configuration and Workflows &middot; Prompt Engineering and Structured Output &middot; Context Management and Reliability.
+  </p>
+  <p class="legal">
+    &copy; 2026 &middot;
+    <a href="../../../../privacy-policy.html">Privacy</a> &middot;
+    <a href="../../../../terms-of-service.html">Terms</a> &middot;
+    <a href="mailto:admin@termidy.com">admin@termidy.com</a>
+  </p>
+</footer>
+<!-- SITEFOOT:END -->
+
+</div>
+</div>
+
+</body>
+</html>

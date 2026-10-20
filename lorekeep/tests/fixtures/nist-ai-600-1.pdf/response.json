@@ -1,0 +1,10 @@
+{
+  "url": "https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf",
+  "status": 200,
+  "headers": {
+    "content-type": "application/pdf",
+    "etag": "\"37d1e58af09cdb1:0\"",
+    "last-modified": "Mon, 24 Mar 2025 19:11:27 GMT"
+  },
+  "body": "body.pdf"
+}

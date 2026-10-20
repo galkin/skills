@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Quantization - Model Optimizer 0.0.1.dev1+gd7cbff348</title>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+
+    
+  
+    
+  </head>
+<body><div class="sy-head">
+  <div class="sy-head-blur"></div>
+  <div class="sy-head-inner sy-container mx-auto">
+    <a class="sy-head-brand" href="../index.html">
+      
+      
+      <strong>Model Optimizer</strong>
+    </a>
+    <div class="sy-head-nav" id="head-nav">
+      <nav class="sy-head-links"></nav>
+      <div class="sy-head-extra flex items-center print:hidden"><div class="sy-head-socials"></div></div>
+    </div>
+    <div class="sy-head-actions flex items-center shrink-0 print:hidden">
+    </div>
+  </div>
+</div>
+<div class="sy-page sy-container flex mx-auto">
+  <aside id="lside" class="sy-lside md:w-72 md:shrink-0 print:hidden">
+    <div class="sy-lside-inner md:sticky">
+      <div class="sy-scrollbar p-6">
+        <div class="globaltoc"><p class="caption" role="heading" aria-level="3"><span class="caption-text">Announcements</span></p>
+<ul>
+<li class="toctree-l1 _expand"><a class="reference internal" href="../index.html">Announcements</a></li>
+</ul>
+<p class="caption" role="heading" aria-level="3"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1 _expand"><a class="reference internal" href="../getting_started/1_overview.html">Overview</a></li>
+<li class="toctree-l1 _expand"><a class="reference internal" href="../getting_started/2_installation.html">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting_started/_installation_for_Linux.html">Installation for Linux</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../getting_started/windows/_installation_for_Windows.html">Installation for Windows</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../getting_started/windows/_installation_standalone.html">Install ModelOpt-Windows as a Standalone Toolkit</a></li>
+
+
+</ul>
+</li>
+</ul>
+</li>
+
+
+
+
+
+
+
+
+
+</ul>
+<p class="caption" role="heading" aria-level="3"><span class="caption-text">Guides</span></p>
+<ul class="current">
+
+
+
+
+
+
+
+
+
+
+
+
+
+</ul>
+<p class="caption" role="heading" aria-level="3"><span class="caption-text">Deployment</span></p>
+<ul>
+
+
+
+</ul>
+<p class="caption" role="heading" aria-level="3"><span class="caption-text">Examples</span></p>
+<ul>
+
+</ul>
+<p class="caption" role="heading" aria-level="3"><span class="caption-text">Reference</span></p>
+<ul>
+
+
+</ul>
+<p class="caption" role="heading" aria-level="3"><span class="caption-text">Support</span></p>
+<ul>
+
+
+</ul>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="lside-overlay js-menu" role="button" aria-label="Close left sidebar" aria-controls="lside" aria-expanded="false"></div>
+  <aside id="rside" class="sy-rside pb-3 w-64 shrink-0 order-last">
+    
+    <div class="sy-scrollbar sy-rside-inner px-6 xl:top-16 xl:sticky xl:pl-0 pt-6 pb-4"><div id="ethical-ad-placement"></div></div>
+  </aside>
+  <div class="rside-overlay js-menu" role="button" aria-label="Close Table of Contents" aria-controls="rside" aria-expanded="false"></div>
+  <main class="sy-main w-full max-sm:max-w-full print:pt-6">
+<div class="sy-breadcrumbs" role="navigation">
+  <div class="sy-breadcrumbs-inner flex items-center">
+    <div class="md:hidden mr-3">
+      
+    </div>
+    <ol class="flex-1" itemscope itemtype="https://schema.org/BreadcrumbList"><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="../index.html"><span itemprop="name">Model Optimizer</span></a>
+        <span>/</span>
+        
+      </li><li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <strong itemprop="name">Quantization</strong>
+        
+      </li></ol>
+    <div class="xl:hidden ml-1">
+      
+    </div>
+  </div>
+</div><div class="flex flex-col break-words justify-between">
+      <div class="relative min-w-0 max-w-6xl px-6 pb-6 pt-8 xl:px-12">
+  <article class="yue dark-code" role="main">
+          <section id="quantization">
+<h1>Quantization<a class="headerlink" href="#quantization" title="Link to this heading">#</a></h1>
+<p>ModelOpt quantization toolkit supports quantization for NVIDIA’s hardware and software stack.
+Currently ModelOpt supports quantization in PyTorch and ONNX frameworks.</p>
+<p>ModelOpt is based on simulated quantization in the original precision to simulate, test, and
+optimize for the best trade-off between the accuracy of the model and different low-precision
+formats. To achieve actual speedups and memory savings, the model with simulated quantization can be
+exported to deployment frameworks, like TensorRT or TensorRT-LLM. Please refer to the
+<a class="reference external" href="https://github.com/NVIDIA/Model-Optimizer" rel="noopener noreferrer" target="_blank">Model-Optimizer GitHub repository</a>
+for more details and examples.</p>
+<p>Below, you can find the documentation for the quantization toolkit in ModelOpt:</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="_basic_quantization.html">Basic Concepts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="_choosing_quant_methods.html">Best practices to choose the right quantization methods</a></li>
+<li class="toctree-l1"><a class="reference internal" href="_pytorch_quantization.html">PyTorch Quantization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="_quant_cfg.html">Quantization Configuration (quant_cfg)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="_customized_model_quantization.html">Guides to quantize a customized model from Hugging Face for TensorRT-LLM deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="_compress_quantized_models.html">Compress quantized models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="_onnx_quantization.html">ONNX Quantization - Linux (Beta)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="windows_guides/_ONNX_PTQ_guide.html">ONNX Quantization - Windows</a></li>
+</ul>
+</div>
+</section>
+
+        </article><div class="navigation flex print:hidden"><div class="navigation-prev">
+    <a href="0_support_matrix.html">
+      <i class="i-lucide chevron-left"></i>
+      <div class="page-info">
+        <span>Previous</span><div class="title">Support Matrix</div></div>
+    </a>
+  </div><div class="navigation-next">
+    <a href="_basic_quantization.html">
+      <div class="page-info">
+        <span>Next</span>
+        <div class="title">Basic Concepts</div>
+      </div>
+      <i class="i-lucide chevron-right"></i>
+    </a>
+  </div></div></div>
+    </div>
+  </main>
+</div>
+<footer class="sy-foot">
+  <div class="sy-foot-inner sy-container mx-auto">
+    <div class="sy-foot-reserved md:flex justify-between items-center">
+      <div class="sy-foot-copyright"><p>2023-2025, NVIDIA Corporation</p>
+  
+  <p>
+    Made with
+    
+    <a href="https://www.sphinx-doc.org/">Sphinx</a> and
+    
+    <a href="https://shibuya.lepture.com">Shibuya theme</a>.
+  </p>
+</div>
+      <div class="sy-foot-socials"></div>
+    </div>
+  </div>
+</footer>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      </body>
+</html>

@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- HEAD-META:START -->
+<title>The building blocks of an effective prompt - CCAO-F study guide, lesson 1.1</title>
+<meta name="description" content="Why a one-line request gets a generic answer, the six parts of a good brief, and how the same brief works for a customer notice and a spreadsheet formula.">
+<link rel="canonical" href="https://claude.termidy.com/learn/ccao-f/prompting-task-execution/effective-prompts/">
+<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
+<link rel="icon" type="image/png" href="../../../../assets/favicon.png">
+<link rel="apple-touch-icon" href="../../../../assets/logo.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="ClaudePrep">
+<meta property="og:url" content="https://claude.termidy.com/learn/ccao-f/prompting-task-execution/effective-prompts/">
+<meta property="og:title" content="The building blocks of an effective prompt - CCAO-F study guide, lesson 1.1">
+<meta property="og:description" content="Why a one-line request gets a generic answer, the six parts of a good brief, and how the same brief works for a customer notice and a spreadsheet formula.">
+<meta property="og:image" content="https://claude.termidy.com/assets/og-cca-foundations.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Claude Certified Associate - Foundations study guide: The building blocks of an effective prompt">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The building blocks of an effective prompt - CCAO-F study guide, lesson 1.1">
+<meta name="twitter:description" content="Why a one-line request gets a generic answer, the six parts of a good brief, and how the same brief works for a customer notice and a spreadsheet formula.">
+<meta name="twitter:image" content="https://claude.termidy.com/assets/og-cca-foundations.png">
+<meta name="twitter:image:alt" content="Claude Certified Associate - Foundations study guide: The building blocks of an effective prompt">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":["LearningResource","Article"],"headline":"The building blocks of an effective prompt","name":"The building blocks of an effective prompt","description":"Why a one-line request gets a generic answer, the six parts of a good brief, and how the same brief works for a customer notice and a spreadsheet formula.","url":"https://claude.termidy.com/learn/ccao-f/prompting-task-execution/effective-prompts/","mainEntityOfPage":"https://claude.termidy.com/learn/ccao-f/prompting-task-execution/effective-prompts/","inLanguage":"en","isAccessibleForFree":true,"learningResourceType":"Lesson","educationalLevel":"Foundations","teaches":["1.1 Create effective prompts for business and technical tasks"],"timeRequired":"PT18M","wordCount":3149,"isPartOf":{"@type":"LearningResource","@id":"https://claude.termidy.com/learn/ccao-f/prompting-task-execution/"},"author":{"@type":"Person","name":"Anton Pavelko","url":"https://www.linkedin.com/in/anton-pavelko/"},"publisher":{"@type":"Organization","name":"ClaudePrep","url":"https://claude.termidy.com/"},"datePublished":"2026-09-29","dateModified":"2026-09-29"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://claude.termidy.com/"},{"@type":"ListItem","position":2,"name":"Study guides","item":"https://claude.termidy.com/learn/"},{"@type":"ListItem","position":3,"name":"CCAO-F","item":"https://claude.termidy.com/learn/ccao-f/"},{"@type":"ListItem","position":4,"name":"Domain 1","item":"https://claude.termidy.com/learn/ccao-f/prompting-task-execution/"},{"@type":"ListItem","position":5,"name":"Lesson 1.1","item":"https://claude.termidy.com/learn/ccao-f/prompting-task-execution/effective-prompts/"}]}</script>
+<!-- HEAD-META:END -->
+<!-- CSSLINK:START -->
+<link rel="stylesheet" href="../../../../assets/site.css">
+<script>/* Light/dark theme for the whole site - Moodle and the static pages alike.
+ * Inlined into <head> by tools/lib/site_chrome.php (static pages, at build time)
+ * and theme/claudeprep/classes/output/core_renderer.php (Moodle, per request).
+ * The contract: a "darkmode" cookie (dark|light) is the visitor's choice; without
+ * one, the site is dark - an owner decision, not the OS setting. In Moodle a
+ * logged-in user's saved preference (data-bs-theme from local_boost_dark) comes
+ * between the two. Output is data-bs-theme on <html>. */
+(function () {
+  var d = document.documentElement;
+  function chosen() {
+    var m = document.cookie.match(/(?:^|; )darkmode=(dark|light)(?:;|$)/);
+    return m ? m[1] : null;
+  }
+  function apply(t) {
+    d.setAttribute('data-bs-theme', t);
+    d.style.colorScheme = t;
+  }
+  var t = chosen() || d.getAttribute('data-bs-theme');
+  apply(t === 'light' ? 'light' : 'dark');
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('.cp-theme-toggle');
+    if (!b) { return; }
+    e.preventDefault();
+    var next = d.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+    apply(next);
+    document.cookie = 'darkmode=' + next + '; path=/; max-age=31536000; SameSite=Lax';
+    document.dispatchEvent(new CustomEvent('cp:themechange', {detail: next}));
+  });
+})();</script>
+<!-- CSSLINK:END -->
+<!-- JSLINK:START -->
+<script src="../../../../assets/site.js" defer></script>
+<!-- JSLINK:END -->
+<!-- APPBANNER:START -->
+<script src="../../../../assets/appbanner.js" defer></script>
+<!-- APPBANNER:END -->
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-S8ZBNKNCLF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-S8ZBNKNCLF');
+</script>
+</head>
+<body>
+
+<!-- SITENAV:START -->
+<nav class="sitenav" aria-label="Site">
+  <div class="shell">
+    <a class="brand" href="../../../../">ClaudePrep</a>
+    <input type="checkbox" id="nav-toggle" class="nav-toggle">
+    <a class="login" href="../../../../login/index.php">Log in</a>
+    <label for="nav-toggle" class="nav-burger" aria-label="Menu"><span></span><span></span><span></span></label>
+    <div class="nav-links">
+      <a href="../../../../">Home</a>
+      <a href="../../../../my/courses.php">Practice</a>
+      <a href="../../../../learn/" aria-current="page">Study guides</a>
+      <a href="../../../../claude-certifications/">Compare exams</a>
+      <a href="../../../../about/">About</a>
+    </div>
+    <button type="button" class="cp-theme-toggle" aria-label="Switch between light and dark theme" title="Light / dark theme"><svg class="cp-icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.2A8.5 8.5 0 1 1 9.8 3.5a6.8 6.8 0 0 0 10.7 10.7z"/></svg><svg class="cp-icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg></button>
+  </div>
+</nav>
+<!-- SITENAV:END -->
+
+<!-- PROGRAMBAR:START -->
+<div class="programbar">
+  <div class="shell">
+    <span>Claude Certification Program</span>
+    <span class="sep">&middot;</span>
+    <span>v1.0</span>
+    <span class="sep">&middot;</span>
+    <span>Effective July 2026</span>
+    <span class="sep">&middot;</span>
+    <span>All four tracks open</span>
+  </div>
+</div>
+<!-- PROGRAMBAR:END -->
+
+<!-- EXAMSWITCH:START -->
+<nav class="examswitch" aria-label="Claude certifications">
+  <ul class="shell">
+    <li><a href="../../../../learn/ccar-f/">CCAR-F</a></li>
+    <li><a href="../../../../learn/ccar-p/">CCAR-P</a></li>
+    <li><span class="here" aria-current="page">CCAO-F</span></li>
+    <li><a href="../../../../learn/ccdv-f/">CCDV-F</a></li>
+  </ul>
+</nav>
+<!-- EXAMSWITCH:END -->
+
+<div class="shell examgrid">
+
+<!-- SIDENAV:START -->
+<aside class="sidenav" aria-label="CCAO-F study guide navigation">
+  <div class="acts">
+    <a class="btn" href="../../../../course/view.php?idnumber=claude_cca_f">Practise Domain 1</a>
+  </div>
+  <input type="checkbox" id="toc-toggle" class="toc-toggle">
+  <label for="toc-toggle" class="toc-label"><span>Contents</span><span class="chev" aria-hidden="true"></span></label>
+  <div class="sidenav-body">
+  <nav class="navtree" aria-label="CCAO-F course structure">
+    <a class="tree-root" href="../../"><span>CCAO-F study guide</span><span class="meta">7 domains &middot; 30 lessons</span></a>
+    <ul class="tree">
+      <li class="tree-domain in-path">
+        <details open>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 1</span> Prompting and Task Execution</span><span class="meta">14%</span></summary>
+        <ul>
+          <li><a href="../../prompting-task-execution/"><span>Domain overview</span></a></li>
+          <li><a href="#" aria-current="page"><span class="ln">1.1</span><span>The building blocks of an effective prompt</span></a>
+          <ul class="tree-toc">
+            <li><a href="#why-a-one-line-request-gets-a-generic-answer">1.1.1 Why a one-line request gets a generic answer</a></li>
+            <li><a href="#the-six-parts-of-a-good-brief">1.1.2 The six parts of a good brief</a></li>
+            <li><a href="#say-what-to-do-and-why">1.1.3 Say what to do, and why</a></li>
+            <li><a href="#keep-your-instructions-apart-from-your-material">1.1.4 Keep your instructions apart from your material</a></li>
+            <li><a href="#the-same-brief-works-for-technical-tasks">1.1.5 The same brief works for technical tasks</a></li>
+            <li><a href="#the-exam-traps">1.1.6 The exam traps</a></li>
+            <li><a href="#put-it-together-brief-claude-for-a-real-task">1.1.7 Put it together: brief Claude for a real task</a></li>
+            <li><a href="#key-takeaways">Key takeaways</a></li>
+            <li><a href="#check">Check your understanding</a></li>
+            <li><a href="#sources">Sources</a></li>
+          </ul>
+        </li>
+          <li><a href="../../prompting-task-execution/task-decomposition/"><span class="ln">1.2</span><span>Breaking a complex request into steps you can check</span></a></li>
+          <li><a href="../../prompting-task-execution/iterating-on-prompts/"><span class="ln">1.3</span><span>Iterating on a prompt, one change at a time</span></a></li>
+          <li><a href="../../prompting-task-execution/prompting-by-task-type/"><span class="ln">1.4</span><span>Prompting by task type: analysis, research, drafting and brainstorming</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 2</span> Output Evaluation and Validation</span><span class="meta">21%</span></summary>
+        <ul>
+          <li><a href="../../output-evaluation-validation/"><span>Domain overview</span></a></li>
+          <li><a href="../../output-evaluation-validation/accuracy-and-completeness/"><span class="ln">2.1</span><span>Checking outputs for accuracy and completeness</span></a></li>
+          <li><a href="../../output-evaluation-validation/hallucinations-inconsistencies-bias/"><span class="ln">2.2</span><span>Spotting hallucinations, inconsistencies and bias</span></a></li>
+          <li><a href="../../output-evaluation-validation/fact-checking-and-validation/"><span class="ln">2.3</span><span>Fact-checking and validating Claude&#039;s output</span></a></li>
+          <li><a href="../../output-evaluation-validation/when-human-review-is-required/"><span class="ln">2.4</span><span>When a human must review</span></a></li>
+          <li><a href="../../output-evaluation-validation/adapting-outputs-for-audience/"><span class="ln">2.5</span><span>Adapting outputs for your audience without changing the facts</span></a></li>
+          <li><a href="../../output-evaluation-validation/choosing-output-formats/"><span class="ln">2.6</span><span>Curating information and choosing the output format</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 3</span> Product and Model Selection</span><span class="meta">12%</span></summary>
+        <ul>
+          <li><a href="../../product-model-selection/"><span>Domain overview</span></a></li>
+          <li><a href="../../product-model-selection/choosing-product-features/"><span class="ln">3.1</span><span>Choosing the right Claude feature for the job</span></a></li>
+          <li><a href="../../product-model-selection/haiku-sonnet-opus/"><span class="ln">3.2</span><span>Haiku, Sonnet and Opus: how the Claude models differ</span></a></li>
+          <li><a href="../../product-model-selection/matching-models-to-tasks/"><span class="ln">3.3</span><span>Matching the model to the task: cost, speed and quality</span></a></li>
+          <li><a href="../../product-model-selection/context-limits-and-memory/"><span class="ln">3.4</span><span>Context and memory: when to restart, summarise or persist</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 4</span> Workflow Integration and Solution Design</span><span class="meta">16%</span></summary>
+        <ul>
+          <li><a href="../../workflow-integration-solution-design/"><span>Domain overview</span></a></li>
+          <li><a href="../../workflow-integration-solution-design/analyzing-requirements-and-use-cases/"><span class="ln">4.1</span><span>Analysing requirements and use cases with Claude</span></a></li>
+          <li><a href="../../workflow-integration-solution-design/research-planning-process-optimization/"><span class="ln">4.2</span><span>Research, planning and process optimisation with Claude</span></a></li>
+          <li><a href="../../workflow-integration-solution-design/solution-design-and-iteration/"><span class="ln">4.3</span><span>Designing, prototyping and iterating with Claude</span></a></li>
+          <li><a href="../../workflow-integration-solution-design/integrating-claude-into-workflows/"><span class="ln">4.4</span><span>Fitting Claude into an existing workflow</span></a></li>
+          <li><a href="../../workflow-integration-solution-design/communicating-value-and-limitations/"><span class="ln">4.5</span><span>Explaining Claude&#039;s value and limits to stakeholders</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 5</span> Configuration and Knowledge Management</span><span class="meta">12%</span></summary>
+        <ul>
+          <li><a href="../../configuration-knowledge-management/"><span>Domain overview</span></a></li>
+          <li><a href="../../configuration-knowledge-management/configuring-projects/"><span class="ln">5.1</span><span>Configuring a Claude Project: instructions and knowledge</span></a></li>
+          <li><a href="../../configuration-knowledge-management/knowledge-and-connectors/"><span class="ln">5.2</span><span>Uploads and connectors: managing what Claude can read</span></a></li>
+          <li><a href="../../configuration-knowledge-management/system-level-instructions/"><span class="ln">5.3</span><span>Writing effective system-level instructions</span></a></li>
+          <li><a href="../../configuration-knowledge-management/maintaining-configurations/"><span class="ln">5.4</span><span>Keeping instructions and knowledge current</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 6</span> Governance, Risk, and Responsible Use</span><span class="meta">15%</span></summary>
+        <ul>
+          <li><a href="../../governance-risk-responsible-use/"><span>Domain overview</span></a></li>
+          <li><a href="../../governance-risk-responsible-use/appropriate-and-inappropriate-use-cases/"><span class="ln">6.1</span><span>Appropriate and inappropriate uses of Claude</span></a></li>
+          <li><a href="../../governance-risk-responsible-use/data-sensitivity-and-privacy/"><span class="ln">6.2</span><span>Sensitive data and privacy: protect it before you share it</span></a></li>
+          <li><a href="../../governance-risk-responsible-use/organizational-ai-policies/"><span class="ln">6.3</span><span>Working within your organisation&#039;s AI policy</span></a></li>
+          <li><a href="../../governance-risk-responsible-use/ethical-implications/"><span class="ln">6.4</span><span>The ethics of using AI at work</span></a></li>
+        </ul>
+        </details>
+      </li>
+      <li class="tree-domain">
+        <details>
+        <summary><span class="twisty" aria-hidden="true"></span><span class="lbl"><span class="dn">Domain 7</span> Troubleshooting and Optimization</span><span class="meta">10%</span></summary>
+        <ul>
+          <li><a href="../../troubleshooting-optimization/"><span>Domain overview</span></a></li>
+          <li><a href="../../troubleshooting-optimization/diagnosing-poor-outputs/"><span class="ln">7.1</span><span>Diagnosing poor outputs: from symptom to root cause</span></a></li>
+          <li><a href="../../troubleshooting-optimization/adjusting-from-feedback/"><span class="ln">7.2</span><span>Adjusting your approach from feedback and results</span></a></li>
+          <li><a href="../../troubleshooting-optimization/optimizing-workflows/"><span class="ln">7.3</span><span>Optimising a Claude workflow: faster without losing quality</span></a></li>
+        </ul>
+        </details>
+      </li>
+    </ul>
+  </nav>
+  <h2>Prepare</h2>
+  <ul>
+      <li><a href="../../../../course/view.php?idnumber=claude_cca_f"><span>Full question bank</span><span class="meta">360</span></a></li>
+      <li><a href="../../../../ccao-f/"><span>CCAO-F exam guide</span></a></li>
+  </ul>
+  </div>
+</aside>
+<!-- SIDENAV:END -->
+
+<div class="content">
+
+<main>
+
+<p class="crumb"><a href="../../../../">Home</a> &rsaquo; <a href="../../../../learn/">Study guides</a> &rsaquo; <a href="../../">CCAO-F</a> &rsaquo; <a href="../">Domain 1</a> &rsaquo; Lesson 1.1</p>
+
+<p class="eyebrow">CCAO-F &middot; Domain 1 &middot; 14% of the exam &middot; Lesson 1.1 &middot; 18 min read</p>
+
+<h1>The building blocks of an effective prompt</h1>
+
+<p class="lede">Why a one-line request gets a generic answer, the six parts of a good brief, and how the same brief works for a customer notice and a spreadsheet formula.</p>
+
+<p class="independent">Written against objective 1.1 of the official CCAO-F exam guide (Version 1.0, effective July 2026). An independent resource, not affiliated with Anthropic; the practice questions are written from scratch.</p>
+
+<h2 id="why-a-one-line-request-gets-a-generic-answer"><span class="secnum">1.1.1</span> Why a one-line request gets a generic answer</h2>
+
+<p>Picture a Monday morning. You run operations at a regional parcel-delivery company, and your main depot moves across town next week. For about a week, deliveries to three postcode areas will arrive a day late. Customers need to hear about it before they start calling. You open Claude and type: "Write an email to customers about delivery delays."</p>
+
+<p>Claude answers in seconds with a polite, well-built email. It apologises for "unforeseen circumstances", warns of delays of "3 to 5 business days", offers 10% off the next order and closes with a warm line about valued customers. It reads well. It is also wrong in almost every detail that matters. The move was planned, the delay is one day, you cannot offer a discount, and the email never says which areas are affected.</p>
+
+<p>Nothing went wrong inside Claude. It did exactly what the request allowed. Claude knows a great deal about how delay notices are usually written, but it knows nothing about YOUR depot, YOUR customers or YOUR rules on compensation unless you put them in front of it. Every gap in a request is a question Claude still has to answer. With nothing to go on, it answers with the most plausible guess. A plausible guess is fine for a greeting; it is a problem for dates, areas and promises.</p>
+
+<p>So the skill in this lesson is not clever wording. It is briefing. A <strong>prompt</strong> is everything you give Claude for one request, and an effective one reads like a brief to a capable colleague on their first day. Anthropic's own prompting guide makes the same comparison: treat Claude as a brilliant new employee who has not yet learned how your organisation works. A good brief states the job, the background, who it is for, the facts to use, the limits, and what a good result looks like.</p>
+
+<figure class="diagram diagram-columns" role="group" aria-label="Two ways to ask for the same email">
+<p class="dtitle">Two ways to ask for the same email</p>
+<div class="dcols">
+<div class="dcol bad" style="--i:0">
+<p class="dhead">One-line request</p>
+<div class="dstack arrows">
+<div class="dbox" style="--i:1"><span class="dl">&quot;Write an email about delays&quot;</span></div>
+<div class="dbox" style="--i:2"><span class="dl">Claude guesses the facts</span><span class="ds">cause, length, compensation</span></div>
+<div class="dbox bad" style="--i:3"><span class="dl">Plausible but wrong</span></div>
+</div>
+</div>
+<div class="dcol ok" style="--i:4">
+<p class="dhead">A brief</p>
+<div class="dstack arrows">
+<div class="dbox" style="--i:5"><span class="dl">Job, facts, audience, limits</span></div>
+<div class="dbox" style="--i:6"><span class="dl">Claude chooses only the wording</span></div>
+<div class="dbox ok" style="--i:7"><span class="dl">Right facts, right tone</span></div>
+</div>
+</div>
+</div>
+<figcaption>A one-line request leaves Claude to guess every fact that matters. A brief leaves it only the wording to decide.</figcaption>
+</figure>
+
+<aside class="callout idea">
+<p><strong>The one idea:</strong> Claude only knows what is in front of it. Anything you leave out of a prompt, it fills with a plausible guess, so an effective prompt puts every fact, limit and expectation that matters on the page.</p>
+</aside>
+
+<h2 id="the-six-parts-of-a-good-brief"><span class="secnum">1.1.2</span> The six parts of a good brief</h2>
+
+<p>Here is the question behind most prompting problems at work, and behind many exam questions too: when an answer comes back generic or wrong, what was missing from the request? Almost always, it is one of six things. Once you know them, you can check any prompt in under a minute, yours or a colleague's.</p>
+
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Part</th>
+  <th>The question it answers</th>
+  <th>In the depot email</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>TASK</strong></td>
+  <td>What exactly should Claude produce?</td>
+  <td>An email to home-delivery customers</td>
+</tr>
+<tr>
+  <td><strong>CONTEXT</strong></td>
+  <td>What is going on, and why does it matter?</td>
+  <td>Planned depot move; we want customers told before they call</td>
+</tr>
+<tr>
+  <td><strong>AUDIENCE</strong></td>
+  <td>Who will read it, and what do they care about?</td>
+  <td>Home customers; they want to know when their parcel arrives</td>
+</tr>
+<tr>
+  <td><strong>MATERIAL</strong></td>
+  <td>Which facts must it use, and only those?</td>
+  <td>Areas NE1, NE2, NE4; one day late; 14 to 21 October</td>
+</tr>
+<tr>
+  <td><strong>CONSTRAINTS</strong></td>
+  <td>What are the limits on tone, length and content?</td>
+  <td>Under 150 words; calm and plain; no credits offered</td>
+</tr>
+<tr>
+  <td><strong>OUTPUT</strong></td>
+  <td>What shape should the result take, and how will you judge it?</td>
+  <td>Subject line plus body; readers know in ten seconds if they are affected</td>
+</tr>
+</tbody>
+</table></div>
+
+<p>None of the six is exotic. Together they are what a good manager says when handing work to someone new. The first three tell Claude what you are trying to achieve. The last three stop it from guessing. Notice that OUTPUT includes how you will judge the result. These are your <strong>success criteria</strong>: the tests a good answer must pass, such as "a reader knows in ten seconds whether they are affected". Stating them helps twice: Claude can aim at them, and you get something concrete to check the draft against when it comes back.</p>
+
+<p>Here is the brief with all six parts. Look at the facts list, which now holds real dates and areas, and at the final sentence. It tells Claude what to do when a detail is missing, instead of letting it guess.</p>
+
+<pre><code class="text">Write an email to our home-delivery customers about a short delay.
+
+Context: our main depot moves to a new site on 14 October. Until 21 October, deliveries to three postcode areas will arrive one day later than usual. We want customers to hear this from us before they need to call.
+
+Audience: home customers, not business accounts. They mainly want to know whether they are affected and when their parcel will arrive.
+
+Facts to use (use only these):
+- Affected areas: NE1, NE2, NE4
+- Dates: 14 to 21 October
+- Delay: one day later than the usual delivery date
+- Tracking links keep working as normal
+
+Constraints: under 150 words, calm and plain, no jargon. We are not offering credits, because the delay is short and planned; to reassure customers, point them to live tracking instead.
+
+Output: a subject line, then the email body. A reader should be able to tell within ten seconds whether they are affected. If you need a detail that is not listed above, write [CHECK] instead.
+</code></pre>
+
+<aside class="callout key">
+<p><strong>Key concept:</strong> An effective prompt covers six parts: the TASK, the CONTEXT behind it, the AUDIENCE, the MATERIAL to use, the CONSTRAINTS, and the OUTPUT you expect, including how you will judge it. A generic answer usually means one of these is missing, and the fix is to add it, not to reword the request.</p>
+</aside>
+
+<h2 id="say-what-to-do-and-why"><span class="secnum">1.1.3</span> Say what to do, and why</h2>
+
+<p>Look again at the constraints in that brief. They could have been written as a list of don'ts: don't be formal, don't use jargon, don't offer compensation. It is tempting, because it is how we often think about rules. It also works less well than you would expect.</p>
+
+<p>A "don't" tells Claude what to avoid but not what to aim for. It also comes without its purpose, so Claude has nothing to go on when a case comes up that you did not foresee. "Don't offer compensation" blocks the words "10% off", but a draft might still hint that the company "will make it up to you". It is like telling a teenager "no parties while we're away": you have banned the party, not the twenty friends who just came round to watch a film. Explain that the neighbours complained about the noise last time, and the film night is covered too.</p>
+
+<p>Anthropic's prompting guide recommends two habits that close this gap. Tell Claude what to do instead of only what not to do. And explain why an instruction matters, because Claude can generalise from the explanation. Once the brief says the delay is short and planned, and that tracking is the reassurance to offer, Claude has the purpose behind the rule. It is then far less likely to slip in an implied promise.</p>
+
+<p>The same thinking covers missing information. Without guidance, Claude may fill a gap such as a helpline number with something that looks right. Giving it explicit permission to say what it does not know, or a marker like [CHECK] that you can search for before sending, turns an invisible guess into a visible question. Anthropic's documentation lists this permission among its basic ways to reduce made-up details, often called hallucinations. It costs one sentence.</p>
+
+<figure class="diagram diagram-columns" role="group" aria-label="A bare rule versus a rule with a reason">
+<p class="dtitle">A bare rule versus a rule with a reason</p>
+<div class="dcols">
+<div class="dcol bad" style="--i:0">
+<p class="dhead">Bare rule</p>
+<div class="dstack">
+<div class="dbox" style="--i:1"><span class="dl">&quot;Don&#039;t offer compensation&quot;</span></div>
+<div class="dbox" style="--i:2"><span class="dl">Says what to avoid</span><span class="ds">not what to aim for</span></div>
+<div class="dbox bad" style="--i:3"><span class="dl">Near misses slip through</span><span class="ds">&quot;we&#039;ll make it up to you&quot;</span></div>
+</div>
+</div>
+<div class="dcol ok" style="--i:4">
+<p class="dhead">Rule with a reason</p>
+<div class="dstack">
+<div class="dbox" style="--i:5"><span class="dl">&quot;No credits: the delay is short and planned&quot;</span></div>
+<div class="dbox" style="--i:6"><span class="dl">Says what to do instead</span><span class="ds">point to live tracking</span></div>
+<div class="dbox ok" style="--i:7"><span class="dl">Claude applies the purpose</span><span class="ds">to cases you did not list</span></div>
+</div>
+</div>
+</div>
+<figcaption>A prohibition says what to avoid. A target with a reason says what to aim for and why, so Claude can apply it to wording you never listed.</figcaption>
+</figure>
+
+<aside class="callout key">
+<p><strong>Key concept:</strong> Say what you want, not only what you do not want, and give the reason for any rule that matters, so Claude can apply its purpose to cases you did not list. Tell Claude what to do when information is missing ("write [CHECK]", "say you do not know"). Gaps then show up instead of being filled with guesses.</p>
+</aside>
+
+<h2 id="keep-your-instructions-apart-from-your-material"><span class="secnum">1.1.4</span> Keep your instructions apart from your material</h2>
+
+<p>Often the facts you need are already written somewhere: a memo from the depot team, a customer's email, last year's notice that customers liked. Pasting them in is the right instinct. The trouble starts when everything lands in one undivided block, because Claude then has to work out where your instructions end and the pasted text begins.</p>
+
+<p>Suppose the depot memo includes a colleague's note: "Can we say sorry for the inconvenience and give 10% off?" That is a suggestion someone made, not your decision. In one block of text, Claude has no reliable way to tell the difference.</p>
+
+<p>The fix is to label each part. Clear headings, such as "Instructions" and "Depot memo", are often enough. When a prompt mixes instructions, pasted documents and examples, Anthropic's prompting guide also recommends <strong>tags</strong>. A tag is a short label in angle brackets placed before and after a piece of text, such as <code>&lt;memo&gt;</code> at the start and <code>&lt;/memo&gt;</code> at the end. Wrapping each kind of content in its own tag reduces misreading. The tag names are yours to choose; pick descriptive ones and use them consistently.</p>
+
+<p>Examples deserve the same care. When a tone or layout is hard to describe, showing one often works better than any adjective. But Claude pays close attention to examples and can pick up their details as well as their style, so say what to take from each one. Here the instructions ask for last year's tone and layout, and name the memo as the only source of facts.</p>
+
+<pre><code class="text">&lt;instructions&gt;
+Draft the customer email about the depot move. Match the tone and layout of the example, but take every fact from the memo, not from the example. Sam's note in the memo suggests a discount; we are not offering one, because the delay is short and planned.
+&lt;/instructions&gt;
+
+&lt;memo&gt;
+Depot move 14 Oct. NE1, NE2, NE4 one day late until 21 Oct.
+Note from Sam: can we say sorry and give 10% off?
+&lt;/memo&gt;
+
+&lt;example&gt;
+(last year's holiday notice, pasted in full)
+&lt;/example&gt;
+</code></pre>
+
+<p>For a task you repeat often, a single example can make every result look alike. Anthropic's prompting guide suggests three to five varied examples for best results, each close to your real use.</p>
+
+<aside class="callout key">
+<p><strong>Key concept:</strong> When a prompt mixes your instructions with pasted material or examples, label each part with headings or tags such as <code>&lt;memo&gt;</code>. Claude can then tell your instructions from the text it is working on. Examples steer tone and format strongly, so say what to copy from them and where the facts come from.</p>
+</aside>
+
+<h2 id="the-same-brief-works-for-technical-tasks"><span class="secnum">1.1.5</span> The same brief works for technical tasks</h2>
+
+<p>The exam objective says business AND technical tasks, and the second kind is where guessing does the most damage. The same Monday, finance asks you for the on-time delivery rate per route, calculated from the dispatch spreadsheet. You are not a spreadsheet expert, so you ask Claude: "Give me a formula for the on-time rate."</p>
+
+<p>Claude will write a formula. It has to guess which spreadsheet tool you use, which column holds which date and what counts as "on time". It also has to guess how to treat <strong>edge cases</strong>: the unusual rows, such as cancelled or failed parcels, that a rule has to handle on purpose. A wrong guess here does not look wrong. The formula runs, a percentage appears, and nothing tells you it is counting the wrong column. That is why technical requests need the same six parts, with MATERIAL and CONSTRAINTS made exact.</p>
+
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Part</th>
+  <th>For the on-time formula</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>TASK</strong></td>
+  <td>One formula for the on-time rate, one result per route</td>
+</tr>
+<tr>
+  <td><strong>CONTEXT</strong></td>
+  <td>A weekly figure for finance, replacing a manual count</td>
+</tr>
+<tr>
+  <td><strong>AUDIENCE</strong></td>
+  <td>You, not a spreadsheet expert; finance reads the weekly figure</td>
+</tr>
+<tr>
+  <td><strong>MATERIAL</strong></td>
+  <td>Google Sheets; column A route, D promised date, E delivered date, F status (Delivered, Cancelled, Failed)</td>
+</tr>
+<tr>
+  <td><strong>CONSTRAINTS</strong></td>
+  <td>On time means delivered on or before the promised date; leave out Cancelled; count Failed as late</td>
+</tr>
+<tr>
+  <td><strong>OUTPUT</strong></td>
+  <td>The formula, one line on how it works, and a way to check it on three routes by hand</td>
+</tr>
+</tbody>
+</table></div>
+
+<p>The last row matters most. You may not be able to read the formula, but you can count three routes by hand and see whether the formula agrees. Pick routes that include a Cancelled and a Failed parcel, because edge cases are where a wrong guess shows. Asking for a way to test the result keeps you in charge of the answer.</p>
+
+<p>The formula also shows where your role ends. If finance later wants the figure to update itself from the dispatch system every night, that is no longer a prompt. It is an <strong>integration</strong>, a connection between two systems that someone has to build and look after. The exam guide leaves that kind of build to Claude Architects and Developers: an Associate recognises the need and hands it over.</p>
+
+<aside class="callout key">
+<p><strong>Key concept:</strong> Technical requests need the same six parts, with the material and constraints made exact: which tool, which columns, which definitions, which edge cases. Ask for a way to test the result, because an answer built on a guess looks just as confident as a correct one.</p>
+</aside>
+
+<h2 id="the-exam-traps"><span class="secnum">1.1.6</span> The exam traps</h2>
+
+<p>Every trap in this objective is a way of avoiding the brief. Questions usually describe a disappointing result and offer several ways forward. The right one adds what was missing.</p>
+
+<ul>
+<li><strong>✗ Sending a one-line request and hoping Claude knows what you mean.</strong> ✓ Brief it: task, context, audience, material, constraints, output. Claude fills every gap with a plausible guess.</li>
+<li><strong>✗ Fixing a generic answer by asking for it to sound "more professional".</strong> ✓ Add the information that was missing. The problem was the brief, not the wording.</li>
+<li><strong>✗ Switching to a more capable model because the answer was vague.</strong> ✓ Fix the prompt first. No model can know your depot dates until you provide them.</li>
+<li><strong>✗ Writing only "don't" rules.</strong> ✓ Say what to do instead and why, so Claude can apply the purpose to cases you did not list.</li>
+<li><strong>✗ Pasting material and instructions in one undivided block.</strong> ✓ Label the parts, and say which text is the source of facts and what to take from any example.</li>
+<li><strong>✗ Adding "be accurate" as the cure for invented details.</strong> ✓ Supply the facts and say what to do when one is missing. A plea for accuracy adds no information.</li>
+</ul>
+
+<figure class="diagram diagram-verdict" role="group" aria-label="Four tempting fixes, one real one">
+<p class="dtitle">Four tempting fixes, one real one</p>
+<div class="dverdict">
+<div class="dbad">
+<div class="dbox bad bad" style="--i:0"><span class="dl">Reword it</span><span class="ds">&quot;more professional&quot;</span></div>
+<div class="dbox bad bad" style="--i:1"><span class="dl">A bigger model</span><span class="ds">the same missing facts</span></div>
+<div class="dbox bad bad" style="--i:2"><span class="dl">&quot;Be accurate&quot;</span><span class="ds">adds no information</span></div>
+<div class="dbox bad bad" style="--i:3"><span class="dl">Write it by hand</span><span class="ds">throws away the help</span></div>
+</div>
+<span class="dconv" aria-hidden="true"></span>
+<div class="dbox ok dgood ok" style="--i:4"><span class="dl">Add what was missing</span><span class="ds">context, facts, limits, success criteria</span></div>
+</div>
+<figcaption>Rewording, a bigger model and a plea for accuracy all leave the gap in place, and writing it by hand gives up the help; only adding what was missing closes it.</figcaption>
+</figure>
+
+<aside class="callout trap">
+<p><strong>Exam trap:</strong> A typical question describes a draft that came back generic, off-target or full of invented details, then asks for the most appropriate next step. The right option adds the specific missing context, source material or constraints to the prompt. The distractors switch to a more capable model, polish the tone, tell Claude to "be more careful", or abandon Claude for the task altogether.</p>
+</aside>
+
+<h2 id="put-it-together-brief-claude-for-a-real-task"><span class="secnum">1.1.7</span> Put it together: brief Claude for a real task</h2>
+
+<p>You now have the whole method. Claude fills gaps with guesses, and a brief closes them in six parts. Rules work better with a target and a reason, labelled material keeps instructions and sources apart, and technical tasks need the same brief with exact inputs and a way to test. The quickest way to make it stick is to watch a brief work, then take one part away.</p>
+
+<aside class="callout exercise">
+<p><strong>Build exercise:</strong> About 20 minutes, in any Claude account.</p>
+  
+  <ol>
+  <li>Pick a real message you need to send this week: an update, a request or an announcement, with nothing confidential in it. Send Claude the one-line version and save the answer.</li>
+  <li>In a new chat, write the full brief: TASK, CONTEXT, AUDIENCE and MATERIAL (the real facts, marked "use only these"). Add CONSTRAINTS with a reason for each rule, and OUTPUT with one sentence on how you will judge it. End with "If you need a detail I have not given, write [CHECK]."</li>
+  <li>Compare the two answers against your success sentence. Count the details in the first answer that Claude had to invent.</li>
+  <li>Now spoil one ingredient: delete the MATERIAL section and the [CHECK] line, and send the brief again in a new chat. Note which facts Claude fills in by itself: dates, names, numbers.</li>
+  <li>Restore both and send once more. The invented details should disappear, and anything still missing should show up as [CHECK].</li>
+  <li>Repeat steps 2 to 5 with one technical task, such as a formula for a spreadsheet you know, and check the result by hand on a few rows, including an unusual one.</li>
+  </ol>
+</aside>
+
+<p>The rest of Domain 1 builds on this brief. Task decomposition (1.2) splits a request that is too big for one brief into steps you can check one at a time. Iteration (1.3) is how you improve a brief when the first answer is close but not right. Prompting by task type (1.4) tunes the six parts for analysis, research, drafting and brainstorming. And in Domain 5, the parts of a brief that repeat on every request move into Project instructions, so you stop retyping them.</p>
+
+<aside class="callout exam">
+<p><strong>On the exam:</strong> Questions on objective 1.1 usually show a prompt or its result and ask for the most appropriate next step. Check the prompt against the six parts, find the one that is missing, and pick the option that supplies it. When the request is technical, such as a formula or a data question, the right option adds exact inputs, definitions and a way to test, not a request for a cleverer answer.</p>
+</aside>
+
+<h2 id="key-takeaways">Key takeaways</h2>
+
+<ul>
+<li>✓ Claude only knows what is in front of it; every gap in a prompt gets filled with a plausible guess.</li>
+<li>✓ An effective prompt covers six parts: task, context, audience, material, constraints, and output with success criteria.</li>
+<li>✓ A generic or wrong answer usually means a part is missing; add it rather than rewording the request or switching models.</li>
+<li>✓ Say what to do and why, and tell Claude what to do when a detail is missing, so gaps show up as questions instead of guesses.</li>
+<li>✓ Label pasted material and examples so Claude can tell them from your instructions, and say what to copy from an example.</li>
+<li>✓ Technical tasks use the same brief with exact inputs, definitions and edge cases, plus a way to test the result.</li>
+</ul>
+
+<h2 id="check">Check your understanding</h2>
+
+<p class="note">4 questions written for this lesson, then one from the CCAO-F question bank on the same topic. Every answer option is explained, including the ones you did not pick. Nothing is stored.</p>
+
+<div class="quiz" id="quiz">
+  <p class="meta" id="meta"></p>
+  <p class="scenario" id="scenario"></p>
+  <p class="question" id="question"></p>
+  <div id="options"></div>
+  <div class="overall hidden" id="overall"></div>
+  <div class="quiznav">
+    <button id="prev" type="button">&#8592; Prev</button>
+    <button id="next" type="button">Next &#8594;</button>
+    <button id="reset" type="button">Reset answers</button>
+    <span class="score" id="score"></span>
+  </div>
+  <p class="score" id="progress" style="margin:.6rem 0 0"></p>
+</div>
+<script>
+const DATA = [{"id":"check-1","domain":"Lesson 1.1 check","scenario_full":"","question":"An office coordinator asks Claude to \"write a notice about the office move\" and gets a polished notice with the wrong moving date and a made-up parking arrangement. What is the most appropriate next step?","options":[{"text":"Ask Claude to rewrite the notice in a more professional tone before it goes to staff.","correct":false,"explanation":"Tone was not the problem. The date and the parking details were guesses, and a rewrite keeps them."},{"text":"Resend it with the real date, the parking facts and the audience, and ask Claude to flag anything missing.","correct":true,"explanation":"The errors came from gaps in the brief. Supplying the material, and a rule for missing details, removes the guesses."},{"text":"Send the same one-line request again using the most capable model available.","correct":false,"explanation":"A more capable model has no more access to the moving date than the first one. The information is still missing."},{"text":"Stop using Claude for internal notices and write them by hand from now on.","correct":false,"explanation":"This overreacts. The task suits Claude well once it is properly briefed."}],"overall":""},{"id":"check-2","domain":"Lesson 1.1 check","scenario_full":"","question":"A project manager's prompt ends with three rules: \"Don't be too formal. Don't mention the budget. Don't make it long.\" The drafts still come back stiff and hint at costs. What is the most appropriate change to the prompt?","options":[{"text":"Add a new \"don't\" rule for each problem that appears in the next few drafts.","correct":false,"explanation":"Each new prohibition still leaves Claude guessing what you do want, and it cannot cover cases you have not thought of yet."},{"text":"Rewrite the three rules in capital letters so Claude treats them as more important.","correct":false,"explanation":"Emphasis is not information. The rules still say only what to avoid, and give no reason Claude could apply to new wording."},{"text":"Replace the rules with targets and a reason: \"Friendly and plain, about 100 words; leave costs out because the budget is not approved yet.\"","correct":true,"explanation":"A positive target with a reason lets Claude aim at the goal and apply it to wording you did not list, such as indirect hints about cost."},{"text":"Ask Claude to score each draft against the three rules before showing it.","correct":false,"explanation":"A self-score does not change the instructions that produced the drafts, so the same gaps remain."}],"overall":""},{"id":"check-3","domain":"Lesson 1.1 check","scenario_full":"","question":"A team lead pastes last quarter's newsletter into a prompt so Claude will match its style, then lists this quarter's news underneath. The new draft repeats the old newsletter's headline figures and event dates. What is the most appropriate fix?","options":[{"text":"Delete the old newsletter from the prompt so Claude has nothing old to copy from.","correct":false,"explanation":"That also removes the style Claude was meant to match. The example is useful once it is labelled."},{"text":"Label the old newsletter as a style example only, and mark this quarter's news as the only source of facts.","correct":true,"explanation":"Claude pays close attention to examples. Labelling each part and saying what to take from it stops old details leaking into the new draft."},{"text":"Ask Claude to double-check every figure and date in the draft before it goes out.","correct":false,"explanation":"Claude would be checking against the same unlabelled prompt, where old and new figures sit side by side. The fix is to make clear which text supplies the facts."},{"text":"Switch to a more capable model that can tell last quarter's news from this quarter's.","correct":false,"explanation":"The prompt never said which text was which, so any model has to guess."}],"overall":""},{"id":"check-4","domain":"Lesson 1.1 check","scenario_full":"","question":"A support supervisor with no spreadsheet experience asks Claude for \"a formula for the average response time\" and pastes it into the team's sheet. The result looks reasonable but is wrong: the formula averages the wrong column and includes tickets that were never answered. What is the most appropriate way to ask again?","options":[{"text":"Ask for the most advanced formula Claude can write, so that it covers every possible case.","correct":false,"explanation":"Complexity does not fix a wrong column or a wrong definition. The problem was missing information."},{"text":"Name the spreadsheet tool and columns, define response time, say how to treat unanswered tickets, and ask for a way to check a few rows by hand.","correct":true,"explanation":"Technical tasks need exact material and constraints, including the edge cases. A hand check lets a non-specialist confirm the formula before trusting it."},{"text":"Ask Claude to confirm that the formula is correct before pasting it into the sheet.","correct":false,"explanation":"Claude's assurance is not a test. It would be checking against the same guessed columns and definition."},{"text":"Stop asking Claude for formulas and send every spreadsheet request to a developer.","correct":false,"explanation":"This overreacts. A single formula is well within an Associate's reach when properly briefed; escalation is for building systems, not everyday spreadsheet help."}],"overall":""},{"id":"AssociateSet12_60Q.csv#31","domain":"From the CCAO-F question bank: Prompting and Task Execution","scenario_full":"","question":"A high school social studies teacher needs a single 25-minute Grade 10 mini-lesson on voting rights. The department has approved one textbook excerpt and a district vocabulary list, and the principal says not to add outside historical examples. The teacher wants a learner-friendly explanation, one source-based activity, and four formative questions for educator review. Which approach best fits this task?","options":[{"text":"Choose the most capable model and ask for the highest-quality lesson draft, relying on the model to make it accurate and age-appropriate.","explanation":"A more capable model may improve reasoning or writing quality, but it does not by itself enforce source boundaries or instructional suitability. Clear prompt constraints and educator review are still needed.","correct":false},{"text":"Create a Claude Project with persistent civics instructions and a reusable knowledge base before asking for the mini-lesson draft.","explanation":"A Project is better suited to recurring workflows that need persistent instructions, shared knowledge, or multiple related conversations. For a single draft where the sources can be supplied directly, this adds unnecessary setup overhead.","correct":false},{"text":"Use a standard chat, provide the approved excerpt and vocabulary list in the prompt, and specify the objective, Grade 10 audience, source-only constraint, desired sections, and criteria such as citing or flagging unsupported points.","explanation":"This is the best fit because the task is short, isolated, and can be completed with the needed materials supplied in the current prompt. The prompt includes the instructional purpose, audience, constraints, output format, and evidence expectations needed to keep the draft grounded in approved sources.","correct":true},{"text":"Use Research mode to gather additional background on voting rights, then ask Claude to combine that research with the approved materials.","explanation":"Research mode can introduce information beyond the approved textbook excerpt and vocabulary list. When the requirement is source-bounded content, Claude should be instructed to stay within the provided materials or flag gaps.","correct":false}],"overall":"For a one-time lesson draft, standard chat is appropriate when all necessary source material and instructions can be provided in the current interaction. The strongest approach is a complete, source-bounded prompt that states the objective, learner audience, approved sources, constraints, output format, and success criteria. Persistent Project setup, external research, or simply selecting a stronger model does not address the core requirement to stay grounded in approved materials."}];
+let filtered = DATA, idx = 0;
+const answers = {};   // question id -> chosen option index
+
+const $ = id => document.getElementById(id);
+
+function render() {
+  if (!filtered.length) { $("question").textContent = "No questions."; return; }
+  const q = filtered[idx];
+  $("progress").textContent = filtered.length > 1 ? `Question ${idx + 1} of ${filtered.length}` : "";
+  $("meta").textContent = q.domain;
+  $("scenario").textContent = q.scenario_full;
+  $("scenario").style.display = q.scenario_full ? "" : "none";
+  $("question").textContent = q.question;
+  const chosen = answers[q.id];
+  const revealed = chosen !== undefined;
+  const box = $("options");
+  box.innerHTML = "";
+  q.options.forEach((opt, i) => {
+    const b = document.createElement("button");
+    b.className = "opt";
+    b.type = "button";
+    b.textContent = String.fromCharCode(65 + i) + ". " + opt.text;
+    b.disabled = revealed;
+    if (revealed && opt.correct) b.classList.add("correct");
+    if (revealed && i === chosen && !opt.correct) b.classList.add("wrong");
+    b.onclick = () => { answers[q.id] = i; render(); };
+    box.appendChild(b);
+    if (revealed && opt.explanation) {
+      const e = document.createElement("div");
+      e.className = "optexp";
+      e.textContent = opt.explanation;
+      box.appendChild(e);
+    }
+  });
+  $("overall").classList.toggle("hidden", !revealed);
+  $("overall").textContent = q.overall;
+  const done = filtered.filter(x => answers[x.id] !== undefined);
+  const ok = done.filter(x => x.options[answers[x.id]].correct);
+  $("score").textContent = done.length ? `Score: ${ok.length}/${done.length}` : "";
+  $("prev").disabled = idx === 0;
+  $("next").disabled = idx >= filtered.length - 1;
+}
+
+$("prev").onclick = () => { if (idx > 0) { idx--; render(); } };
+$("next").onclick = () => { if (idx < filtered.length - 1) { idx++; render(); } };
+$("reset").onclick = () => { for (const k in answers) delete answers[k]; render(); };
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft") $("prev").onclick();
+  if (e.key === "ArrowRight") $("next").onclick();
+});
+render();
+</script>
+
+<div class="cta">
+  <h2>48 CCAO-F questions on Domain 1, free</h2>
+  <p>Every question in the bank is tagged to a domain, so you can drill 48 questions on Prompting and Task Execution alone, or sit the full 60-question timed simulator.</p>
+  <p>
+    <a class="btn" href="../../../../course/view.php?idnumber=claude_cca_f">Open the CCAO-F question bank &rarr;</a>
+    <a class="btn ghost" href="../">Back to Domain 1 &rarr;</a>
+  </p>
+  <p class="note" style="margin-bottom:0">
+    The question bank is free. It asks for an account only because the quiz engine has to store
+    answers to score them and show which domains are weak. The questions on this page need nothing.
+  </p>
+</div>
+
+<h2 id="sources">Sources</h2>
+<ul>
+  <li><a href="https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices" rel="noopener">Prompting best practices</a></li>
+  <li><a href="https://claude.com/blog/best-practices-for-prompt-engineering" rel="noopener">Prompt engineering best practices</a></li>
+  <li><a href="https://academy.claude.com/courses/claude-101/getting-better-results" rel="noopener">Getting better results (Claude 101)</a></li>
+  <li><a href="https://academy.claude.com/courses/ai-fluency-framework-foundations/effective-prompting-techniques" rel="noopener">Effective prompting techniques (AI Fluency)</a></li>
+  <li><a href="https://support.claude.com/en/articles/7996857-my-prompt-isn-t-giving-me-a-helpful-answer" rel="noopener">My prompt isn&#039;t giving me a helpful answer</a></li>
+  <li><a href="https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/reduce-hallucinations" rel="noopener">Reduce hallucinations</a></li>
+  <li><a href="../../../../ccao-f/">The CCAO-F exam guide, summarised</a></li>
+</ul>
+
+<nav class="lessonnav" aria-label="Lesson navigation">
+  <a class="prev" href="../"><span class="lbl">&larr; Up</span><span class="t">Domain 1 overview</span></a>
+  <a class="next" href="../../prompting-task-execution/task-decomposition/"><span class="lbl">Next &rarr;</span><span class="t">1.2 Breaking a complex request into steps you can check</span></a>
+</nav>
+
+</main>
+
+<!-- SITEFOOT:START -->
+<footer class="sitefoot">
+  <div class="cols">
+    <div>
+      <h2>Certifications</h2>
+      <ul>
+        <li><a href="../../../../ccar-f/">CCAR-F &middot; Architect</a></li>
+        <li><a href="../../../../ccar-p/">CCAR-P &middot; Architect Pro</a></li>
+        <li><a href="../../../../ccao-f/">CCAO-F &middot; Associate</a></li>
+        <li><a href="../../../../ccdv-f/">CCDV-F &middot; Developer</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Study</h2>
+      <ul>
+        <li><a href="../../../../learn/">Study guides</a></li>
+        <li><a href="../../../../claude-certifications/">Compare the 4 exams</a></li>
+        <li><a href="../../../../articles/">Articles</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Practice</h2>
+      <ul>
+        <li><a href="../../../../#certifications">All certifications</a></li>
+        <li><a href="../../../../course/index.php">All question banks</a></li>
+        <li><a href="#practice">Free questions</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Community</h2>
+      <ul>
+        <li><a href="../../../../about/">About this site</a></li>
+        <li><a href="mailto:admin@termidy.com">Report a correction</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Official</h2>
+      <ul>
+        <li><a href="https://anthropic-partners.skilljar.com/page/faq-certifications" rel="noopener">Partner Academy</a></li>
+        <li><a href="https://www.pearsonvue.com/us/en/anthropic.html" rel="noopener">Pearson VUE</a></li>
+        <li><a href="https://docs.claude.com/" rel="noopener">Anthropic docs</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="apps">
+    <a href="https://apps.apple.com/gb/app/claudeprep/id6794950689" rel="noopener">ClaudePrep for iOS</a>
+    <a href="https://play.google.com/store/apps/details?id=com.termidy.claude.dev" rel="noopener">ClaudePrep for Android</a>
+  </p>
+
+  <p class="maintainer">
+    Maintained by Anton Pavelko, Claude Certified
+    <a href="https://www.credly.com/badges/b58893ef-7864-408e-9f60-5ee30ad2e0ea" rel="noopener">Architect</a> &middot;
+    <a href="https://www.credly.com/badges/3e0fa70c-5795-44fc-8b5d-2ed6ed0972fc" rel="noopener">Associate</a> &middot;
+    <a href="https://www.credly.com/badges/478d6b2e-18e7-4e40-8443-1f341941e4c0/public_url" rel="noopener">Developer</a>.
+  </p>
+
+  <p class="legal">
+    An independent community resource. Not affiliated with, endorsed by, or sponsored by Anthropic.
+    Claude and Anthropic are trademarks of Anthropic, PBC. Practice questions are written from
+    scratch; none come from a real exam.
+  </p>
+  <p class="note" style="font-size:.8rem">
+    CCAO-F domains: Prompting and Task Execution &middot; Output Evaluation and Validation &middot; Product and Model Selection &middot; Workflow Integration and Solution Design &middot; Configuration and Knowledge Management &middot; Governance, Risk, and Responsible Use &middot; Troubleshooting and Optimization.
+  </p>
+  <p class="legal">
+    &copy; 2026 &middot;
+    <a href="../../../../privacy-policy.html">Privacy</a> &middot;
+    <a href="../../../../terms-of-service.html">Terms</a> &middot;
+    <a href="mailto:admin@termidy.com">admin@termidy.com</a>
+  </p>
+</footer>
+<!-- SITEFOOT:END -->
+
+</div>
+</div>
+
+</body>
+</html>

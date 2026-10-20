@@ -1,0 +1,17 @@
+# What a proposer returns for eur-lex.europa.eu/ (v1.3 ticket 05): the site's help box taken for
+# the first heading, and a heading per chapter and per article, as the first live run's proposer
+# offered them (the article pattern anchored, as the orchestrator accepted it).
+
+[[readings]]
+prefix = "eur-lex.europa.eu/"
+drop_leading = "^# Need help\\?$"
+
+[[readings]]
+prefix = "eur-lex.europa.eu/"
+heading_before = "^CHAPTER [IVXLC]+$"
+level = 1
+
+[[readings]]
+prefix = "eur-lex.europa.eu/"
+heading_before = "^Article \\d+$"
+level = 2

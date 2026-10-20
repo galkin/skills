@@ -1,0 +1,8 @@
+{
+  "url": "https://build.nvidia.com/nvidia/nvidia-nemotron-nano-9b-v2/modelcard",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html; charset=utf-8"
+  },
+  "body": "body.html"
+}

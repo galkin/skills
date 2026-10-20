@@ -1,0 +1,22 @@
+Fetch one batch of a guide's Sources into the Project's lorekeep Store, following the lorekeep skill, and report the friction.
+
+TARGET. You are a Run worker in the agentic-system.design repository (this worktree). The tool is lorekeep; its skill is vendored at `.agents/skills/lorekeep/SKILL.md` — read it first, in full; open `references/store.md` or `references/owner.md` only if the skill sends you there. Environment for every lorekeep command (set it in each shell call, shell state does not persist):
+
+    export PATH="$HOME/Projects/lorekeep/.venv/bin:$PATH"
+    export LOREKEEP_STORE="$HOME/orca/sources/agentic-system.design"
+    export LOREKEEP_TAG={{TAG}}
+
+Your batch: the URLs in `{{BATCHDIR}}/batch-{{BATCH}}`, one per line ({{COUNT}} of them), {{GUIDE}}. Your working folder for logs and the report: `{{BATCHDIR}}/{{BATCH}}/` (exists, empty but for `err/`). Five other workers fetch other batches into the same Store at the same time.
+
+CHANGE.
+1. Fetch every URL of your batch with `lorekeep get --json <url>` and append each JSON line to `{{BATCHDIR}}/{{BATCH}}/log.jsonl`; for an exit 1, append instead `{"url": "<url>", "error": "<the lorekeep: error: line>"}`. A shell loop over the batch file is the right way (token economy: do not spend one tool call per URL); run it in the background or with a long timeout, since {{COUNT}} fetches take a while; capture stderr per URL too (`{{BATCHDIR}}/{{BATCH}}/err/<n>.txt`), the warnings matter. Record the wall time.
+2. When the loop is done, read the log and the stderr files, and apply the skill's rule on exit 1: retry what the skill says to retry, once, and record the second result. Everything else is reported, not retried; never fetch another way, never `add`.
+3. Spot-check five Versions of different converters (`converter` in the JSON: a `md-twin`, a `raw-twin`, a `trafilatura …`, a `markitdown …`, a `verbatim` if your batch has them), preferring the smallest and the warned ones: open the file at `path` (the Reading) and, where `version` differs from `path`, the Version too, and say in the report whether the body is the page's content (title, headings, code fences, tables) or something else (a menu, an empty page, a sign-in page, an error page), and whether the Reading is cleaner than the Version or lost something.
+4. Try `lorekeep search` three times with what a guide writer would ask about pages you fetched (one plain query, one `--exact` for an identifier, one that you expect to need `--all`), and say whether `file:line` pointed at the answer.
+5. Write `{{BATCHDIR}}/{{BATCH}}/report.md` with these sections: **Numbers** (URLs, exit 0 by `outcome`, exit 1 by error kind, retries and their result, converters, authorities, wall time); **To report to the owner** (exactly what the skill says to report: unknown hosts, error lines with URLs, `third-party` pages the guide treats as primary, missing code/tables warnings, `thin content`, reading-rule warnings), each with its URL; **Spot checks**; **Search**; **Friction** — the most important section, in three lists: *the brief* (this text: what it should have told you), *the skill* (every place it was unclear, wrong, missing, or made you guess; every output you did not know how to read; every rule you had to infer), *the tool* (every output, exit code, warning or file that cost you tokens or time, or that you would want different). Be concrete: quote the sentence or the output line. If something worked well, one line is enough.
+
+CONSTRAINTS. Write only under `{{BATCHDIR}}/{{BATCH}}/`. Never edit anything in the Store folder or `lorekeep.toml`; never run `recheck`, `tag`, `backup`, `restore`, `index`, `rules`, `skill`. Do not touch git in this repository (no add, commit, stash, checkout). Do not install anything. Do not fetch any URL with curl, a web tool or a browser. Do not touch the other batches.
+
+OWNERSHIP. Your batch, your folder. The Store is shared with the other workers; lorekeep's lock handles that.
+
+OBSERVABLE ACCEPTANCE. `{{BATCHDIR}}/{{BATCH}}/log.jsonl` has one line per URL of the batch (plus retry lines), `{{BATCHDIR}}/{{BATCH}}/report.md` has the five sections, and `worker_done` carries `--report-path {{BATCHDIR}}/{{BATCH}}/report.md`, the counts (stored / fresh-or-unchanged / errors), and `--outcome succeeded` when every URL was attempted and the report is written, even if some URLs failed; `failed` only if you could not run lorekeep at all.

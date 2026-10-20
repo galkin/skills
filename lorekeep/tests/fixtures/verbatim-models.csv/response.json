@@ -1,0 +1,8 @@
+{
+  "url": "https://docs.nvidia.com/rag/latest/_static/examples/models.csv",
+  "status": 200,
+  "headers": {
+    "content-type": "text/csv; charset=utf-8"
+  },
+  "body": "body.csv"
+}

@@ -1,0 +1,10 @@
+{
+  "url": "https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html; charset=utf-8",
+    "etag": "\"1791905761-gzip\"",
+    "last-modified": "Tue, 13 Oct 2026 15:36:01 GMT"
+  },
+  "body": "body.html"
+}

@@ -1,0 +1,28 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+        <link rel="canonical" href="https://docs.nvidia.com/nemo/retriever/26.8.1/extraction/concepts/">
+        <title>Key concepts - NeMo Retriever Documentation</title>
+</head>
+<body>
+      <main class="md-main" data-md-component="main">
+              <article class="md-content__inner md-typeset">
+
+<h1 id="concepts">Concepts<a class="headerlink" href="#concepts" title="Permanent link">&para;</a></h1>
+<p>These terms appear throughout NeMo Retriever Library documentation.</p>
+<h2 id="job">Job<a class="headerlink" href="#job" title="Permanent link">&para;</a></h2>
+<p>An <strong>ingestion job</strong> is a unit of work you run on input content (documents, audio, video, and other supported types). Submit jobs through any of these supported entry points:</p>
+<ul>
+<li><strong>Python API</strong> — <code>Ingestor</code> task chains such as <code>.extract(...)</code>. Library and batch modes run ingest in-process. Against a deployed Retriever service (<code>run_mode="service"</code>), the client wraps the REST contract below. Refer to the <a href="../nemo-retriever-api-reference/">Python API guide</a>.</li>
+<li><strong><code>retriever ingest</code> CLI</strong> — including <code>retriever ingest service</code> for a running service. Refer to the <a href="https://github.com/NVIDIA/NeMo-Retriever/tree/main/nemo_retriever/docs/cli">CLI reference</a>.</li>
+<li><strong>Retriever service REST API</strong> — the public two-step ingest workflow:</li>
+<li>Create and configure the job aggregate with <code>POST /v1/ingest/job</code> and an <code>application/json</code> <code>JobCreateRequest</code> body. The JSON sets job-level fields such as <code>expected_documents</code>; it does not embed document bytes.</li>
+<li>Upload document content separately with multipart requests to job-scoped endpoints such as <code>POST /v1/ingest/job/{job_id}/document</code>.</li>
+</ul>
+</article>
+</main>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "url": "https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.md",
+  "status": 200,
+  "headers": {
+    "content-type": "text/markdown; charset=utf-8"
+  },
+  "body": "body.md"
+}

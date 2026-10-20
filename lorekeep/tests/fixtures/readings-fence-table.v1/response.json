@@ -1,0 +1,6 @@
+{
+  "url": "https://docs.example.test/guide/fences-and-tables",
+  "status": 200,
+  "headers": { "content-type": "text/markdown; charset=utf-8" },
+  "body": "body.md"
+}

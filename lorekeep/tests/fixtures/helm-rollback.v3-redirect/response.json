@@ -1,0 +1,8 @@
+{
+  "url": "https://v3.helm.sh/docs/helm/helm_rollback/",
+  "status": 301,
+  "headers": {
+    "location": "https://helm.sh/docs/helm/helm_rollback/",
+    "content-length": "0"
+  }
+}

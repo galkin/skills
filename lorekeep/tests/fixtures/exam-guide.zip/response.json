@@ -1,0 +1,8 @@
+{
+  "url": "https://example.test/exam/guide.zip",
+  "status": 200,
+  "headers": {
+    "content-type": "application/zip"
+  },
+  "body": "body.zip"
+}
