@@ -57,12 +57,14 @@ class RenderedPage:
 class Wait:
     """How long the browser waits for a page before it returns the document: the `CrawlerRunConfig`
     parameters of these names (Crawl4AI's Page Navigation & Timing), Crawl4AI's default where
-    `None`. `wait_for` is a `js:` condition, given up after `wait_for_timeout` milliseconds."""
+    `None`. `wait_for` is a `js:` condition, given up after `wait_for_timeout` milliseconds;
+    `page_timeout` bounds the navigation itself, in milliseconds."""
 
     wait_until: str = "domcontentloaded"
     delay_before_return_html: float | None = None
     wait_for: str | None = None
     wait_for_timeout: int | None = None
+    page_timeout: int | None = None
 
     def config(self) -> dict[str, Any]:
         """The keywords `CrawlerRunConfig` receives: the parameters that are set."""
@@ -80,6 +82,10 @@ class FetcherNotInstalled(Exception):
 
 class PageFetchError(Exception):
     """The browser could not render the page."""
+
+
+class NavigationTimeout(PageFetchError):
+    """The page never reached the wait's `wait_until` before the navigation timed out."""
 
 
 class PageFetcher(Protocol):
@@ -142,6 +148,8 @@ class Crawl4AIFetcher:
                     f"the browser could not render {url}: Chromium is not installed for "
                     f"Crawl4AI; the owner installs it with: {chromium_install_command()}"
                 )
+            if "Page.goto: Timeout" in message:
+                raise NavigationTimeout(f"the browser could not render {url}: {message}")
             raise PageFetchError(f"the browser could not render {url}: {message}")
         return RenderedPage(html=result.html, final_url=result.redirected_url or result.url or url)
 

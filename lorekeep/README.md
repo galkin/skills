@@ -120,6 +120,7 @@ inherited.
 | ---------------------------------- | ----------- | ----------- | --------------------------------------------- |
 | `platform.claude.com/`             | `anthropic` | primary     | `md-suffix`                                   |
 | `docs.aws.amazon.com/`             | `aws`       | primary     | `md-suffix`, `.html` → `.md`                  |
+| `skillbuilder.aws/`                | `aws`       | official    | — (`browser`; `cut` drops the cookie banner)  |
 | `learn.microsoft.com/`             | `microsoft` | primary     | `accept-header`                               |
 | `docs.nvidia.com/`                 | `nvidia`    | primary     | — (Sphinx and MkDocs sections serve no `.md`) |
 | `docs.nvidia.com/cuvs/`            | `nvidia`    | primary     | `md-suffix` (Fern)                            |

@@ -29,6 +29,7 @@ from lorekeep.edges import (
     CommandResult,
     Edges,
     FetcherNotInstalled,
+    NavigationTimeout,
     PageFetchError,
     RenderedPage,
     Wait,
@@ -120,7 +121,8 @@ class FakeTransport(httpx.BaseTransport):
 class FakeFetcher:
     """The browser: renders the pages it was given (`url → (html file, final url)`). A page given
     as a sequence of files renders as the next one on each call, the last one ever after; each
-    call's `CrawlerRunConfig` keywords are recorded in `configs`."""
+    call's `CrawlerRunConfig` keywords are recorded in `configs`. A page in `never_quiet` times
+    its navigation out under `networkidle`, as a page that keeps polling does."""
 
     def __init__(
         self,
@@ -129,6 +131,7 @@ class FakeFetcher:
         installed: bool = True,
         chromium: bool = True,
         version: str = "0.9.5",
+        never_quiet: Sequence[str] = (),
     ) -> None:
         self.pages = {
             url: (
@@ -140,6 +143,7 @@ class FakeFetcher:
         self.installed = installed
         self.chromium = chromium
         self._version = version
+        self.never_quiet = set(never_quiet)
         self.calls: list[str] = []
         self.configs: list[dict[str, Any]] = []
 
@@ -166,6 +170,8 @@ class FakeFetcher:
         rendered = sum(1 for call in self.calls if call == url)
         self.calls.append(url)
         self.configs.append(wait.config())
+        if url in self.never_quiet and wait.wait_until == "networkidle":
+            raise NavigationTimeout(f"the browser could not render {url}: Page.goto: Timeout")
         if url not in self.pages:
             raise PageFetchError(f"the fake browser has no page for {url}")
         paths, final_url = self.pages[url]

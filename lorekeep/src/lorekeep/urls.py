@@ -52,6 +52,26 @@ def other_canonical(canonical: str | None, url: str, rules: Sequence[HostRule]) 
     return found if found != url else None
 
 
+def went_home(asked: str, final: str) -> bool:
+    """Whether a request for a page below a site's root ended at a site's root page: a publisher
+    that dropped a page often redirects to its home page instead of answering `404`. A root's own
+    `index.*` is the root, so `/index.html` landing on `/` is the same page. A locale root
+    (`/en/`) is not recognised."""
+    landed = urlsplit(final)
+    return not _root(urlsplit(asked).path) and _root(landed.path) and not landed.query
+
+
+def home_reason(asked: str, final: str) -> str:
+    """The reason a page that `went_home` is gone, for `get`'s error and `recheck`'s row."""
+    return f"{asked} is gone: it ended at the site's home page {final}"
+
+
+def _root(path: str) -> bool:
+    """Whether `path` is a site's root: empty, `/`, or the root's `index.*` page."""
+    rest = path.strip("/")
+    return rest == "" or ("/" not in rest and rest.startswith("index."))
+
+
 def rule_for(host_path: str, rules: Sequence[HostRule]) -> HostRule | None:
     """The rule with the longest `prefix` that `host/path` starts with, or `None`."""
     matching = [rule for rule in rules if host_path.startswith(rule.prefix)]

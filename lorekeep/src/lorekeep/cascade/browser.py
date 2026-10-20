@@ -7,19 +7,22 @@ the rendered document before the cut.
 A page whose scripts load its content after the document has loaded renders as a shell: a menu
 and a payload `<script>`. The step judges each render as the static step judges a page (thin
 Markdown against the document's text) and renders again, waiting longer, up to three attempts;
-no host rule tunes it. A shell after the last attempt stores nothing.
+no host rule tunes it. A shell after the last attempt stores nothing. A page whose network never
+goes quiet times the `networkidle` navigation out after `QUIET_TIMEOUT`; that render is made
+again waiting for `load`, and so are the attempts after it.
 """
 
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 
 import httpx
 
 from lorekeep.cascade.html import THIN_CHARACTERS, THIN_WORDS, Shell, convert_rendered
 from lorekeep.cascade.step import Fallthrough, Fetched, Request, Same
 from lorekeep.cascade.twin import decoded, page_url
-from lorekeep.edges import FetcherNotInstalled, PageFetchError, Wait
+from lorekeep.edges import FetcherNotInstalled, NavigationTimeout, PageFetchError, Wait
 from lorekeep.project import HostRule
 
 BROWSER_MARK = "via crawl4ai"
@@ -39,18 +42,27 @@ GROWN = (
 """The `wait_for` condition: the page's main text (`innerText`, which leaves scripts out) has
 grown past the thin threshold."""
 
+QUIET_TIMEOUT = 20000
+"""How long, in milliseconds, a render waits for the network to go quiet before it gives up and
+renders again waiting for `load` (with Crawl4AI's own navigation timeout, 60 s)."""
+
 ATTEMPTS = (
-    Wait(wait_until="networkidle"),
-    Wait(wait_until="networkidle", delay_before_return_html=3.0),
+    Wait(wait_until="networkidle", page_timeout=QUIET_TIMEOUT),
+    Wait(wait_until="networkidle", delay_before_return_html=3.0, page_timeout=QUIET_TIMEOUT),
     Wait(
         wait_until="networkidle",
         delay_before_return_html=3.0,
         wait_for=GROWN,
         wait_for_timeout=15000,
+        page_timeout=QUIET_TIMEOUT,
     ),
 )
 """Each render waits longer than the one before; the next runs only when this one was a shell.
 A `wait_for` that times out returns the document as it is, judged like the others."""
+
+LOADED = "load"
+"""What a render waits for instead of `networkidle` once the page's network never went quiet
+(a page that polls, as AWS Skill Builder does): the attempts go on with this `wait_until`."""
 
 
 def via_browser(converter: str) -> bool:
@@ -65,15 +77,29 @@ class BrowserStep:
         address = page_url(request.url, request.rule)
         cut = request.rule.cut if request.rule is not None else ()
         characters = 0
-        for wait in ATTEMPTS:
+        network_settles = True
+        attempts = iter(ATTEMPTS)
+        wait = next(attempts, None)
+        while wait is not None:
             try:
-                rendered = request.fetcher.fetch(address, wait)
+                rendered = request.fetcher.fetch(
+                    address,
+                    wait
+                    if network_settles
+                    else replace(wait, wait_until=LOADED, page_timeout=None),
+                )
                 version = request.fetcher.version()
+            except NavigationTimeout as error:
+                if not network_settles:
+                    return Fallthrough(str(error))
+                network_settles = False
+                continue
             except (FetcherNotInstalled, PageFetchError) as error:
                 return Fallthrough(str(error))
             converted = convert_rendered(rendered.html, rendered.final_url, cut)
             if isinstance(converted, Shell):
                 characters = converted.characters
+                wait = next(attempts, None)
                 continue
             if isinstance(converted, Fallthrough):
                 return Fallthrough(converted.reason)

@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import sys
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
 
 from lorekeep import edges
-from lorekeep.edges import BROWSER_INSTALL, Crawl4AIFetcher, chromium_install_command
+from lorekeep.edges import (
+    BROWSER_INSTALL,
+    Crawl4AIFetcher,
+    NavigationTimeout,
+    PageFetchError,
+    Wait,
+    chromium_install_command,
+)
 
 
 def test_the_chromium_command_runs_the_playwright_of_the_interpreter_running_lorekeep() -> None:
@@ -101,3 +108,44 @@ def test_the_browser_starts_as_fetch_starts_it_and_is_ready(
 
     assert (found.ready, found.crawl4ai, found.fix) == (True, "0.9.5", None)
     assert started == [{"headless": True, "verbose": False}]
+
+
+def failing_crawl4ai(message: str) -> ModuleType:
+    """A `crawl4ai` whose every crawl fails with `message`, as Crawl4AI reports a failed page."""
+
+    class AsyncWebCrawler:
+        def __init__(self, **_: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> AsyncWebCrawler:
+            return self
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+        async def arun(self, **_: Any) -> SimpleNamespace:
+            return SimpleNamespace(success=False, error_message=message, html="", url=None)
+
+    module = ModuleType("crawl4ai")
+    module.BrowserConfig = lambda **_: None  # type: ignore[attr-defined]
+    module.CrawlerRunConfig = lambda **_: None  # type: ignore[attr-defined]
+    module.CacheMode = SimpleNamespace(BYPASS="bypass")  # type: ignore[attr-defined]
+    module.AsyncWebCrawler = AsyncWebCrawler  # type: ignore[attr-defined]
+    return module
+
+
+def test_a_navigation_timeout_is_told_apart_from_other_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    timeout = (
+        "Unexpected error in _crawl_web at line 779\nError: Failed on navigating ACS-GOTO:\n"
+        'Page.goto: Timeout 20000ms exceeded.\n  - waiting until "networkidle"'
+    )
+    imports(monkeypatch, {"crawl4ai": failing_crawl4ai(timeout)})
+    with pytest.raises(NavigationTimeout):
+        Crawl4AIFetcher().fetch("https://example.test/app", Wait(wait_until="networkidle"))
+
+    imports(monkeypatch, {"crawl4ai": failing_crawl4ai("net::ERR_NAME_NOT_RESOLVED")})
+    with pytest.raises(PageFetchError) as raised:
+        Crawl4AIFetcher().fetch("https://example.test/app", Wait())
+    assert not isinstance(raised.value, NavigationTimeout)

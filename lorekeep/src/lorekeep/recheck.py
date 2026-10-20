@@ -38,7 +38,7 @@ from lorekeep.store import (
     commit,
     read_rows,
 )
-from lorekeep.urls import other_canonical, trust
+from lorekeep.urls import home_reason, other_canonical, trust, went_home
 
 
 @dataclass(frozen=True)
@@ -128,6 +128,9 @@ def perform(
     if status != 200:
         return _record(store, stored, "error", str(status), tags, f"{address} answered {status}")
 
+    if went_home(address, str(response.url)):
+        reason = home_reason(address, str(response.url))
+        return _record(store, stored, "gone", str(status), tags, reason)
     found = trust(stored.url, rules)
     step = cascade.step_of(str(head.get("converter", "")))
     assert not isinstance(step, cascade.Fallthrough), "a skipped Version is never asked"

@@ -27,8 +27,8 @@ Next.js payload, an empty `<main>`."""
 CARD = FIXTURES / "build-nemotron-modelcard.rendered-card.html"
 """The same document with the card's content in `<main>` (synthesised: see the README)."""
 SHORT = FIXTURES / "browser-short-page.html"
-NETWORKIDLE = {"wait_until": "networkidle"}
-DELAYED = {"wait_until": "networkidle", "delay_before_return_html": 3.0}
+NETWORKIDLE = {"wait_until": "networkidle", "page_timeout": 20000}
+DELAYED = {"wait_until": "networkidle", "delay_before_return_html": 3.0, "page_timeout": 20000}
 
 
 def browser_rule(store: Path) -> None:
@@ -41,11 +41,18 @@ def browser_rule(store: Path) -> None:
 
 
 def get_card(
-    tmp_path: Path, renders: list[Path], url: str = MODEL_CARD
+    tmp_path: Path,
+    renders: list[Path],
+    url: str = MODEL_CARD,
+    *,
+    final_url: str | None = None,
+    never_quiet: bool = False,
 ) -> tuple[Path, FakeFetcher, Result]:
     store = make_store(tmp_path)
     browser_rule(store)
-    fetcher = FakeFetcher({url: (renders, url)})
+    fetcher = FakeFetcher(
+        {url: (renders, final_url or url)}, never_quiet=[url] if never_quiet else []
+    )
     edges = Edges(transport=FakeTransport([]), fetcher=fetcher, runner=FakeRunner())
     return store, fetcher, get(store, edges, url, tag="nvidia")
 
@@ -114,3 +121,44 @@ def test_a_page_short_for_real_is_stored_on_the_first_render(tmp_path: Path) -> 
     [version] = store.glob("*.md")
     _, body = read_version(version)
     assert b"fixes the login timeout" in body
+
+
+LOADED = {"wait_until": "load"}
+
+
+def test_a_page_whose_network_never_goes_quiet_is_rendered_again_waiting_for_load(
+    tmp_path: Path,
+) -> None:
+    store, fetcher, result = get_card(tmp_path, [CARD], never_quiet=True)
+
+    assert result.exit_code == 0, result.stderr
+    assert fetcher.configs == [NETWORKIDLE, LOADED]
+    assert len(list(store.glob("*.md"))) == 1
+
+
+def test_after_a_navigation_timeout_every_later_attempt_waits_for_load(tmp_path: Path) -> None:
+    store, fetcher, result = get_card(tmp_path, [SHELL], never_quiet=True)
+
+    assert result.exit_code == 1
+    assert "the browser rendered a shell" in result.stderr, result.stderr
+    assert fetcher.configs[:3] == [
+        NETWORKIDLE,
+        LOADED,
+        {"wait_until": "load", "delay_before_return_html": 3.0},
+    ]
+    assert fetcher.configs[3]["wait_until"] == "load"
+    assert fetcher.configs[3]["wait_for"].startswith("js:")
+    assert list(store.glob("*.md")) == []
+
+
+def test_a_page_rendered_as_the_site_home_page_is_gone_and_stores_nothing(
+    tmp_path: Path,
+) -> None:
+    store, _, result = get_card(tmp_path, [CARD], final_url="https://build.nvidia.com/")
+
+    assert result.exit_code == 1
+    assert result.stderr == (
+        f"lorekeep: error: {MODEL_CARD} is gone: it ended at the site's home page "
+        "https://build.nvidia.com/\n"
+    )
+    assert list(store.glob("*.md")) == [] and list(store.glob("*.orig.*")) == []

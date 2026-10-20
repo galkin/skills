@@ -14,6 +14,15 @@ authority = "primary"
 twin = "md-suffix"
 page_suffix = ".html"
 
+# AWS's training catalog: its pages build themselves in the browser, never let the network go
+# quiet, and carry AWS's cookie banner, whose text alone passes for content until it is cut.
+[[hosts]]
+prefix = "skillbuilder.aws/"
+publisher = "aws"
+authority = "official"
+browser = true
+cut = ["#awsccc-sb-ux-c"]
+
 [[hosts]]
 prefix = "learn.microsoft.com/"
 publisher = "microsoft"

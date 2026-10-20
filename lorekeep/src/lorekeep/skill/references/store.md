@@ -148,10 +148,11 @@ title: "Guardrail Types"
 
 ## Rechecks
 
-A `checks.csv` row has `result` `unchanged`, `changed`, `gone` (`404` or `410`) or `error`;
-`status` is the HTTP status, or the exception's class name (`ReadTimeout`) when there was no
-response; `sha256` names the Version that is latest after the check. A Version's age, for the
-freshness window, counts from the later of its `fetched_at` and its last Recheck.
+A `checks.csv` row has `result` `unchanged`, `changed`, `gone` (`404`, `410`, or a page that now
+ends at its site's home page) or `error`; `status` is the HTTP status, or the exception's class
+name (`ReadTimeout`) when there was no response; `sha256` names the Version that is latest after
+the check. A Version's age, for the freshness window, counts from the later of its `fetched_at` and
+its last Recheck.
 
 ## `citations.csv`
 

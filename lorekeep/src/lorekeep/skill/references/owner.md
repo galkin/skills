@@ -256,10 +256,15 @@ matches `host/path` by prefix and the longest matching prefix wins. Its keys:
   (`networkidle`), again with three more seconds when the Markdown is thin, and a third time
   waiting up to 15 seconds for the page's main text to grow past the thin threshold. A page still
   thin after the third render is the error `the browser rendered a shell` and nothing is stored.
+  A page whose network never goes quiet within 20 seconds (it keeps polling) is rendered again
+  waiting for `load`, and so are the attempts after it.
   A browser-rendered Version is never rechecked.
 - `cut` — a list of CSS selectors removed from a page the browser rendered under the prefix
   before conversion (`cut = ["nav", ".cookie-banner"]`); the Original is the rendered document
   before the cut. It changes nothing for a static page or a Twin.
+
+Whatever step reads it, a page below a site's root that ends at a site's home page is gone:
+`get` stores nothing and `recheck` records `gone`.
 
 A Project rule with the same prefix as a default rule replaces it, and a Project rule with a longer
 prefix wins over it. A rule that names neither `twin` nor `page_suffix` inherits both from the

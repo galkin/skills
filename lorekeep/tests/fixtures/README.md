@@ -68,6 +68,8 @@ are lower-case. `match_headers` is optional.
 | `helm-rollback.v3`                     | `v3.helm.sh` serving the page itself (`200`), its canonical link naming `helm.sh`          |
 | `helm-rollback.v3-redirect`            | the same address as a `301` to `helm.sh` (a cross-host redirect)                           |
 | `helm-rollback.html`                   | the page on `helm.sh`                                                                      |
+| `helm-rollback.home-redirect`          | the page's address as a `301` to `/`: a dropped page sent to the home page (synthesised)   |
+| `helm-home.html`                       | `helm.sh`'s home page, where that redirect ends (synthesised)                              |
 
 The five measured pages (Anthropic, AWS, three termidy lessons) were captured on 2026-10-17; their
 response headers were not kept, so the ones here are the minimum a test needs. The Microsoft and

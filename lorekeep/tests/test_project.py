@@ -7,6 +7,7 @@ from tests.support import run_cli
 DEFAULT_RULES = [
     ["platform.claude.com/", "anthropic", "primary", "twin=md-suffix"],
     ["docs.aws.amazon.com/", "aws", "primary", "twin=md-suffix", "page_suffix=.html"],
+    ["skillbuilder.aws/", "aws", "official", "browser", "cut=#awsccc-sb-ux-c"],
     ["learn.microsoft.com/", "microsoft", "primary", "twin=accept-header"],
     ["docs.nvidia.com/", "nvidia", "primary"],
     ["docs.nvidia.com/cuvs/", "nvidia", "primary", "twin=md-suffix"],
@@ -75,7 +76,8 @@ cut = ["nav", ".cookie-banner"]
     stdout = status(tmp_path)
 
     expected = [list(rule) for rule in DEFAULT_RULES]
-    expected[2] = ["learn.microsoft.com/", "microsoft-learn", "official", "(lorekeep.toml)"]
+    microsoft = [rule[0] for rule in expected].index("learn.microsoft.com/")
+    expected[microsoft] = ["learn.microsoft.com/", "microsoft-learn", "official", "(lorekeep.toml)"]
     own = "(lorekeep.toml)"
     expected += [
         ["raw.githubusercontent.com/anthropics/", "anthropic", "primary", "twin=raw", own],

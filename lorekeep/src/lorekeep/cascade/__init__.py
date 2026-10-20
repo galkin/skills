@@ -24,7 +24,7 @@ from lorekeep.cascade.browser import BrowserStep
 from lorekeep.cascade.page import PageStep
 from lorekeep.cascade.step import Fallthrough, Fetched, Request, Same, Step
 from lorekeep.cascade.twin import TwinStep
-from lorekeep.urls import rule_for
+from lorekeep.urls import home_reason, rule_for, went_home
 
 __all__ = [
     "BROWSER",
@@ -66,7 +66,16 @@ def step_of(converter: str) -> Step | Fallthrough:
 
 
 def run_cascade(request: Request) -> Fetched | list[Fallthrough]:
-    """The first step's `Fetched`, or every step's reason when none yielded Markdown.
+    """The first step's `Fetched`, or every step's reason when none yielded Markdown; a page that
+    ended at a site's home page is gone, a `final` reason, and nothing of it is stored."""
+    outcome = _steps(request)
+    if isinstance(outcome, Fetched) and went_home(request.url, outcome.final_url):
+        return [Fallthrough(home_reason(request.url, outcome.final_url), final=True)]
+    return outcome
+
+
+def _steps(request: Request) -> Fetched | list[Fallthrough]:
+    """The steps themselves, in order.
 
     A host rule with `browser = true` goes to the browser without any plain request; otherwise
     the browser runs only when the last plain step says the page needs it. A `final` reason
