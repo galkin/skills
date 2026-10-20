@@ -62,6 +62,7 @@ Copies the Store to the Project's bucket (`bucket` in `lorekeep.toml`) with `gcl
 never deleting there and never replacing a Version or an Original; the growing files (`tags.csv`,
 `checks.csv`, `aliases.csv`, `citations.csv`, `datapackage.json`, `lorekeep.toml`) are copied
 every time and the bucket's versioning keeps their history. Regenerates `datapackage.json` first.
+Uploads are gzipped on the wire only; the bucket holds the files as they are.
 `.cache/` is never backed up, nor is the Index: the Readings in it are rebuilt from the Versions
 and the rules by the next `get`, `search` or `read`, so a restored Store needs nothing more.
 
