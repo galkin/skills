@@ -3,12 +3,13 @@
     runner validate <workflow.yaml>
     runner run <workflow.yaml> --run-id <id> [--param k=v ...]
     runner retry <workflow.yaml> --run-id <id> [--step <id>] [--downstream]
+    runner exec <workflow.yaml> --run-id <id> --step <id> [--env K=V ...]
     runner status --run-id <id> | runner status
     runner queue <queue.yaml> --slot <worktree> [--resume <item> [--step <id>]] [--poll-sec N]
     runner queue <queue.yaml> --status
 
 Exit codes: 0 the run succeeded or partially succeeded, 1 it failed, 2 the workflow,
-parameters or usage are invalid.
+parameters or usage are invalid; ``exec`` exits with the step command's own code.
 """
 
 from __future__ import annotations
@@ -43,6 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--step")
     t.add_argument("--downstream", action="store_true", help="also reset every step reachable from --step")
 
+    e = sub.add_parser("exec", help="run one step's commands once in the run's environment, outside the run (run.json untouched)")
+    e.add_argument("workflow")
+    e.add_argument("--run-id", required=True)
+    e.add_argument("--step", required=True)
+    e.add_argument("--env", action="append", default=[], metavar="NAME=VALUE", help="set over the DAG and step environment")
+
     s = sub.add_parser("status", help="print the state of one run, or list runs")
     s.add_argument("--run-id")
 
@@ -60,7 +67,7 @@ def parse_params(items: list[str]) -> dict[str, str]:
     out: dict[str, str] = {}
     for item in items:
         if "=" not in item:
-            raise SpecError(f"--param expects NAME=VALUE, got {item!r}")
+            raise SpecError(f"--param and --env expect NAME=VALUE, got {item!r}")
         k, v = item.split("=", 1)
         out[k] = v
     return out
@@ -88,6 +95,8 @@ def main(argv: list[str] | None = None) -> int:
                 raise SpecError("--downstream requires --step")
             status = engine.retry(dag, runs_dir, args.run_id, args.step, args.downstream)
             return 0 if status in ("succeeded", "partially_succeeded") else 1
+        if args.cmd == "exec":
+            return engine.exec_step(load(args.workflow), runs_dir, args.run_id, args.step, parse_params(args.env))
         if args.cmd == "queue":
             return queue.main_queue(args, runs_dir)
         if args.cmd == "status":

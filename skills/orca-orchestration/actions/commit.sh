@@ -22,6 +22,10 @@
 #   LOCK_WAIT_SEC   how long to wait for another slot's merge lock (default 900); past it the
 #                   step fails naming the lock and its age, and nothing is deleted: a stale
 #                   lock (a power loss while it was held) is the coordinator's to remove
+#   CHECK_ONLY      1: run CHECKS_FULL in the slot and stop there (CHECKS PASSED or CHECKS
+#                   FAILED): nothing is staged, committed or merged. A coordinator who edited a
+#                   slot by hand runs the workflow's own commit step this way (`runner exec …
+#                   --env CHECK_ONLY=1`), then resumes the run so this script commits the edit
 # Exit 1 on failed checks, commit, lock wait or merge, so the step fails and the item is held. Staged
 # changes in the integration worktree are refused first, before the slot's checks run: a
 # cherry-pick will not run over a dirty index, and finding that out after ten minutes of checks
@@ -34,6 +38,12 @@ cd "$W" || exit 1
 MERGE=${MERGE:-last}
 case "$MERGE" in last|all|off) ;; *) echo "MERGE must be last, all or off, not '$MERGE'"; exit 1;; esac
 [ "$(pwd -P)" = "$(cd "$MAIN" && pwd -P)" ] && MERGE=off   # the slot is the integration worktree: nothing to merge
+if [ "${CHECK_ONLY:-}" = 1 ]; then
+  if [ -n "${CHECKS_FULL:-}" ] && ! sh -c "$CHECKS_FULL" > "$LOGS/$NAME.check.log" 2>&1; then
+    echo "CHECKS FAILED, see $LOGS/$NAME.check.log"; exit 1
+  fi
+  echo "CHECKS PASSED (CHECK_ONLY: nothing committed)"; exit 0
+fi
 if [ "$MERGE" != off ] && ! git -C "$MAIN" diff --cached --quiet; then
   echo "INTEGRATION INDEX DIRTY: $MAIN has staged changes and git cherry-pick refuses to run over them; unstage them (git reset) first"; exit 1
 fi

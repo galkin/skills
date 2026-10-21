@@ -504,6 +504,41 @@ def retry(dag: Dag, runs_dir: Path, run_id: str, step_id: str | None, downstream
     return runner.execute()
 
 
+def exec_step(dag: Dag, runs_dir: Path, run_id: str, step_id: str, extra_env: dict[str, str]) -> int:
+    """Run one step's commands once, outside the run, exactly as the run would run them.
+
+    The run's params, the outputs of its succeeded steps, the DAG and step environment and
+    the step's working directory, with ``extra_env`` over all of them. Preconditions, retries
+    and repeats do not apply and ``run.json`` is not touched: this is how a coordinator runs a
+    step's own checks on a slot it edited by hand (``CHECK_ONLY=1`` on a commit step) before
+    resuming the run. The log is ``steps/<step>.exec.<n>.log`` and is echoed to stdout; the
+    exit code is the command's.
+    """
+    step = dag.step(step_id)
+    state = load_state(runs_dir, run_id)
+    run_dir = runs_dir / run_id
+    runner = Runner(dag, state.params, run_dir, run_id, state)
+    steps_dir = run_dir / "steps"
+    n = 1
+    while (steps_dir / f"{step.id}.exec.{n}.log").exists():
+        n += 1
+    log = steps_dir / f"{step.id}.exec.{n}.log"
+    env, scope = runner.step_env(step, steps_dir, n)
+    env["DAGU_OUTPUT_FILE"] = str(steps_dir / f"{step.id}.exec.{n}.out")  # never the run's own attempt files
+    env["DAG_RUN_STEP_LOG_FILE"] = str(log)
+    env.update(extra_env)
+    open(env["DAGU_OUTPUT_FILE"], "w").close()
+    cwd = runner.working_dir(step.working_dir, scope)
+    code = 0
+    for command in step.run:
+        code = runner.spawn(resolve(command, scope), env, cwd, log, step.timeout_sec)
+        if code != 0:
+            break
+    runner.log(f"exec {step.id} ({' '.join(f'{k}={v}' for k, v in extra_env.items()) or 'no extra env'}) exit {code}, log {log}")
+    print(log.read_text(encoding="utf-8", errors="replace"), end="")
+    return code
+
+
 def status_text(state: RunState, runs_dir: Path | None = None) -> str:
     """One line per step; a failed step also names its last attempt's log when ``runs_dir`` is given."""
     lines = [f"{state.run_id}  {state.status}  dag={state.dag}  params={json.dumps(state.params, sort_keys=True)}"]

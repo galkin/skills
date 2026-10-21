@@ -43,10 +43,27 @@ sh actions/commit.sh <slot worktree> <integration worktree> "<subject>"
 | `AFTER_COMMIT`   | Command run on the integration worktree after a successful merge           | none                      |
 | `CI_LOG_DIR`     | Where check logs go                                                        | `<integration>/.task/ci`  |
 | `LOCK_WAIT_SEC`  | How long to wait for another slot's merge lock before failing              | `900`                     |
+| `CHECK_ONLY`     | `1`: run `CHECKS_FULL` in the slot and stop (`CHECKS PASSED` / `CHECKS FAILED`, log `CI_LOG_DIR/<subject>.check.log`); nothing staged, committed or merged | unset |
 
 A pass that commits twice (writer, then improver) sets `MERGE=off` on the first commit step
 and `MERGE=all` with `EMPTY_OK=1` on the second, so both commits reach the integration branch
 together and an improver that changed nothing is not a failure.
+
+## A coordinator's edit in a slot
+
+The coordinator's edit takes the worker's path: it is made in the slot, never in the
+integration worktree, and never committed or cherry-picked by hand. Before resuming, the
+workflow's own commit step runs in check-only mode, with the run's params and environment:
+
+```sh
+bin/runner --runs-dir $W/.task/runs exec <wf.yaml> --run-id <item> --step <commit step> --env CHECK_ONLY=1
+```
+
+It runs `CHECKS_FULL` exactly as the commit will, so a failure (a formatter, a schema) shows
+now rather than inside the commit. Once it passes, the run is resumed at its decision step and
+the workflow's commit step commits the edit with the unit's subject and merges it. Since this
+script runs `CHECKS_FULL` before it commits anything and the merge takes only slot commits, an
+edit that reaches the integration branch this way has passed the same checks as a worker's.
 
 Exit 1 on failed checks, an empty commit, a lock not released in time, or a failed merge, so
 the step fails and the queue holds the item. The messages are `CHECKS FAILED`, `NOTHING TO

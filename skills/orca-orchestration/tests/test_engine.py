@@ -276,3 +276,97 @@ def test_existing_run_id_is_refused(tmp_path):
     run(tmp_path, "steps:\n  - {id: a, run: echo hi}\n")
     with pytest.raises(FileExistsError):
         run(tmp_path, "steps:\n  - {id: a, run: echo hi}\n")
+
+
+def test_exec_runs_one_step_in_the_runs_environment_without_touching_its_state(tmp_path):
+    status, st, dag = run(tmp_path, """
+        params:
+          - name: unit
+            default: u1
+        env:
+          CHECKS: from-dag
+        steps:
+          - id: review
+            run: printf 'findings=2\\n' >> "$DAGU_OUTPUT_FILE"
+            outputs:
+              - name: findings
+          - id: held
+            depends: review
+            run: exit 2
+          - id: commit
+            depends: held
+            env:
+              WHAT: ${params.unit} after ${steps.review.outputs.findings}
+            run: echo "commit $WHAT checks=$CHECKS only=${CHECK_ONLY:-0}"; [ "${CHECK_ONLY:-}" = 1 ]
+        """)
+    assert status == "failed" and st.steps["commit"].status == "canceled"
+    before = (tmp_path / "runs" / "r1" / "run.json").read_text()
+    assert engine.exec_step(dag, tmp_path / "runs", "r1", "commit", {"CHECK_ONLY": "1"}) == 0
+    log = (tmp_path / "runs" / "r1" / "steps" / "commit.exec.1.log").read_text()
+    assert log == "commit u1 after 2 checks=from-dag only=1\n"
+    assert engine.exec_step(dag, tmp_path / "runs", "r1", "commit", {}) == 1  # exit code is the command's
+    assert (tmp_path / "runs" / "r1" / "steps" / "commit.exec.2.log").exists()
+    assert (tmp_path / "runs" / "r1" / "run.json").read_text() == before
+    assert "exec commit (CHECK_ONLY=1) exit 0" in (tmp_path / "runs" / "r1" / "run.log").read_text()
+
+
+TARGETED_FIX = """
+    # The tail of an author/reviewer workflow (workflow-syntax.md › A targeted-fix round):
+    # findings left after r2 go to the owning role, a focused re-review checks that
+    # correction only, and only what is still left after it holds the run.
+    steps:
+      - id: count2
+        run: printf 'findings=%s\\n' "$(cat "$DAG_RUN_WORK_DIR/../../r2")" >> "$DAGU_OUTPUT_FILE"
+        outputs:
+          - name: findings
+      - id: fix3
+        depends: count2
+        preconditions:
+          - condition: ${steps.count2.outputs.findings}
+            expected: "re:^[1-9]"
+        continue_on: skipped
+        run: echo fixed >> "$DAG_RUN_WORK_DIR/../../worked"; cat "$DAG_RUN_WORK_DIR/../../fix_leaves" > "$DAG_RUN_WORK_DIR/../../r3"
+      - id: review3
+        depends: fix3
+        preconditions:
+          - condition: ${steps.count2.outputs.findings}
+            expected: "re:^[1-9]"
+        continue_on: skipped
+        run: echo "re-review of r2's findings" >> "$DAG_RUN_WORK_DIR/../../worked"
+      - id: count3
+        depends: review3
+        preconditions:
+          - condition: ${steps.count2.outputs.findings}
+            expected: "re:^[1-9]"
+        continue_on: skipped
+        run: printf 'findings=%s\\n' "$(cat "$DAG_RUN_WORK_DIR/../../r3")" >> "$DAGU_OUTPUT_FILE"
+        outputs:
+          - name: findings
+      - id: held_r3
+        depends: count3
+        preconditions:
+          - condition: ${steps.count3.outputs.findings}
+            expected: "re:^[1-9]"
+        continue_on: skipped
+        run: exit 2
+      - id: commit
+        depends: held_r3
+        run: echo committed >> "$DAG_RUN_WORK_DIR/../../worked"
+"""
+
+
+@pytest.mark.parametrize("r2,left,expect", [
+    ("0", "0", {"fix3": "skipped", "review3": "skipped", "count3": "skipped", "held_r3": "skipped", "commit": "succeeded"}),
+    ("2", "0", {"fix3": "succeeded", "review3": "succeeded", "count3": "succeeded", "held_r3": "skipped", "commit": "succeeded"}),
+    ("2", "1", {"fix3": "succeeded", "review3": "succeeded", "count3": "succeeded", "held_r3": "failed", "commit": "canceled"}),
+])
+def test_a_targeted_fix_round_needs_nothing_beyond_the_subset(tmp_path, r2, left, expect):
+    (tmp_path / "r2").write_text(r2)
+    (tmp_path / "fix_leaves").write_text(left)
+    status, st, dag = run(tmp_path, TARGETED_FIX)
+    assert {k: st.steps[k].status for k in expect} == expect
+    assert status == ("failed" if left != "0" and r2 != "0" else "succeeded")
+    if status == "failed":  # the coordinator's third option: another targeted round, no waiver, no hand fix
+        (tmp_path / "fix_leaves").write_text("0")
+        assert engine.retry(dag, tmp_path / "runs", "r1", "fix3", downstream=True) == "succeeded"
+        assert (tmp_path / "worked").read_text().count("fixed") == 2

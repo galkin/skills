@@ -17,7 +17,9 @@ uv run --no-project --python 3.11 --with pyyaml --with jsonschema --with pytest 
 
 Runner tests are built from the Dagu spec examples; adapter tests run against
 `tests/fake_orca.py` (`ORCA_CLI_COMMAND` points at it; it keeps state in `$FAKE_ORCA_STATE`,
-logs every call to `$FAKE_ORCA_LOG`, completes tasks after `$FAKE_ORCA_AUTOCOMPLETE` polls,
+logs every call to `$FAKE_ORCA_LOG`, replays its oldest message batch until `check --ack` as a bound
+Run does and answers `inbox` (every message, newest first; `inbox_down` in the state fails it)
+and `reply` (a message in the thread), completes tasks after `$FAKE_ORCA_AUTOCOMPLETE` polls,
 runs `$FAKE_ORCA_ON_START` in the worker's worktree on `worker-start` so a whole workflow can
 be tried without a vendor, answers `runtime_unavailable` for as many calls as the file named
 by `$FAKE_ORCA_DOWN` counts down, and refuses `worker-release` for the dispatches in its

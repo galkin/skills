@@ -7,7 +7,7 @@
     adapter followup --run <run_id> --handle <h> --title <text> (--spec|--spec-file|--spec-template)...
     adapter handle   --task <id>            adapter alive --handle <h>
     adapter unstall  [--worktree <path>] [--exclude <path>]
-    adapter drain    --run <run_id>
+    adapter drain    --run <run_id> [--once] [--repeat-sec 300] | --run <run_id> --ack <msg_id> [--body <text>]
     adapter close    --worktree <path> [--all]   adapter release --task <id>
     adapter budget   [--costs step=pct,...] [--new pct] [--week pct] [--margin pct] [--reset] [--why]
     adapter cost     [--worktree <path>]... [--hours 12] [--json] [--write]
@@ -15,7 +15,7 @@
 Outputs go to ``$DAGU_OUTPUT_FILE`` when it is set (``task=``, ``dispatch=``, ``handle=``,
 ``status=``), so a workflow step declares them as ``outputs``. Exit codes follow the old
 drivers: 0 ok, 4 the task ended badly, 5 the agent sits on a usage limit, 6 provider errors
-persist, 3 the mailbox holds a question or escalation, 1 other failures.
+persist, 3 (``drain --once``) a question or escalation is unanswered, 1 other failures.
 
 The spec is the ``--spec`` texts and files joined in order. ``--spec-file`` is literal;
 ``--spec-template`` resolves ``${params.x}`` from ``$DAG_PARAMS_JSON`` and ``${env.X}`` from
@@ -45,6 +45,7 @@ import re
 import shlex
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 from . import budget, cost, ledger, orca
@@ -166,10 +167,15 @@ def build_parser() -> argparse.ArgumentParser:
     u.add_argument("--worktree", help="only this worktree's terminals")
     u.add_argument("--exclude", help="never this worktree (the coordinator's)")
 
-    d = sub.add_parser("drain", help="consume heartbeat/worker_done batches; exit 3 on a question or escalation")
+    d = sub.add_parser("drain", help="consume heartbeat/worker_done batches; print every unanswered question or escalation each round")
     d.add_argument("--run", required=True)
     d.add_argument("--timeout-ms", type=int, default=300000)
-    d.add_argument("--once", action="store_true", help="one wait, then exit (tests)")
+    d.add_argument("--repeat-sec", type=float, default=300, help="print the pending questions again at least this often (default %(default)s)")
+    d.add_argument("--retry-sec", type=float, default=30, help="pause before re-reading a batch the inbox does not show yet (default %(default)s)")
+    d.add_argument("--inbox-limit", type=int, default=2000, help="how many of the newest inbox messages to search for questions and replies")
+    d.add_argument("--once", action="store_true", help="one round: print what is pending, exit 3 when anything is")
+    d.add_argument("--ack", metavar="MSG_ID", help="answer one question or escalation that needs no words: reply in its thread with --body, then exit")
+    d.add_argument("--body", default="Acknowledged by the coordinator.", help="with --ack: the reply text")
 
     c = sub.add_parser("close", help="release the worktree's terminals the adapter started whose tasks have settled; retained and user-owned ones stay (exit 0, named in the log)")
     c.add_argument("--worktree", required=True)
@@ -426,10 +432,77 @@ def cmd_unstall(args) -> int:
 
 
 BENIGN = {"heartbeat", "worker_done"}
+ANSWERABLE = {"question", "escalation"}  # pending until a reply in their thread
+
+
+def attention_line(m: dict, now: float) -> str:
+    """``ATTENTION <id> <type> from <sender> [task <id>] age <n>m | <subject> | <body>``."""
+    sender = m.get("from_handle") or m.get("from") or m.get("fromHandle") or "?"
+    task = ""
+    try:
+        payload = m.get("payload")
+        payload = json.loads(payload) if isinstance(payload, str) else payload or {}
+        task = payload.get("taskId") or "" if isinstance(payload, dict) else ""
+    except ValueError:
+        pass
+    age = "?"
+    created = m.get("created_at") or m.get("createdAt")
+    if created:
+        try:
+            t = datetime.fromisoformat(str(created).replace("Z", "+00:00")).timestamp()
+            age = f"{max(0, int((now - t) // 60))}m"
+        except ValueError:
+            pass
+    body = " ".join(str(m.get("body") or "").split())[:400]
+    return f"ATTENTION {m.get('id')} {m.get('type')} from {sender}{f' task {task}' if task else ''} age {age} | {m.get('subject')} | {body}"
+
+
+def pending_attention(run: str, seen: dict[str, dict], limit: int) -> tuple[dict[str, dict], set[str]] | None:
+    """The run's questions and escalations nobody has answered, and the ids the inbox holds.
+
+    A message is answered when its thread holds a message from someone other than its
+    sender (``orchestration reply``). The inbox is the record, so a question that arrived
+    while no drain ran is found too; ``seen`` adds what this process was delivered. None when
+    Orca does not answer: nothing may then be taken as answered or recorded.
+    """
+    try:
+        rows = orca.inbox(limit)
+    except OrcaError as e:
+        log(f"inbox unavailable ({e}); pending questions cannot be listed this round")
+        return None
+    replied: dict[str, set[str]] = {}
+    for m in rows:
+        thread = m.get("thread_id")
+        if thread and thread != m.get("id"):
+            replied.setdefault(thread, set()).add(str(m.get("from_handle") or ""))
+    candidates = {m["id"]: m for m in rows if m.get("id") and m.get("type") in ANSWERABLE
+                  and (m.get("run_id") == run or m.get("to_handle") == f"run:{run}")}
+    for mid, m in seen.items():
+        candidates.setdefault(mid, m)
+    pending = {mid: m for mid, m in candidates.items()
+               if not (replied.get(mid, set()) - {str(m.get("from_handle") or "")})}
+    return pending, {m.get("id") for m in rows}
 
 
 def cmd_drain(args) -> int:
-    """Keep the coordinator's inbox quiet: ack benign batches, exit 3 on anything else."""
+    """Keep the coordinator's inbox quiet and every open question in view.
+
+    Benign batches are acknowledged. A question or escalation is printed as an ATTENTION line
+    with its id, sender and age, and printed again on every round until its thread holds a
+    reply, so a second question never hides behind the first and none is consumed silently.
+    A batch holding one is acknowledged only once the inbox shows it (the inbox, not the
+    batch, is what the next round reads); while Orca cannot say so, the batch stays unacked
+    and is replayed. The process keeps running; ``--once`` makes one round and exits 3 while
+    anything is pending.
+    """
+    if args.ack:
+        orca.reply(args.ack, args.body)
+        log(f"acknowledged {args.ack} with a reply in its thread")
+        return 0
+    seen: dict[str, dict] = {}  # the open questions and escalations, as far as this process knows
+    shown: set[str] = set()
+    first = True
+    last_shown = 0.0
     prev = None
     while True:
         argv = ["orchestration", "check", "--run", args.run, "--wait", "--timeout-ms", str(args.timeout_ms)]
@@ -439,16 +512,34 @@ def cmd_drain(args) -> int:
         prev = None
         messages = r.get("messages") or []
         delivery = find(r, "deliveryId", "delivery_id")
-        if messages and all(m.get("type") in BENIGN for m in messages):
+        now = time.time()
+        other = [m for m in messages if m.get("type") not in BENIGN]
+        for m in other:
+            if m.get("type") in ANSWERABLE and m.get("id"):
+                seen[m["id"]] = m
+            else:  # nothing to answer: shown once, then it is the coordinator's to read
+                print(attention_line(m, now), flush=True)
+        # The inbox is read on the first round (what arrived while no drain ran) and while
+        # anything is open; a round of heartbeats with nothing open needs no lookup.
+        found = pending_attention(args.run, seen, args.inbox_limit) if first or seen else ({}, set())
+        first = False
+        recorded = found is not None and all(m.get("id") in found[1] for m in other if m.get("type") in ANSWERABLE)
+        if messages and delivery and (not other or recorded):
             prev = delivery
-        elif messages:
-            for m in messages:
-                print(f"ATTENTION {delivery} {m.get('id')} {m.get('type')} | {m.get('subject')} | {str(m.get('body'))[:400]}")
-            return EXIT_ATTENTION
+        if found is not None:
+            seen = dict(found[0])  # answered ones drop out here
+        fresh = set(seen) - shown
+        if seen and (args.once or fresh or now - last_shown >= args.repeat_sec):
+            for m in sorted(seen.values(), key=lambda m: str(m.get("created_at") or "")):
+                print(attention_line(m, now), flush=True)
+            last_shown = now
+        shown = set(seen)
         if args.once:
             if prev:
                 orca.call("orchestration", "check", "--run", args.run, "--ack", prev, check=False)
-            return 0
+            return EXIT_ATTENTION if seen else 0
+        if messages and delivery and not prev:
+            time.sleep(args.retry_sec)  # an unrecorded batch is replayed at once: do not spin on it
 
 
 def cmd_close(args) -> int:
