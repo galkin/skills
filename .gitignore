@@ -1,0 +1,2 @@
+# uv writes a lock beside a skill run with `uv run`; a skill ships no lock
+skills/*/uv.lock
