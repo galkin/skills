@@ -162,12 +162,15 @@ printf 'bucket = "agentic-system-design-sources"\n' > ~/orca/sources/agentic-sys
 
 ## For agents: the skill
 
-`lorekeep skill` prints a skill ([`SKILL.md`](src/lorekeep/skill/SKILL.md)) that teaches a Run
-the commands it calls (`get`, `search`, `add`, `status`), what to cite and what to report. Two
-references sit beside it: [`references/store.md`](src/lorekeep/skill/references/store.md), the
-Store's layout, frontmatter and `citations.csv`; and
-[`references/owner.md`](src/lorekeep/skill/references/owner.md), the owner's commands (`recheck`,
-`tag add`, `backup`, `restore`, `index`, `skill`) and how to write `[[hosts]]` rules. It ships
+`lorekeep skill` prints a skill ([`SKILL.md`](src/lorekeep/skill/SKILL.md)): what lorekeep is,
+its settings and exit codes, and which reference each way of using it reads. A **Reader** searches
+the Store and cites what it finds ([`references/reading.md`](src/lorekeep/skill/references/reading.md));
+a **Collector** fills it for a guide or a section, then reports what failed
+([`references/collecting.md`](src/lorekeep/skill/references/collecting.md)); the owner curates it
+with `recheck`, `tag add`, `backup`, `restore`, `index`, `skill` and `[[hosts]]` rules
+([`references/curating.md`](src/lorekeep/skill/references/curating.md)).
+[`references/store.md`](src/lorekeep/skill/references/store.md) holds the Store's layout,
+frontmatter, `--json` fields and `citations.csv`. It ships
 inside the package, so it always matches the version. A release, from this folder:
 
 ```sh

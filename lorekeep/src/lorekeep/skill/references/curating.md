@@ -1,6 +1,6 @@
-# The owner's commands and host rules
+# Curating a Store: the owner's commands and host rules
 
-These commands keep a Store over time; a Run never calls them. Every one takes `--store DIR`
+The **Curator**, the owner, keeps a Store over time with these commands; a Run never calls them. Every one takes `--store DIR`
 (default: `$LOREKEEP_STORE`). The Store's files are described in [store.md](store.md).
 
 ## `lorekeep recheck`
@@ -305,10 +305,8 @@ accepted = 2026-10-17
 removes = "26 lines"
 ```
 
-A law or standard is `primary` where its issuer publishes the text, its official journal:
-EUR-Lex for EU law, the Federal Register, nist.gov for NIST. An institution's reproduction of it
-(the Commission's AI Act Service Desk) is `official`, and a Run cites the journal; set a rule's
-`authority` that way, since the skill tells a Run to report a Version that says otherwise.
+Set a rule's `authority` for a law or standard the way [reading.md](reading.md#what-to-cite)
+tells a Run to cite it, since a Run reports a Version that says otherwise.
 
 Pages a Run reports to you, and what fixes them: an unknown host or a mislabelled `authority` —
 a `[[hosts]]` rule; it applies to every stored Version at once, without a new fetch; `thin content` — `uv tool install --editable '.[browser]'` from the lorekeep

@@ -2,7 +2,7 @@
 against the limits (`check`), and the passing ones written into `lorekeep.toml` (`accept`).
 
 lorekeep calls no model: the proposer is a subagent the orchestrator launches, and these commands
-only hand it Versions and judge what it returns (references/owner.md has the brief). A candidate
+only hand it Versions and judge what it returns (references/curating.md has the brief). A candidate
 is measured on its own, on every Version it reaches, before any other rule; `removes` is the most
 it changed there, in lines for a block operation and in percent for `drop_lines`.
 """
