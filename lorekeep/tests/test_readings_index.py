@@ -264,8 +264,8 @@ def test_recheck_and_citations_work_on_versions_and_a_changed_page_gets_its_read
 
 
 def test_the_owner_reference_says_the_cache_is_never_backed_up() -> None:
-    """No fixture: `references/owner.md`."""
-    owner = skill_folder().joinpath("references", "owner.md").read_text(encoding="utf-8")
+    """No fixture: `references/curating.md`."""
+    owner = skill_folder().joinpath("references", "curating.md").read_text(encoding="utf-8")
 
     assert "`.cache/` is never backed up" in owner
     assert "rebuilt from the Versions" in owner

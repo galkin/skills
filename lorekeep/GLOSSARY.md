@@ -108,6 +108,14 @@ _Avoid_: check (a quiz in the first consuming Project), refresh, poll, sync
 A link from a finished work to the Source it rests on, as the work states it.
 _Avoid_: reference, usage
 
+**Reader**:
+The LLM step that finds a fact in the Store, opens it and cites the Source it rests on.
+_Avoid_: consumer, user
+
+**Curator**:
+The owner, keeping a Store over time: host and reading rules, Rechecks, Tags, backups.
+_Avoid_: admin, maintainer
+
 **Collector**:
 The LLM step that decides which Sources a piece of work needs before anyone writes it.
 _Avoid_: crawler, fetcher, researcher

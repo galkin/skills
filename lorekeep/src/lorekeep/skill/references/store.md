@@ -101,7 +101,7 @@ and:
   rule knows it.
 - `authority` — how far to rely on it for a fact, by the current host rules:
   - `primary` — a publisher documenting its own product or specification, or a law or standard
-    on its official journal (EUR-Lex, the Federal Register, nist.gov); cite it.
+    on its official journal ([reading.md](reading.md#what-to-cite)); cite it.
   - `official` — the publisher's other material (blog, announcements); cite with care.
   - `third-party` — anyone writing about someone else's product, or a host no rule knows;
     context, not a citation.
@@ -118,13 +118,28 @@ and:
 - `requested_url` — the address asked, normalised; it differs from `url` after a redirect or a
   Twin reduction. `add` has none of its own: it equals `url`.
 - `verified_at` — the last `unchanged` Recheck, else `fetched_at`.
-- `outcome` — what this call did (`stored`, `fresh`, `unchanged`, `changed`, `gone`, `error`,
-  `skipped`).
+- `outcome` — what this call did: `stored` (first fetch), `fresh` (returned without a request),
+  `unchanged`, `changed` (a new Version, the one returned), `gone` or `error` (the stored Version,
+  with a warning), or `skipped` (a browser-rendered Version, never rechecked).
+
+`search --json`: `line` is the matching line, `heading_line` the Section's heading (`null`, with
+`heading` `""`, before the first heading); `other_tags` is `0` when the scope is everything;
+`"relaxed": true` comes with the note line.
+
+```json
+{"results": [{"file": "/…/store/.cache/readings/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md", "line": 39, "heading_line": 14, "heading": "Jailbreak Protection > Jailbreak Detection", "snippet": "…server_endpoint: \"http://0.0.0.0:1337/heuristics\" [length_per_perplexity_threshold]: 89.79 prefix_suffix_perplexity_threshold: 1845.65 ``…", "url": "https://docs.nvidia.com/nemo/guardrails/latest/configure-guardrails/guardrail-catalog/jailbreak-protection", "tag": ["nvidia"], "publisher": "nvidia", "authority": "primary"}], "other_tags": 0}
+```
+
+`status --json`:
+
+```json
+{"versions": 5, "sources": 5, "tags": {"nvidia": 5}, "oldest_fetched_at": "2026-10-17T20:08:26Z", "newest_fetched_at": "2026-10-17T20:08:26Z", "checks": {"unchanged": 0, "changed": 0, "gone": 0, "error": 0}, "unknown_hosts": ["genai.owasp.org", "helm.sh"], "readings": 1, "rules": 6, "bytes": 303355, "browser": {"ready": true, "crawl4ai": "0.9.5", "detail": "Chromium starts", "fix": null}}
+```
 
 ## Readings
 
 A **Reading** is a Version's Markdown after the Project's reading rules (`[[readings]]`, see
-[owner.md](owner.md#lorekeeptoml)): the publisher's banner or menu dropped, a site suffix cut from
+[curating.md](curating.md#lorekeeptoml)): the publisher's banner or menu dropped, a site suffix cut from
 the first heading, a heading inserted before each article of a law. A rule only drops whole lines,
 cuts that suffix or inserts a heading line, and never touches a line inside a code fence or a
 table line, so every other line of a Reading is a line of its Version, byte for byte. `lorekeep
@@ -191,7 +206,7 @@ package and the `[[hosts]]` of the Store's `lorekeep.toml`; `lorekeep status --r
 merged table. A host matched by neither gets `publisher = <host>`, `authority = third-party`, and
 the unknown-host warning. A rule's `publisher` and `authority` reach every stored Version at once;
 its `twin`, `browser` and `cut` apply to new fetches only (how a page is obtained, not how it is
-judged). Writing rules: [owner.md](owner.md#lorekeeptoml).
+judged). Writing rules: [curating.md](curating.md#lorekeeptoml).
 
 ### Twins
 
