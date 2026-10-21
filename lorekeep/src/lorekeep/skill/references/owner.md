@@ -243,7 +243,11 @@ only reports the line.
 
 The Store's `lorekeep.toml` holds `bucket`, `freshness_days` (default 30) and `[[hosts]]` rules
 over the package's default table (`lorekeep status --rules` prints the merged table). A rule
-matches `host/path` by prefix and the longest matching prefix wins. Its keys:
+matches `host/path` by prefix and the longest matching prefix wins; a site's root is `host/`, so
+`https://agents.md` is under `agents.md/`. A GitHub issue, discussion or pull request
+(`github.com/<org>/<repo>/issues/`, `…/discussions/`, `…/pull/`, `…/pulls`, `github.com/orgs/<org>/discussions/`)
+is a user's contribution: `third-party` under its repository's publisher whatever rule makes the
+repository `primary`, unless a rule names that longer prefix itself. Its keys:
 
 - `prefix`, `publisher`, `authority` — required.
 - `twin` — `md-suffix`, `accept-header`, `raw` or `github-raw` (see [store.md](store.md#twins)).

@@ -14,7 +14,6 @@ Twin, once, taken over the page already fetched (a page that moved, whose old Tw
 from __future__ import annotations
 
 from dataclasses import replace
-from urllib.parse import urlsplit
 
 import httpx
 
@@ -24,7 +23,7 @@ from lorekeep.cascade.browser import BrowserStep
 from lorekeep.cascade.page import PageStep
 from lorekeep.cascade.step import Fallthrough, Fetched, Request, Same, Step
 from lorekeep.cascade.twin import TwinStep
-from lorekeep.urls import home_reason, rule_for, went_home
+from lorekeep.urls import home_reason, host_path, rule_for, went_home
 
 __all__ = [
     "BROWSER",
@@ -105,8 +104,7 @@ def redirected_twin(request: Request, page: Fetched) -> Fetched | None:
     """The Twin of the address the page step was redirected to, when its rule names one of
     `REDIRECTED_TWINS` and the Twin step has not asked that Twin already; `None` when there is
     none or it declined, and the page's own conversion stands."""
-    parts = urlsplit(page.final_url)
-    rule = rule_for(f"{(parts.hostname or '').lower()}{parts.path}", request.rules)
+    rule = rule_for(host_path(page.final_url), request.rules)
     if rule is None or rule.twin not in REDIRECTED_TWINS:
         return None
     address = twin.twin_url(page.final_url, rule)

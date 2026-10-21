@@ -51,7 +51,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
 
 from lorekeep import frontmatter, sections
 from lorekeep.project import (
@@ -63,6 +62,7 @@ from lorekeep.project import (
     removes_text,
 )
 from lorekeep.store import OWNER_SCHEME, lock, parse_version, stem
+from lorekeep.urls import host_path
 
 CACHE_DIR = ".cache"
 """The Store's folder of what is rebuilt from the Versions: never indexed as a Version, never
@@ -192,12 +192,6 @@ def rules_for(
         else:
             chosen.append(rule)
     return chosen
-
-
-def host_path(url: str) -> str:
-    """What a rule's `prefix` is matched against: the url's host, lower-cased, and path."""
-    parts = urlsplit(url)
-    return f"{(parts.hostname or '').lower()}{parts.path}"
 
 
 def covers(

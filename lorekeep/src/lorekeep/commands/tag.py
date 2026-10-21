@@ -25,7 +25,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     if args.prefix is not None:
         urls = source_urls(ctx.store, args.prefix)
         if not urls:
-            print(f"lorekeep: error: no Source's url starts with {args.prefix}", file=sys.stderr)
+            print(f"lorekeep: error: no Source's url is under {args.prefix}", file=sys.stderr)
             return 1
     else:
         found = latest(ctx.store, args.url, ctx.project.hosts)
