@@ -16,6 +16,7 @@ from __future__ import annotations
 import bisect
 import contextlib
 import csv
+import hashlib
 import json
 import sqlite3
 import sys
@@ -40,7 +41,7 @@ from lorekeep.store import (
     TagRow,
     VersionInfo,
 )
-from lorekeep.urls import normalise, unknown_host
+from lorekeep.urls import effective_trust, normalise, unknown_host
 
 _VERSION_COLUMNS = (
     "url",
@@ -58,13 +59,15 @@ _VERSION_COLUMNS = (
     "warnings",
 )
 _ORIGINAL_COLUMNS = ("url", "mediatype", "sha256", "stored")
-SCHEMA_VERSION = "6"
+SCHEMA_VERSION = "7"
 """Bumped whenever a table's columns or what they hold change, so an Index built by an older
 lorekeep reads as stale and is rebuilt with the new tables (2: `versions.canonical`; 3:
 `sections.heading_line` beside `sections.line`, which is now the Section's first text line; 4:
 `versions.warnings`, the Version's `warnings` as a JSON list; 5: `sections_fts` holds the text
 with its ligatures read as letters; 6: `sections.source`, the file a Section was read from — the
-Version's Reading where it has one — and `versions.reading`)."""
+Version's Reading where it has one — and `versions.reading`; 7: `versions.effective_publisher`
+and `versions.effective_authority`, the Version's trust under the host rules the Index was built
+with)."""
 
 _SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -72,7 +75,9 @@ CREATE TABLE IF NOT EXISTS versions(
   file TEXT PRIMARY KEY,
   {", ".join(f"{column} TEXT" for column in _VERSION_COLUMNS)},
   {", ".join(f"original_{column} TEXT" for column in _ORIGINAL_COLUMNS)},
-  reading TEXT
+  reading TEXT,
+  effective_publisher TEXT,
+  effective_authority TEXT
 );
 CREATE INDEX IF NOT EXISTS versions_url ON versions(url);
 CREATE TABLE IF NOT EXISTS tags(url TEXT, tag TEXT, added_at TEXT);
@@ -152,14 +157,14 @@ def rebuild(store: Path, project: Project) -> Counts:
 
 def ensure(store: Path, project: Project) -> Counts | None:
     """Bring the Index up to date before a reader queries it: compare `meta` with the files and
-    the Project's reading rules without any lock; only when the file is missing or stale take the
-    Store lock, compare again and rebuild in place. Returns the rebuild's counts, or `None` when
-    the Index was current, so six readers finding none produce one build and a query on a
-    current Index never waits."""
-    if _looks_current(store, project.readings):
+    the Project's reading and host rules without any lock; only when the file is missing or
+    stale take the Store lock, compare again and rebuild in place. Returns the rebuild's
+    counts, or `None` when the Index was current, so six readers finding none produce one build
+    and a query on a current Index never waits."""
+    if _looks_current(store, project):
         return None
     with store_module.lock(store):
-        if _looks_current(store, project.readings):
+        if _looks_current(store, project):
             return None
         return _rebuild_locked(store, project)
 
@@ -180,8 +185,8 @@ def report(counts: Counts | None, *, note: bool = True) -> None:
         print(warning, file=sys.stderr)
 
 
-def _looks_current(store: Path, rules: Sequence[ReadingRule]) -> bool:
-    with current(store, rules) as reader:
+def _looks_current(store: Path, project: Project) -> bool:
+    with current(store, project) as reader:
         return reader is not None
 
 
@@ -203,7 +208,7 @@ def _rebuild_locked(store: Path, project: Project) -> Counts:
             versions = sections = ignored = 0
             for path in sorted(store.glob("*.md")):
                 try:
-                    sections += _index_version(con, path)
+                    sections += _index_version(con, path, project.hosts)
                 except FrontmatterError as error:
                     store_module.not_a_version(path, error)
                     ignored += 1
@@ -214,7 +219,7 @@ def _rebuild_locked(store: Path, project: Project) -> Counts:
             aliases = _insert_rows(con, AliasRow, store_module.read_rows(store, AliasRow))
             cited, warnings = _read_citations(store, project.hosts)
             con.executemany("INSERT INTO citations VALUES(?, ?, ?)", cited)
-            _write_meta(con, store, ignored, readings.rules_hash(project.readings))
+            _write_meta(con, store, ignored, _rules_of(project))
             con.execute("COMMIT")
         except BaseException:
             con.execute("ROLLBACK")
@@ -299,9 +304,13 @@ def _as_of(text: str | None) -> str | None:
     return parsed.astimezone(UTC).strftime(TIME_FORMAT)
 
 
-def _index_version(con: sqlite3.Connection, path: Path) -> int:
+def _index_version(
+    con: sqlite3.Connection, path: Path, hosts: Sequence[HostRule] | None = None
+) -> int:
     """Insert one Version's row and its Sections (with their FTS rows), read from its Reading
-    when it has one; how many Sections."""
+    when it has one; how many Sections. Its effective trust is what `hosts` say of its `url`;
+    without them (a commit's notification) it is the frontmatter's, which the fetch took from
+    the very rules the Index was built with, or else the Index is stale by their hash."""
     data = path.read_bytes()
     head, body = store_module.parse_version(data)
     original = head.get("original")
@@ -311,6 +320,10 @@ def _index_version(con: sqlite3.Connection, path: Path) -> int:
     values += [_text(head.get(column)) for column in _VERSION_COLUMNS]
     values += [_text(original.get(column)) for column in _ORIGINAL_COLUMNS]
     values += [source if source != path.name else None]
+    if hosts is None:
+        values += [_text(head.get("publisher")), _text(head.get("authority"))]
+    else:
+        values += list(effective_trust(head, hosts))
     con.execute(f"INSERT INTO versions VALUES({', '.join('?' * len(values))})", values)
     return _index_sections(con, path.name, source, source_data, source_body)
 
@@ -411,6 +424,10 @@ _SCHEMA_KEY = "schema"
 _RULES_KEY = "reading_rules"
 """The `meta` key holding the hash of the reading rules the Index's Readings were built with."""
 
+_HOSTS_KEY = "host_rules"
+"""The `meta` key holding the hash of the host rules the Index's effective trust and Citation
+addresses were computed with."""
+
 _READINGS = "readings"
 """The prefix of the fingerprint's keys for `.cache/readings/`."""
 
@@ -439,20 +456,36 @@ _IGNORED = "md_ignored"
 so a commit can tell that `versions` still accounts for every `.md` file."""
 
 
-def _write_meta(con: sqlite3.Connection, store: Path, ignored: int, rules: str) -> None:
+def _rules_of(project: Project) -> dict[str, str]:
+    """The `meta` values naming the rules an Index is built under: its reading rules' hash and
+    its host rules', each of what the rules do, not where they were written."""
+    described = [
+        [rule.prefix, rule.publisher, rule.authority, rule.twin, rule.page_suffix]
+        for rule in project.hosts
+    ]
+    hosts = hashlib.sha256(json.dumps(described).encode()).hexdigest()
+    return {_RULES_KEY: readings.rules_hash(project.readings), _HOSTS_KEY: hosts}
+
+
+def _rules_recorded(con: sqlite3.Connection) -> dict[str, str]:
+    """The rule hashes `meta` holds, kept as they are by a notification."""
+    return {key: _meta_value(con, key) for key in (_RULES_KEY, _HOSTS_KEY)}
+
+
+def _write_meta(con: sqlite3.Connection, store: Path, ignored: int, rules: dict[str, str]) -> None:
     con.execute("DELETE FROM meta")
     values = [
         *_fingerprint(store),
         (_IGNORED, str(ignored)),
-        (_RULES_KEY, rules),
+        *rules.items(),
         (_SCHEMA_KEY, SCHEMA_VERSION),
     ]
     con.executemany("INSERT INTO meta(key, value) VALUES(?, ?)", values)
 
 
-def _is_current(store: Path, con: sqlite3.Connection, rules: str | None) -> bool:
+def _is_current(store: Path, con: sqlite3.Connection, rules: dict[str, str] | None) -> bool:
     """Whether the Index's `meta` still describes the Store's files and, when `rules` is given,
-    was built under the reading rules hashed `rules`; no lock is taken."""
+    was built under the rules it hashes (`_rules_of`); no lock is taken."""
     try:
         recorded = dict(con.execute("SELECT key, value FROM meta").fetchall())
     except sqlite3.Error:
@@ -460,7 +493,7 @@ def _is_current(store: Path, con: sqlite3.Connection, rules: str | None) -> bool
     recorded.pop(_IGNORED, None)
     if recorded.pop(_SCHEMA_KEY, None) != SCHEMA_VERSION:
         return False
-    built_under = recorded.pop(_RULES_KEY, None)
+    built_under = {key: recorded.pop(key, None) for key in (_RULES_KEY, _HOSTS_KEY)}
     if rules is not None and built_under != rules:
         return False
     return bool(recorded) and recorded == dict(_fingerprint(store))
@@ -510,7 +543,7 @@ def notify(
                 FILE_OF[AliasRow]: _notify_rows(con, AliasRow, aliases),
             }
             if _agrees(con, store, touched):
-                _write_meta(con, store, _ignored_of(con), _meta_value(con, _RULES_KEY))
+                _write_meta(con, store, _ignored_of(con), _rules_recorded(con))
             con.execute("COMMIT")
         except BaseException:
             con.execute("ROLLBACK")
@@ -546,7 +579,7 @@ def notify_reading(store: Path, version: Path) -> None:
                     for key, value in _fingerprint(store)
                     if not key.startswith(_READINGS)
                 ):
-                    _write_meta(con, store, _ignored_of(con), _meta_value(con, _RULES_KEY))
+                    _write_meta(con, store, _ignored_of(con), _rules_recorded(con))
             con.execute("COMMIT")
         except BaseException:
             con.execute("ROLLBACK")
@@ -636,7 +669,8 @@ def _agrees(con: sqlite3.Connection, store: Path, touched: dict[str, bool]) -> b
 class Hit:
     """`file` is the file searched, relative to the Store (the Version's Reading when it has
     one); `line` is that file's line of the first match in the Section (its first text line when
-    no line holds a query word as written); `heading_line` its heading's (`None` before any)."""
+    no line holds a query word as written); `heading_line` its heading's (`None` before any);
+    `publisher` and `authority` the Version's effective trust."""
 
     file: str
     line: int
@@ -645,6 +679,8 @@ class Hit:
     snippet: str
     url: str
     tags: list[str]
+    publisher: str
+    authority: str
 
 
 @dataclass(frozen=True)
@@ -681,11 +717,11 @@ class Summary:
 
 
 @contextlib.contextmanager
-def current(store: Path, rules: Sequence[ReadingRule] | None = None) -> Iterator[Reader | None]:
+def current(store: Path, project: Project | None = None) -> Iterator[Reader | None]:
     """A Reader over a current Index, or `None` when the Index is missing, stale (its `meta`
-    no longer describes the files or, with `rules`, it was built under other reading rules) or
-    unreadable, so the caller reads the files instead. Takes no lock and never rebuilds: the one
-    protocol every lookup follows."""
+    no longer describes the files or, with a `project`, it was built under other reading or host
+    rules) or unreadable, so the caller reads the files instead. Takes no lock and never
+    rebuilds: the one protocol every lookup follows."""
     if not _exists(store):
         yield None
         return
@@ -695,7 +731,7 @@ def current(store: Path, rules: Sequence[ReadingRule] | None = None) -> Iterator
         yield None
         return
     try:
-        digest = None if rules is None else readings.rules_hash(rules)
+        digest = None if project is None else _rules_of(project)
         yield Reader(store, con) if _is_current(store, con, digest) else None
     finally:
         con.close()
@@ -778,7 +814,8 @@ class Reader:
         filters, filter_args = _filters(scope)
         tag_filter, tag_args = _tag_filter(scope.tags)
         rows = con.execute(
-            f"SELECT s.source, s.line, s.heading_line, s.heading, s.body, {snippet}, l.url "
+            f"SELECT s.source, s.line, s.heading_line, s.heading, s.body, {snippet}, l.url, "
+            "l.effective_publisher, l.effective_authority "
             f"FROM {match_from} "
             f"JOIN latest l ON l.file = s.file WHERE {match_where}{filters}{tag_filter} "
             f"ORDER BY {order} LIMIT ?",
@@ -798,8 +835,10 @@ class Reader:
                 snippet=_snippet(unescape(text), needle) if exact else unescape(_one_line(text)),
                 url=url,
                 tags=_tags_of(con, url),
+                publisher=publisher,
+                authority=authority,
             )
-            for file, line, heading_line, heading, body, text, url in rows
+            for file, line, heading_line, heading, body, text, url, publisher, authority in rows
         ]
         other: int | None = None
         if scope.tags is not None:
@@ -845,8 +884,8 @@ class Reader:
 
     def summary(self) -> Summary:
         """Versions, Sources, Sources per Tag, the oldest and newest `fetched_at`, Rechecks per
-        result, the hosts no rule knew (a Version whose publisher is its url's host), and the
-        Versions that have a Reading."""
+        result, the hosts no rule knows (a Version whose effective publisher is its url's host),
+        and the Versions that have a Reading."""
         con = self.con
         versions, sources, oldest, newest, read = con.execute(
             "SELECT count(*), count(DISTINCT url), min(fetched_at), max(fetched_at), "
@@ -862,7 +901,9 @@ class Reader:
             checks[result] = count
         hosts = {
             host
-            for url, publisher in con.execute("SELECT DISTINCT url, publisher FROM versions")
+            for url, publisher in con.execute(
+                "SELECT DISTINCT url, effective_publisher FROM versions"
+            )
             if (host := unknown_host(url, publisher))
         }
         return Summary(
@@ -939,10 +980,10 @@ def _fts_query(query: str, *, any_word: bool = False) -> str:
 def _filters(scope: Scope) -> tuple[str, list[object]]:
     sql, args = "", []
     if scope.publisher is not None:
-        sql += " AND l.publisher = ?"
+        sql += " AND l.effective_publisher = ?"
         args.append(scope.publisher)
     if scope.authority is not None:
-        sql += " AND l.authority = ?"
+        sql += " AND l.effective_authority = ?"
         args.append(scope.authority)
     return sql, args
 

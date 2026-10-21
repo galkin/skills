@@ -6,8 +6,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from lorekeep.project import HostRule
 from lorekeep.recheck import verified_at
 from lorekeep.store import read_head
+from lorekeep.urls import effective_trust
 
 
 def scope_tags(
@@ -33,6 +35,7 @@ def version_json(
     outcome: str,
     *,
     asked: str,
+    rules: Sequence[HostRule],
     requested_url: str | None = None,
     reading: Path | None = None,
 ) -> dict[str, Any]:
@@ -40,8 +43,17 @@ def version_json(
     the command's argument exactly as given (`asked`, a fragment kept), the normalised address
     the caller asked for (`requested_url`, the Version's `url` when not given), when its
     publisher last confirmed it, and what the call did (`outcome`). With a `reading`, `path` is
-    the Reading's and `version` the Version's; every other field stays the Version's."""
+    the Reading's and `version` the Version's; every other field stays the Version's.
+    `publisher` and `authority` are the effective ones, what the current host `rules` say of its
+    `url`; the frontmatter's, captured at fetch, follow as `captured_publisher` and
+    `captured_authority` when they differ."""
     head = read_head(path)
+    publisher, authority = effective_trust(head, rules)
+    captured = {
+        f"captured_{key}": head[key]
+        for key, value in (("publisher", publisher), ("authority", authority))
+        if head[key] != value
+    }
     paths = {"path": str(reading), "version": str(path)} if reading else {"path": str(path)}
     return {
         **paths,
@@ -51,8 +63,9 @@ def version_json(
         "sha256": head["sha256"],
         "fetched_at": head["fetched_at"],
         "converter": head["converter"],
-        "publisher": head["publisher"],
-        "authority": head["authority"],
+        "publisher": publisher,
+        "authority": authority,
+        **captured,
         "verified_at": verified_at(store, head),
         "outcome": outcome,
     }

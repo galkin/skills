@@ -53,6 +53,8 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
                 "snippet": hit.snippet,
                 "url": hit.url,
                 "tag": hit.tags,
+                "publisher": hit.publisher,
+                "authority": hit.authority,
             }
             for hit in hits
         ]

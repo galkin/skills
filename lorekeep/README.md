@@ -137,11 +137,13 @@ inherited.
 | `github.com/`                      | `github`    | third-party | `github-raw`                                  |
 
 A host matched by no rule is stored with `publisher = <host>` and `authority = third-party`, and
-every `get` of it warns, so the table can be extended. A rule added after a page was fetched does
-not change its stored Versions (frontmatter is never rewritten). A Version a Recheck stores takes
-the new `publisher` and `authority`, but a Recheck rereads the page with the converter that stored
-it, so a new Twin rule reaches only a Source first fetched after it: fetch the pages into a new
-Store.
+every `get` of it warns, so the table can be extended. A rule's `publisher` and `authority` reach
+every stored Version at once: `get`, `search` and `status` judge a Version by the current rules,
+while its frontmatter keeps what they said at fetch (`get --json` shows it as
+`captured_authority` when they differ). Its `twin`, `browser` and `cut` say how a page is
+obtained, so they apply to new fetches only: a Recheck rereads the page with the converter that
+stored it, and a new Twin rule reaches only a Source first fetched after it — fetch the pages into
+a new Store.
 
 ## The first Store
 

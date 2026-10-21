@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
@@ -117,6 +117,16 @@ def trust(url: str, rules: Sequence[HostRule]) -> Trust:
     return Trust(
         host, "third-party", None, warning, f"lorekeep: note: {url} is third-party under no rule"
     )
+
+
+def effective_trust(head: Mapping[str, object], rules: Sequence[HostRule]) -> tuple[str, str]:
+    """`publisher` and `authority` of a Version as the current host rules judge its `url`; the
+    frontmatter's own (captured at fetch, never rewritten) for an owner's Source (`lorekeep add`),
+    which no host rule describes."""
+    if head.get("origin") == "owner":
+        return str(head["publisher"]), str(head["authority"])
+    found = trust(str(head["url"]), rules)
+    return found.publisher, found.authority
 
 
 def catch_all(rule: HostRule) -> bool:

@@ -88,8 +88,8 @@ path. The next command that reads the Index picks it up.
 `lorekeep index [--store DIR]`
 
 Rebuilds the Index (`sources.db`) from the files, first building the Readings that are missing
-or stale. Rarely needed: every reader rebuilds a stale Index (a change of the `[[readings]]` rules
-makes it stale), every write keeps it current.
+or stale. Rarely needed: every reader rebuilds a stale Index (a change of the `[[readings]]` or
+`[[hosts]]` rules makes it stale), every write keeps it current.
 
 - `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
 
@@ -270,8 +270,9 @@ A Project rule with the same prefix as a default rule replaces it, and a Project
 prefix wins over it. A rule that names neither `twin` nor `page_suffix` inherits both from the
 longest shorter prefix that names a `twin` — `github.com/<org>/` with only `publisher` and
 `authority` keeps `github-raw`, while `docs.langchain.com/` replaced without `twin` has no Twin —
-and `status --rules` marks them `(inherited)`; `browser` and `cut` are never inherited. A rule
-changed after pages were stored does not reach them on Recheck (see `recheck` above).
+and `status --rules` marks them `(inherited)`; `browser` and `cut` are never inherited. A rule's
+`twin`, `browser` or `cut` changed after pages were stored does not reach them on Recheck (see
+`recheck` above).
 
 `[[readings]]` rules make Readings (see [store.md](store.md#readings)), over the package's
 defaults (`readings.toml`: the Fern and Mintlify llms.txt banners; EUR-Lex's `Need help?` box
@@ -306,6 +307,6 @@ EUR-Lex for EU law, the Federal Register, nist.gov for NIST. An institution's re
 `authority` that way, since the skill tells a Run to report a Version that says otherwise.
 
 Pages a Run reports to you, and what fixes them: an unknown host or a mislabelled `authority` —
-a `[[hosts]]` rule; `thin content` — `uv tool install --editable '.[browser]'` from the lorekeep
+a `[[hosts]]` rule; it applies to every stored Version at once, without a new fetch; `thin content` — `uv tool install --editable '.[browser]'` from the lorekeep
 checkout (the README's Install section has the Chromium step); `unsupported media type`,
 `could not convert`, missing code blocks or tables — a lorekeep issue.

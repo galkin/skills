@@ -135,7 +135,13 @@ def report(args: argparse.Namespace, ctx: Context, path: Path, outcome: str) -> 
         return 0
     requested = normalise(args.url, ctx.project.hosts)
     printed = version_json(
-        ctx.store, path, outcome, asked=args.url, requested_url=requested, reading=reading.path
+        ctx.store,
+        path,
+        outcome,
+        asked=args.url,
+        requested_url=requested,
+        reading=reading.path,
+        rules=ctx.project.hosts,
     )
     print(json.dumps(printed))
     return 0
