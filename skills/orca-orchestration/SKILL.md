@@ -30,7 +30,7 @@ cd .agents/skills/orca-orchestration
 | `bin/runner status [--run-id <id>]`                                          | Per-step status, exit code, outputs and error; without `--run-id`, every run.                |
 | `bin/runner queue <q.yaml> --slot <worktree> [--resume <item> [--step <s>]]` | Continuous mode for one slot. Exit 0 queue empty or retired, 2 an item is held, 7 only held. |
 | `bin/runner queue <q.yaml> --status`                                         | Item states.                                                                                 |
-| `bin/adapter drain --run <run id>`                                            | Consumes worker heartbeats and done messages; exits 3 on a question or escalation.           |
+| `bin/adapter drain --run <run id>`                                            | Consumes worker heartbeats and done messages; exits 3 on a question or escalation. Only beside a running queue: see [adapter.md](references/adapter.md#commands). |
 | `bin/adapter unstall`, `bin/adapter close --worktree W`, `bin/adapter release --task <id>`      | Wake limit-stalled terminals; release the worktree's settled terminals the adapter started (`--all`: every terminal); release a settled task. |
 | `bin/adapter cost --worktree <slot> [--write]`                                | Tokens per worker session by item and step (joined through the launch ledger); `--write` records them beside the run state. |
 
