@@ -14,6 +14,7 @@ reference). The Dagu binary is never involved.
 - Outputs
 - continue_on, retry_policy, repeat_policy
 - Statuses and the run outcome
+- A targeted-fix round
 - Pitfalls
 
 ## DAG fields
@@ -100,6 +101,58 @@ Step: `not_started | running | succeeded | failed | skipped | canceled`. A depen
 eligible only when every dependency succeeded or was continued by its `continue_on`;
 otherwise it is `canceled`. Run: `succeeded`, `partially_succeeded` (something failed but was
 continued), `failed`. The `exit` handler runs in every case.
+
+## A targeted-fix round
+
+When a last review round leaves findings, a workflow does not have to stop at a hold: it can
+send what is left to the role that owns the work, have an independent reviewer check that
+correction alone, and hold only on what survives. Nothing beyond the subset is needed:
+steps gated by preconditions on the last count, `continue_on: skipped` so a clean count passes
+straight to the commit, and `--reuse-task` so each worker continues in the session that knows
+the findings. The tail of a workflow whose `count2` publishes `findings`:
+
+```yaml
+  - id: fix3                     # the owning role fixes the residual findings only
+    depends: count2
+    preconditions:
+      - condition: ${steps.count2.outputs.findings}
+        expected: "re:^[1-9]"
+    continue_on: skipped
+    run: $ADAPTER run … --role author --reuse-task ${steps.author.outputs.task} --title "Fix ${params.unit} r2 residue" --spec-template $TASKS/fix-residue.md
+    outputs: [{name: task}, {name: handle}]
+  - id: wait_fix3                # same precondition and continue_on on every step of the round
+    depends: fix3
+    …
+  - id: review3                  # a focused re-review: only r2's findings and the lines fixed for them
+    depends: wait_fix3
+    …
+    run: $ADAPTER run … --role reviewer --reuse-task ${steps.review2.outputs.task} --title "Review ${params.unit} r3" --spec-template $TASKS/review-residue.md
+  - id: wait_review3
+    …
+  - id: count3
+    …
+    outputs: [{name: findings}]
+  - id: held_r3                  # only what the targeted round left reaches the coordinator
+    depends: count3
+    preconditions:
+      - condition: ${steps.count3.outputs.findings}
+        expected: "re:^[1-9]"
+    continue_on: skipped
+    run: echo "findings left after the targeted fix" >&2; exit 2
+  - id: commit
+    depends: held_r3
+```
+
+Every step of the round carries the precondition on `count2`, so when r1 or r2 left nothing
+the whole round is skipped (its outputs stay unresolved, which `re:` reads as not met; see
+Pitfalls). What "focused" means is the Task text's business, not the workflow's: the re-review
+template names the residual findings and the corrected lines, and nothing else. After
+`held_r3`, `retry --step fix3 --downstream` (or the queue's `--resume <item> --step fix3`) is
+one more targeted round, a third choice beside a waiver and a fix by hand. `tests/test_engine.py`
+runs this tail clean, fixed and still held.
+
+`repeat_policy` is not the tool here: it reruns one step, and the fix and the re-review are two
+workers whose task ids are separate step outputs the next round reuses.
 
 ## Pitfalls
 

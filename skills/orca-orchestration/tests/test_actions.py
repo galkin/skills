@@ -166,3 +166,18 @@ def test_index_dirtied_during_the_checks_is_refused_once_the_lock_is_held(repos)
     assert r.returncode == 1 and "INTEGRATION INDEX DIRTY" in r.stdout
     assert not (main / ".task" / "merge.lock").exists()
     assert git(main, "log", "--format=%s", "-1") == "init"
+
+
+def test_check_only_runs_the_full_checks_and_commits_nothing(repos):
+    """A coordinator's hand edit is checked by the commit step's own checks before the run resumes."""
+    main, slot = repos
+    (slot / "src" / "b.md").write_text("b\n")
+    r = run_commit(slot, main, "Add b", CHECK_ONLY="1", CHECKS_FULL="test -f src/b.md")
+    assert r.returncode == 0 and "CHECKS PASSED" in r.stdout, r.stdout + r.stderr
+    assert git(slot, "status", "--porcelain") == "?? src/b.md"  # nothing staged or committed
+    assert git(main, "log", "--format=%s", "-1") == "init"
+    r = run_commit(slot, main, "Add b", CHECK_ONLY="1", CHECKS_FULL="echo unformatted >&2; exit 1")
+    assert r.returncode == 1 and "CHECKS FAILED" in r.stdout
+    assert "unformatted" in (main / ".task" / "ci" / "Add_b.check.log").read_text()
+    r = run_commit(slot, main, "Add b", CHECKS_FULL="test -f src/b.md")  # the resumed run's commit step
+    assert r.returncode == 0 and git(main, "log", "--format=%s", "-1") == "Add b"

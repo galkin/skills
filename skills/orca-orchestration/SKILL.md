@@ -27,10 +27,11 @@ cd .agents/skills/orca-orchestration
 | `bin/runner validate <wf.yaml>`                                              | Schema and load-time checks; prints the inferred step order.                                 |
 | `bin/runner run <wf.yaml> --run-id <id> --param k=v …`                       | One run. Exit 0 succeeded or partially succeeded, 1 failed, 2 invalid.                       |
 | `bin/runner retry <wf.yaml> --run-id <id> [--step <s> [--downstream]]`       | Rerun failed and not-run steps, or reset one step and its descendants and continue.          |
+| `bin/runner exec <wf.yaml> --run-id <id> --step <s> [--env K=V …]`           | One step's commands once, in the run's params, outputs and env, outside the run (`run.json` untouched); exits with the command's code. |
 | `bin/runner status [--run-id <id>]`                                          | Per-step status, exit code, outputs and error; without `--run-id`, every run.                |
 | `bin/runner queue <q.yaml> --slot <worktree> [--resume <item> [--step <s>]]` | Continuous mode for one slot. Exit 0 queue empty or retired, 2 an item is held, 7 only held. |
 | `bin/runner queue <q.yaml> --status`                                         | Item states.                                                                                 |
-| `bin/adapter drain --run <run id>`                                            | Consumes worker heartbeats and done messages; exits 3 on a question or escalation. Only beside a running queue: see [adapter.md](references/adapter.md#commands). |
+| `bin/adapter drain --run <run id>`                                            | Consumes worker heartbeats and done messages and keeps running; prints an `ATTENTION` line for every unanswered question or escalation, again each round until its thread holds a reply. `--ack <msg id>` answers one that needs no words. Only beside a running queue: see [adapter.md](references/adapter.md#commands). |
 | `bin/adapter unstall`, `bin/adapter close --worktree W`, `bin/adapter release --task <id>`      | Wake limit-stalled terminals; release the worktree's settled terminals the adapter started (`--all`: every terminal); release a settled task. |
 | `bin/adapter cost --worktree <slot> [--write]`                                | Tokens per worker session by item and step (joined through the launch ledger); `--write` records them beside the run state. |
 
@@ -56,7 +57,12 @@ the workflow file, not to the cwd.
    while the admission hook says no, and waits out a usage limit by itself.
 3. **Sleep.** Watch `slots.log` for `HELD`, `queue empty` and `retired`, and `drain.log` for
    `ATTENTION` (a Monitor on those words, or a check every 30 minutes). Read nothing else
-   unless one of them fires: every step's output is on disk for later.
+   unless one of them fires: every step's output is on disk for later. Every `ATTENTION` line
+   names a message id, its sender and its age, and the open ones are printed together again
+   (at once when another arrives, else every `--repeat-sec`) until each is answered: `orca
+   orchestration reply --id <msg id> --body …`, or `bin/adapter drain --run <run id> --ack
+   <msg id>` for an escalation that needs action rather than words. The drain does not exit
+   on a question, so it never needs restarting to see the next one.
 4. **Decide** when a slot exits 2 (`HELD`):
 
    ```sh
@@ -65,11 +71,24 @@ the workflow file, not to the cwd.
    cat $W/.task/runs/<item>/steps/<step>.<n>.log              # what it said
    ```
 
-   Fix the cause (the project doc says how: a waiver file, a follow-up to the worker, a fix
-   by hand, or leave it for the workflow's next round), then
-   restart the slot on that item: `… queue <q.yaml> --slot <slot> --resume <item> --step <step>`.
-   The slot finishes the item and continues the queue. For a unit outside the queue,
+   Fix the cause (the project doc says which of these it allows), then restart the slot on
+   that item: `… queue <q.yaml> --slot <slot> --resume <item> --step <step>`. The slot
+   finishes the item and continues the queue. For a unit outside the queue,
    `bin/runner retry <wf.yaml> --run-id <id> --step <step> --downstream` does the same.
+
+   - **Another targeted-fix round**, when the workflow declares one
+     ([workflow-syntax.md](references/workflow-syntax.md#a-targeted-fix-round)): resume at its
+     fix step; the owning role fixes what is left and a focused re-review checks that
+     correction. Prefer it to a waiver for a finding nobody accepts.
+   - **A fix by hand** goes through the commit step like a worker's, never through `git
+     commit` or an edit in the integration worktree: edit the **slot**, run the workflow's own
+     commit step in check-only mode,
+     `bin/runner --runs-dir $W/.task/runs exec <wf.yaml> --run-id <item> --step <commit step> --env CHECK_ONLY=1`
+     (the same `CHECKS_FULL`, nothing committed; see [actions.md](references/actions.md)),
+     repeat until it passes, then resume at the decision step so the workflow's commit step
+     commits and merges the edit. A hand fix is unreviewed: the project doc says what records
+     it (a waiver, or a targeted round's re-review).
+   - **A waiver or a follow-up to the worker**, as the project doc defines them.
 5. **Finish.** `touch <runs dir>/q/retire-<slot name>` retires an idle slot; `bin/adapter close
    --worktree <slot>` releases the terminals the adapter started there once their tasks settled
    and names what it kept (a retained one, the owner's own); `bin/adapter cost --worktree <slot>
@@ -84,7 +103,8 @@ simply listing it.
 ## Run state
 
 `<runs dir>/<id>/run.json` (status, params, every step's attempts, exit codes, outputs),
-`run.log`, `steps/<step>.<n>.log` and `.out` (the attempt's output records);
+`run.log`, `steps/<step>.<n>.log` and `.out` (the attempt's output records), `steps/<step>.exec.<n>.log`
+(a `runner exec` by hand);
 `<runs dir>/q/<item>.active|held|done` for the queue. Plain files: nothing needs the runner
 or Orca to be running to be read.
 

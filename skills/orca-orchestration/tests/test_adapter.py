@@ -193,15 +193,102 @@ def test_unstall_wakes_only_stalled_terminals_outside_the_excluded_worktree(orca
     assert sent[0][1] == "2"
 
 
-def test_drain_acks_benign_batches_and_stops_on_attention(orca_env, capsys):
-    orca_env.state(messages=[
-        {"deliveryId": "d1", "messages": [{"id": "m1", "type": "heartbeat"}, {"id": "m2", "type": "worker_done"}]},
-        {"deliveryId": "d2", "messages": [{"id": "m3", "type": "question", "subject": "Which path?", "body": "A or B"}]},
-    ])
+def q(mid, sender, created, subject="Question", body="A or B", kind="question", task=None):
+    m = {"id": mid, "type": kind, "run_id": "r", "to_handle": "run:r", "from_handle": sender, "thread_id": mid,
+         "subject": subject, "body": body, "created_at": created}
+    if task:
+        m["payload"] = json.dumps({"taskId": task})
+    return m
+
+
+def attention(out):
+    return [l for l in out.splitlines() if l.startswith("ATTENTION")]
+
+
+def test_drain_acks_benign_batches(orca_env, capsys):
+    orca_env.state(messages=[{"deliveryId": "d1", "messages": [{"id": "m1", "type": "heartbeat"}, {"id": "m2", "type": "worker_done"}]}])
     assert cli.main(["drain", "--run", "r", "--once"]) == 0
     assert orca_env.state().get("acked") == ["d1"]
+    assert attention(capsys.readouterr().out) == []
+
+
+def test_drain_prints_every_pending_question_until_it_is_answered(orca_env, capsys, monkeypatch):
+    """Two questions, one batch each: both are printed with id, sender and age, on every call,
+    until each thread holds a reply (the live defect: the second was never shown)."""
+    monkeypatch.setattr(time, "time", lambda: 1792591200.0)  # 2026-10-21T14:00:00Z
+    orca_env.state(messages=[
+        {"deliveryId": "d1", "messages": [{"id": "h", "type": "heartbeat"}, q("msg_a", "dispatch:ctx_1", "2026-10-21T13:50:00Z", task="task_1")]},
+    ])
     assert cli.main(["drain", "--run", "r", "--once"]) == cli.EXIT_ATTENTION
-    assert "ATTENTION d2 m3 question | Which path? | A or B" in capsys.readouterr().out
+    assert attention(capsys.readouterr().out) == ["ATTENTION msg_a question from dispatch:ctx_1 task task_1 age 10m | Question | A or B"]
+    assert orca_env.state()["acked"] == ["d1"]  # recorded in the inbox, so the batch is acked and the next one comes
+    orca_env.state(messages=[{"deliveryId": "d2", "messages": [q("msg_b", "dispatch:ctx_2", "2026-10-21T13:57:00Z", body="line one\nline two")]}])
+    assert cli.main(["drain", "--run", "r", "--once"]) == cli.EXIT_ATTENTION
+    lines = attention(capsys.readouterr().out)
+    assert [l.split()[1] for l in lines] == ["msg_a", "msg_b"]  # the first is still open: printed again
+    assert lines[1] == "ATTENTION msg_b question from dispatch:ctx_2 age 3m | Question | line one line two"
+    orca_env.state(messages=[])
+    assert cli.main(["drain", "--run", "r", "--once"]) == cli.EXIT_ATTENTION  # no new batch: both still shown
+    assert [l.split()[1] for l in attention(capsys.readouterr().out)] == ["msg_a", "msg_b"]
+    assert cli.main(["drain", "--run", "r", "--ack", "msg_a", "--body", "Take A."]) == 0  # a reply in its thread
+    assert cli.main(["drain", "--run", "r", "--once"]) == cli.EXIT_ATTENTION
+    assert [l.split()[1] for l in attention(capsys.readouterr().out)] == ["msg_b"]
+    assert ["orchestration", "reply", "--id", "msg_a", "--body", "Take A.", "--json"] in orca_env.calls()
+
+
+def test_drain_finds_a_question_that_arrived_while_no_drain_ran(orca_env, capsys):
+    """The inbox is the record: a question another check consumed, or one older than this
+    drain, is still printed until answered; another run's and an answered one are not."""
+    answered = q("msg_old", "dispatch:ctx_3", "2026-10-21T12:00:00Z")
+    orca_env.state(delivered=[q("msg_new", "dispatch:ctx_4", "2026-10-21T13:00:00Z", kind="escalation", subject="Blocked"),
+                              answered, {**q("msg_x", "dispatch:ctx_9", "2026-10-21T13:00:00Z"), "run_id": "other", "to_handle": "run:other"}],
+                   inbox=[{"id": "msg_re", "thread_id": "msg_old", "from_handle": "run:r", "type": "status", "created_at": "2026-10-21T12:01:00Z"}])
+    assert cli.main(["drain", "--run", "r", "--once"]) == cli.EXIT_ATTENTION
+    lines = attention(capsys.readouterr().out)
+    assert len(lines) == 1 and lines[0].startswith("ATTENTION msg_new escalation from dispatch:ctx_4 ") and "| Blocked |" in lines[0]
+
+
+def test_drain_does_not_count_the_askers_own_follow_up_as_an_answer(orca_env, capsys):
+    orca_env.state(delivered=[q("msg_a", "dispatch:ctx_1", "2026-10-21T13:00:00Z")],
+                   inbox=[{"id": "msg_f", "thread_id": "msg_a", "from_handle": "dispatch:ctx_1", "type": "question", "created_at": "2026-10-21T13:05:00Z"}])
+    assert cli.main(["drain", "--run", "r", "--once"]) == cli.EXIT_ATTENTION
+    assert [l.split()[1] for l in attention(capsys.readouterr().out)] == ["msg_a"]
+
+
+def test_drain_keeps_a_question_batch_unacked_while_the_inbox_is_down(orca_env, capsys):
+    orca_env.state(inbox_down=True, messages=[{"deliveryId": "d1", "messages": [q("msg_a", "dispatch:ctx_1", "2026-10-21T13:00:00Z")]}])
+    assert cli.main(["drain", "--run", "r", "--once"]) == cli.EXIT_ATTENTION
+    assert [l.split()[1] for l in attention(capsys.readouterr().out)] == ["msg_a"]  # shown from the batch itself
+    assert not orca_env.state().get("acked")  # not recorded anywhere it can be found again: replayed
+    orca_env.state(inbox_down=False)
+    assert cli.main(["drain", "--run", "r", "--once"]) == cli.EXIT_ATTENTION
+    assert orca_env.state()["acked"] == ["d1"]
+
+
+def test_drain_keeps_running_past_a_question(orca_env, capsys, monkeypatch):
+    """The long-running drain does not exit on the first question (that left the second
+    unseen for ten minutes): a later one is printed beside the first, at once."""
+    orca_env.state(messages=[{"deliveryId": "d1", "messages": [q("msg_a", "dispatch:ctx_1", "2026-10-21T13:00:00Z")]}])
+    real, checks = cli.orca.call, []
+
+    class Stop(Exception):
+        pass
+
+    def call(*argv, **kw):
+        if argv[1] == "check":
+            checks.append(argv)
+            if len(checks) == 2:  # the second question is sent while the first is still open
+                orca_env.state(messages=orca_env.state()["messages"] + [{"deliveryId": "d2", "messages": [q("msg_b", "dispatch:ctx_2", "2026-10-21T13:02:00Z")]}])
+            if len(checks) > 3:
+                raise Stop
+        return real(*argv, **kw)
+
+    monkeypatch.setattr(cli.orca, "call", call)
+    with pytest.raises(Stop):
+        cli.main(["drain", "--run", "r"])
+    ids = [l.split()[1] for l in attention(capsys.readouterr().out)]
+    assert ids == ["msg_a", "msg_a", "msg_b"]  # the new one brings every open one back into view
+    assert orca_env.state()["acked"] == ["d1", "d2"]
 
 
 def test_close_and_release(orca_env, wt, capsys):

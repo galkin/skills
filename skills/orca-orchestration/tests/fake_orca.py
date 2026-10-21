@@ -127,11 +127,31 @@ def main():
                 return reply({"error": "unknown task"}, ok=False)
             return reply({"dispatch": {"id": t["dispatch"], "assignee_handle": t["handle"]}})
         if cmd == "check":
+            # A bound Run replays its oldest batch until it is acked (Orca 1.4.229), so a batch
+            # leaves the queue on --ack, not on delivery.
             if "--ack" in rest:
-                s["acked"] = s.get("acked", []) + [opt(rest, "--ack")]
-            batch = s["messages"].pop(0) if s["messages"] and "--wait" in rest else {"deliveryId": None, "messages": []}
+                d = opt(rest, "--ack")
+                s["acked"] = s.get("acked", []) + [d]
+                if s["messages"] and s["messages"][0].get("deliveryId") == d:
+                    s["delivered"] = s.get("delivered", []) + s["messages"].pop(0)["messages"]
+            batch = s["messages"][0] if s["messages"] and "--wait" in rest else {"deliveryId": None, "messages": []}
             save(s)
             return reply(batch)
+        if cmd == "inbox":
+            if s.get("inbox_down"):
+                reply({"code": "runtime_unavailable", "message": "inbox unavailable"}, ok=False)
+                sys.exit(1)
+            # Everything ever sent, newest first: replies, delivered batches, queued batches.
+            rows = s.get("inbox", []) + s.get("delivered", []) + [m for b in s["messages"] for m in b["messages"]]
+            rows = sorted(rows, key=lambda m: m.get("created_at", ""), reverse=True)
+            return reply({"messages": rows[: int(opt(rest, "--limit", "1000"))], "count": len(rows)})
+        if cmd == "reply":
+            mid = opt(rest, "--id")
+            s["n"] += 1
+            s.setdefault("inbox", []).append({"id": f"msg_r{s['n']}", "thread_id": mid, "type": "status", "from_handle": "run:coordinator",
+                                              "subject": "Re:", "body": opt(rest, "--body"), "created_at": "9999"})
+            save(s)
+            return reply({"message": {"id": f"msg_r{s['n']}"}})
         if cmd == "worker-release":
             d = opt(rest, "--dispatch")
             if d in s.get("retained", []):  # the user took the terminal: Orca keeps it (Orca 1.4.229 answers ok with state retained)

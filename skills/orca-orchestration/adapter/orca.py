@@ -128,6 +128,23 @@ def release(dispatch: str) -> tuple[bool, str]:
     return ok, ": ".join(x for x in (state, reason) if x) or str(r)[:200]
 
 
+# ----- messages -------------------------------------------------------------------
+
+
+def inbox(limit: int = 2000) -> list[dict]:
+    """The newest ``limit`` messages across recipients (Orca 1.4.229: ``id``, ``run_id``,
+    ``to_handle``, ``from_handle``, ``type``, ``thread_id``, ``created_at``, newest first).
+    Raises ``OrcaError`` when Orca does not answer, so a caller never mistakes an outage for
+    an empty mailbox."""
+    r = call("orchestration", "inbox", "--limit", str(limit))
+    rows = r.get("messages") or r.get("items") or []
+    return [m for m in rows if isinstance(m, dict)]
+
+
+def reply(message_id: str, body: str) -> None:
+    call("orchestration", "reply", "--id", message_id, "--body", body)
+
+
 # ----- terminals ------------------------------------------------------------------
 
 
