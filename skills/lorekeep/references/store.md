@@ -60,14 +60,9 @@ Every value is a quoted string (`warnings` a list of them); a field without a va
   publishers name the wrong page (this one names the 2023 risk) or a pinned release.
 - `fetched_at` — when this Version was received, UTC ISO 8601.
 - `sha256` — the hash of the Markdown body; its first 8 hex digits name the file.
-- `publisher` — who authored the content; the host itself when no host rule knows it.
-- `authority` — how far to rely on it for a fact:
-  - `primary` — a publisher documenting its own product or specification, or a law or standard
-    on its official journal (EUR-Lex, the Federal Register, nist.gov); cite it.
-  - `official` — the publisher's other material (blog, announcements); cite with care.
-  - `third-party` — anyone writing about someone else's product, or a host no rule knows;
-    context, not a citation.
-  - `generated` — produced by an LLM and added by the owner; never cite it.
+- `publisher`, `authority` — as the host rules gave them when this Version was fetched; never
+  rewritten. `get`, `search` and `status` use the effective ones, from the current rules; `get
+  --json` shows the stored one beside it as `captured_authority` when they differ.
 - `converter` — what made the Markdown:
   - `md-twin` — the publisher's own Markdown, as published.
   - `raw-twin` — a GitHub file read from its raw address: Markdown as published, any other file
@@ -93,13 +88,26 @@ Every value is a quoted string (`warnings` a list of them); a field without a va
   `lorekeep: warning: <url>: <warning>` on every return of the Version. Absent when nothing was
   lost, and on every Version stored before the field existed.
 
-Nothing that changes later is in the frontmatter: Tags are rows of `tags.csv`, Rechecks rows of
-`checks.csv`.
+Nothing that changes later is read from the frontmatter: Tags are rows of `tags.csv`, Rechecks
+rows of `checks.csv`, and the effective `publisher` and `authority` come from the current host
+rules.
 
 ## What `--json` adds
 
 `get --json` and `add --json` print the frontmatter's `url`, `sha256`, `fetched_at`, `converter`,
-`publisher`, `authority`, and:
+and:
+
+- `publisher` — who authored the content, by the current host rules; the host itself when no
+  rule knows it.
+- `authority` — how far to rely on it for a fact, by the current host rules:
+  - `primary` — a publisher documenting its own product or specification, or a law or standard
+    on its official journal (EUR-Lex, the Federal Register, nist.gov); cite it.
+  - `official` — the publisher's other material (blog, announcements); cite with care.
+  - `third-party` — anyone writing about someone else's product, or a host no rule knows;
+    context, not a citation.
+  - `generated` — produced by an LLM and added by the owner; never cite it.
+- `captured_publisher`, `captured_authority` — the frontmatter's, only when the current rules
+  say otherwise. An owner's Source keeps its own: no host rule describes it.
 
 - `path` — the absolute path of the file to read: the Version's Reading when it has one, else the
   Version.
@@ -181,7 +189,9 @@ guides/cca/subagents,https://claude.termidy.com/learn/ccar-f/agentic-architectur
 Two layers of rules, matched on `host/path` by longest prefix: the default table shipped in the
 package and the `[[hosts]]` of the Store's `lorekeep.toml`; `lorekeep status --rules` prints the
 merged table. A host matched by neither gets `publisher = <host>`, `authority = third-party`, and
-the unknown-host warning. Writing rules: [owner.md](owner.md#lorekeeptoml).
+the unknown-host warning. A rule's `publisher` and `authority` reach every stored Version at once;
+its `twin`, `browser` and `cut` apply to new fetches only (how a page is obtained, not how it is
+judged). Writing rules: [owner.md](owner.md#lorekeeptoml).
 
 ### Twins
 
