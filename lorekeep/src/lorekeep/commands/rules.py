@@ -34,6 +34,7 @@ from lorekeep.project import (
     with_readings,
 )
 from lorekeep.store import OWNER_SCHEME, lock, parse_version, scan
+from lorekeep.urls import host_path
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
@@ -107,7 +108,7 @@ def sample(args: argparse.Namespace, ctx: Context) -> int:
     prefix = args.prefix.split("://", 1)[-1]
     newest: dict[str, _Version] = {}
     for version in versions(ctx.store):
-        if not readings.host_path(str(version.head["url"])).startswith(prefix):
+        if not host_path(str(version.head["url"])).startswith(prefix):
             continue
         url = str(version.head["url"])
         held = newest.get(url)

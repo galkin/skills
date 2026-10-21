@@ -1,0 +1,8 @@
+{
+  "url": "https://agents.md",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html; charset=UTF-8"
+  },
+  "body": "body.html"
+}

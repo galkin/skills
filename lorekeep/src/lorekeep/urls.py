@@ -24,7 +24,7 @@ def normalise(url: str, rules: Sequence[HostRule]) -> str:
     netloc = f"{host}:{parts.port}" if parts.port else host
     path = re.sub(r"/{2,}", "/", parts.path) or "/"
     pieces = [piece for piece in parts.query.split("&") if piece]
-    rule = rule_for(f"{host}{path}", rules)
+    rule = rule_for(host_path(url), rules)
     if rule is not None:
         path, pieces = twins.to_page(path, pieces, rule)
     query = [
@@ -72,10 +72,41 @@ def _root(path: str) -> bool:
     return rest == "" or ("/" not in rest and rest.startswith("index."))
 
 
+def host_path(url: str) -> str:
+    """What a rule's `prefix` is matched against: the url's host, lower-cased, and its path,
+    duplicate slashes collapsed, with `/` for a root's empty one, so `https://agents.md` is under
+    `agents.md/`."""
+    parts = urlsplit(url.strip())
+    return f"{(parts.hostname or '').lower()}{re.sub(r'/{2,}', '/', parts.path) or '/'}"
+
+
 def rule_for(host_path: str, rules: Sequence[HostRule]) -> HostRule | None:
     """The rule with the longest `prefix` that `host/path` starts with, or `None`."""
     matching = [rule for rule in rules if host_path.startswith(rule.prefix)]
     return max(matching, key=lambda rule: len(rule.prefix), default=None)
+
+
+def under(url: str, prefix: str) -> bool:
+    """Whether a stored `url` is under a `--prefix` URL: it starts with it, or it is the root
+    `prefix` names, which `normalise` stores without its slash (`https://agents.md`)."""
+    return url.startswith(prefix) or url == bare_root(prefix)
+
+
+def bare_root(prefix: str) -> str | None:
+    """`prefix` without its slash when it is a site's root (`https://agents.md/`), else `None`."""
+    parts = urlsplit(prefix)
+    if parts.scheme and parts.netloc and parts.path == "/" and not parts.query:
+        return prefix[:-1]
+    return None
+
+
+# A user's contribution on GitHub — an issue, a discussion, a pull request — under its repository
+# or its organisation: third-party whoever the repository's rule makes primary, as Wikipedia's
+# WP:USERG rules user-generated content out as a source.
+CONTRIBUTION = re.compile(
+    r"github\.com/(?:orgs/(?P<org>[^/]+)|[^/]+/[^/]+)/"
+    r"(?P<kind>issues|discussions|pulls?)(?:/|$)"
+)
 
 
 def unknown_host(url: str, publisher: str) -> str | None:
@@ -102,10 +133,12 @@ def trust(url: str, rules: Sequence[HostRule]) -> Trust:
     under its own name, with a warning for stderr that a Run passes on to the owner. A
     `third-party` verdict no rule made for this page's publisher — no rule, or a catch-all — is
     named in a note, so a Run sees it without reading `authority`."""
-    parts = urlsplit(url)
-    host = (parts.hostname or "").lower()
-    rule = rule_for(f"{host}{parts.path}", rules)
+    host = (urlsplit(url).hostname or "").lower()
+    rule = rule_for(host_path(url), rules)
     if rule is not None:
+        contribution = _contribution(url, rule, rules)
+        if contribution is not None:
+            return contribution
         note = None
         if rule.authority == "third-party" and catch_all(rule):
             note = f"lorekeep: note: {url} is third-party under the {rule.prefix} rule"
@@ -117,6 +150,24 @@ def trust(url: str, rules: Sequence[HostRule]) -> Trust:
     return Trust(
         host, "third-party", None, warning, f"lorekeep: note: {url} is third-party under no rule"
     )
+
+
+def _contribution(url: str, rule: HostRule, rules: Sequence[HostRule]) -> Trust | None:
+    """The trust of a GitHub contribution `rule` would make primary: `third-party` under the
+    publisher of its repository's rule (of the organisation's, for `orgs/<org>/discussions`),
+    with a note. `None` when `url` is no contribution, when `rule` already says so, or when
+    `rule` names the contribution's own prefix or a longer one."""
+    found = CONTRIBUTION.match(host_path(url))
+    if found is None or len(rule.prefix) >= found.end("kind"):
+        return None
+    repository = rule
+    if found["org"] is not None and catch_all(rule):
+        repository = rule_for(f"github.com/{found['org']}/", rules) or rule
+    if repository is rule and rule.authority == "third-party":
+        return None
+    kind = {"issues": "issue", "discussions": "discussion"}.get(found["kind"], "pull request")
+    note = f"lorekeep: note: {url} is third-party: a GitHub {kind} is a user's contribution"
+    return Trust(repository.publisher, "third-party", rule, None, note)
 
 
 def effective_trust(head: Mapping[str, object], rules: Sequence[HostRule]) -> tuple[str, str]:

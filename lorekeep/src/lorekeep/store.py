@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 
 from lorekeep import frontmatter, history
 from lorekeep.project import HostRule
-from lorekeep.urls import normalise
+from lorekeep.urls import normalise, under
 
 LOCK_FILE = ".lorekeep.lock"
 TAGS_FILE = "tags.csv"
@@ -280,14 +280,14 @@ def latest(store: Path, url: str, rules: Sequence[HostRule]) -> VersionInfo | No
 
 
 def source_urls(store: Path, prefix: str) -> list[str]:
-    """Every Source's `url` that starts with `prefix`, sorted: from a current Index without a
+    """Every Source's `url` `under` `prefix`, sorted: from a current Index without a
     lock, else from every `.md` frontmatter. Never rebuilds the Index."""
     from lorekeep import index
 
     with index.current(store) as reader:
         if reader is not None:
             return reader.urls(prefix)
-    return sorted({info.url for info in scan(store) if info.url.startswith(prefix)})
+    return sorted({info.url for info in scan(store) if under(info.url, prefix)})
 
 
 def scan(store: Path) -> Iterator[VersionInfo]:

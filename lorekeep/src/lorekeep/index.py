@@ -41,7 +41,7 @@ from lorekeep.store import (
     TagRow,
     VersionInfo,
 )
-from lorekeep.urls import effective_trust, normalise, unknown_host
+from lorekeep.urls import bare_root, effective_trust, normalise, unknown_host
 
 _VERSION_COLUMNS = (
     "url",
@@ -59,7 +59,7 @@ _VERSION_COLUMNS = (
     "warnings",
 )
 _ORIGINAL_COLUMNS = ("url", "mediatype", "sha256", "stored")
-SCHEMA_VERSION = "7"
+SCHEMA_VERSION = "8"
 """Bumped whenever a table's columns or what they hold change, so an Index built by an older
 lorekeep reads as stale and is rebuilt with the new tables (2: `versions.canonical`; 3:
 `sections.heading_line` beside `sections.line`, which is now the Section's first text line; 4:
@@ -67,7 +67,8 @@ lorekeep reads as stale and is rebuilt with the new tables (2: `versions.canonic
 with its ligatures read as letters; 6: `sections.source`, the file a Section was read from — the
 Version's Reading where it has one — and `versions.reading`; 7: `versions.effective_publisher`
 and `versions.effective_authority`, the Version's trust under the host rules the Index was built
-with)."""
+with; 8: the same columns judged with a site's root under its `host/` rule and a GitHub
+contribution third-party)."""
 
 _SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -767,21 +768,21 @@ class Reader:
         return VersionInfo.read(self.store / row[0])
 
     def urls(self, prefix: str) -> list[str]:
-        """Every Source's `url` that starts with `prefix`, sorted."""
+        """Every Source's `url` `under` `prefix` (`urls.under`), sorted."""
         rows = self.con.execute(
-            "SELECT DISTINCT url FROM versions WHERE substr(url, 1, ?) = ? ORDER BY url",
-            (len(prefix), prefix),
+            "SELECT DISTINCT url FROM versions WHERE substr(url, 1, ?) = ? OR url = ? ORDER BY url",
+            (len(prefix), prefix, bare_root(prefix)),
         )
         return [url for (url,) in rows]
 
     def latest_in_scope(self, scope: Scope, prefix: str | None = None) -> list[VersionInfo]:
-        """The latest Version of every Source in `scope` whose `url` starts with `prefix`, by
+        """The latest Version of every Source in `scope` whose `url` is `under` `prefix`, by
         url."""
         filters, args = _filters(scope)
         tag_filter, tag_args = _tag_filter(scope.tags)
         if prefix is not None:
-            filters += " AND substr(l.url, 1, ?) = ?"
-            args += [len(prefix), prefix]
+            filters += " AND (substr(l.url, 1, ?) = ? OR l.url = ?)"
+            args += [len(prefix), prefix, bare_root(prefix)]
         rows = self.con.execute(
             f"SELECT l.file FROM latest l WHERE 1{filters}{tag_filter} ORDER BY l.url",
             [*args, *tag_args],
