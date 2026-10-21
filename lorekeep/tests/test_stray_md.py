@@ -76,7 +76,7 @@ def test_index_counts_only_versions_and_names_the_stray_file_once(tmp_path: Path
 
 def test_status_counts_neither_a_version_nor_a_host_for_the_stray_file(tmp_path: Path) -> None:
     store = make_store(tmp_path)
-    write_version(store, FIXTURES / "aws-prompt-caching.twin", fetched_at="2026-10-02T00:00:00Z")
+    write_version(store, FIXTURES / "helm-rollback.html", fetched_at="2026-10-02T00:00:00Z")
     (store / "note.md").write_text("# A note\n\nNot a Version.\n", encoding="utf-8")
     edges, _ = edges_over()
 
@@ -86,7 +86,7 @@ def test_status_counts_neither_a_version_nor_a_host_for_the_stray_file(tmp_path:
     assert result.stderr.count(WARNING) == 1, result.stderr
     found = json.loads(result.stdout)
     assert (found["versions"], found["sources"]) == (1, 1)
-    assert found["unknown_hosts"] == ["docs.aws.amazon.com"]
+    assert found["unknown_hosts"] == ["helm.sh"]
 
 
 def test_get_without_an_index_finds_the_stored_version_past_the_stray_file(

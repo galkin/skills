@@ -67,7 +67,11 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     if args.json:
         # The file is what the Store has: an earlier `add` of the same text keeps its fields.
         outcome = "unchanged" if already else "stored"
-        print(json.dumps(version_json(ctx.store, path, outcome, asked=args.file)))
+        print(
+            json.dumps(
+                version_json(ctx.store, path, outcome, asked=args.file, rules=ctx.project.hosts)
+            )
+        )
     else:
         print(path)
     return 0

@@ -61,7 +61,8 @@ _Avoid_: vendor (not every publisher is one), site, origin
 **Authority**:
 How far a Source can be relied on for a fact: `primary` (a publisher documenting its own product or
 specification), `official` (the publisher's other material), `third-party` (anyone writing about
-someone else's product), or `generated` (produced by an LLM).
+someone else's product), or `generated` (produced by an LLM). A fetched Version's authority is the
+one the current host rules give its `url`; its frontmatter keeps the one captured at fetch.
 _Avoid_: citation, verdict, trust level
 
 ### Where it lives

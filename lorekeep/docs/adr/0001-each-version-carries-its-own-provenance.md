@@ -35,6 +35,12 @@ A Source the owner provides rather than fetches (research pasted from a chat) ha
 Nothing that grows over time is in the frontmatter: which Tags a Source carries (ADR 0008) and when
 it was rechecked (ADR 0007) live in append-only files beside it, because a Version is written once.
 
+`publisher` and `authority` are what the host rules said when the Version was fetched. `get`,
+`search` and `status` judge a fetched Version by the current rules instead, so a rule added later
+reaches every stored Version without rewriting one; `get --json` prints the captured values beside
+the effective ones when they differ, and the package's `sources` table copies the captured ones,
+because it describes the files (amended in 0.2.5).
+
 ## Considered Options
 
 - **RO-Crate (+ BagIt).** Rejected: its strength is lineage from inputs to outputs, which the

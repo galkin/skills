@@ -20,12 +20,13 @@ NIM_OVERVIEW = (
 )
 NIM_INTRODUCTION = "https://docs.nvidia.com/nim/large-language-models/latest/introduction.html"
 AWS = "https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html"
-GOOGLE = "https://cloud.google.com/vertex-ai/docs/generative-ai/learn/overview"
+GOOGLE = "https://vertex.unknown.test/generative-ai/overview"
 
 
 def mixed_store(store: Path) -> None:
-    """Six Versions of five Sources: two hosts no rule knows (publisher equal to the host), one
-    known publisher, one owner's note; three Tags; a `checks.csv` of every outcome."""
+    """Six Versions of five Sources: one host no rule knows, one whose Versions were stored as
+    unknown (publisher equal to the host) before the default rule for it, one known publisher,
+    one owner's note; three Tags; a `checks.csv` of every outcome."""
     write_version(store, FIXTURES / "nim-overview.html", fetched_at="2026-08-01T00:00:00Z")
     write_version(
         store,
@@ -41,7 +42,9 @@ def mixed_store(store: Path) -> None:
         publisher="aws",
         authority="primary",
     )
-    write_version(store, FIXTURES / "google-overview.html", fetched_at="2026-08-03T12:00:00Z")
+    write_version(
+        store, FIXTURES / "google-overview.html", fetched_at="2026-08-03T12:00:00Z", url=GOOGLE
+    )
     write_version(
         store,
         FIXTURES / "termidy-effective-prompts.html",
@@ -88,7 +91,7 @@ def test_status_json_is_one_object_in_the_spec_shape(tmp_path: Path) -> None:
         "oldest_fetched_at": "2026-07-15T08:00:00Z",
         "newest_fetched_at": "2026-08-04T09:30:00Z",
         "checks": {"unchanged": 3, "changed": 1, "gone": 1, "error": 1},
-        "unknown_hosts": ["cloud.google.com", "docs.nvidia.com"],
+        "unknown_hosts": ["vertex.unknown.test"],
         "readings": 0,
         "rules": 6,
         "bytes": store_bytes(tmp_path),
@@ -108,7 +111,7 @@ def test_status_prints_every_figure_as_text(tmp_path: Path) -> None:
     assert "Oldest fetched_at: 2026-07-15T08:00:00Z" in lines
     assert "Newest fetched_at: 2026-08-04T09:30:00Z" in lines
     assert "Rechecks: 3 unchanged, 1 changed, 1 gone, 1 error" in lines
-    assert "Unknown hosts: cloud.google.com, docs.nvidia.com" in lines
+    assert "Unknown hosts: vertex.unknown.test" in lines
     assert f"Size on disk: {store_bytes(tmp_path)} bytes" in lines
     assert "Browser: ready (Crawl4AI 0.9.5)" in lines
 
@@ -128,14 +131,14 @@ def test_status_on_a_store_without_an_index_builds_it_first(tmp_path: Path) -> N
 def test_status_sees_a_version_copied_in_after_the_index_was_built(tmp_path: Path) -> None:
     mixed_store(tmp_path)
     assert run_cli(["index", "--store", str(tmp_path)]).exit_code == 0
-    write_version(tmp_path, FIXTURES / "termidy-ethical-ai.html", fetched_at="2026-09-01T00:00:00Z")
+    write_version(tmp_path, FIXTURES / "helm-rollback.html", fetched_at="2026-09-01T00:00:00Z")
 
     result = run_cli(["status", "--json", "--store", str(tmp_path)])
 
     found = json.loads(result.stdout)
     assert (found["versions"], found["sources"]) == (7, 6)
     assert found["newest_fetched_at"] == "2026-09-01T00:00:00Z"
-    assert "claude.termidy.com" in found["unknown_hosts"]
+    assert "helm.sh" in found["unknown_hosts"]
 
 
 def test_status_of_an_empty_store_has_no_fetch_times(tmp_path: Path) -> None:

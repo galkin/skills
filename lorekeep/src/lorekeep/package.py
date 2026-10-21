@@ -2,6 +2,8 @@
 
 `regenerate` is the only writer and runs under the Store lock: a resource for each CSV that exists,
 typed by its columns, and one `sources` resource whose `data` is inline, one row per Version.
+Its `publisher` and `authority` are the frontmatter's, as captured at fetch: the package describes
+the files, and the current host rules' verdict is the Index's (ADR 0001).
 """
 
 from __future__ import annotations

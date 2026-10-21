@@ -345,6 +345,12 @@ def test_without_a_tag_the_scope_is_everything_and_no_line_is_printed(tmp_path: 
 
 def test_tag_publisher_and_authority_filter_the_scope(tmp_path: Path) -> None:
     three_twins(tmp_path)
+    # The filters read the host rules, not the frontmatter: Foundry is `official` by this rule.
+    (tmp_path / "lorekeep.toml").write_text(
+        '[[hosts]]\nprefix = "learn.microsoft.com/"\npublisher = "microsoft"\n'
+        'authority = "official"\ntwin = "accept-header"\n',
+        encoding="utf-8",
+    )
     run_cli(["index", "--store", str(tmp_path)])
 
     def hosts(*argv: str) -> set[str]:
@@ -402,7 +408,17 @@ def test_json_prints_results_and_the_other_tags_count(tmp_path: Path) -> None:
     assert data["other_tags"] == 1
     assert len(data["results"]) == 3
     for hit in data["results"]:
-        assert set(hit) == {"file", "line", "heading_line", "heading", "snippet", "url", "tag"}
+        assert set(hit) == {
+            "file",
+            "line",
+            "heading_line",
+            "heading",
+            "snippet",
+            "url",
+            "tag",
+            "publisher",
+            "authority",
+        }
         assert Path(hit["file"]).parent == tmp_path
         assert isinstance(hit["line"], int)
         assert hit["url"] == AWS

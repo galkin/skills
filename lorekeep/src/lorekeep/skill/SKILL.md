@@ -75,8 +75,8 @@ Parallel `get`s against one Store are safe: writers take a lock; one page gets o
   journal, and report a Version whose `authority` says otherwise.
 - A `third-party` verdict from no rule or a whole-host rule prints a note on every `get`
   (`lorekeep: note: <url> is third-party under the github.com/ rule`, or `under no rule`); a page
-  the guide treats as primary there (a vendor's repository; report when unsure) is reported to the
-  owner, who may add a host rule; until then it is context. `status --rules` shows the rules.
+  the guide treats as primary (a vendor's repository; report when unsure) is reported to the owner,
+  who may add a host rule; until then it is context — the next `get` shows the new authority.
 
 ## stderr lines and what to do
 
@@ -214,7 +214,7 @@ no matches
 `"relaxed": true` comes with the note line.
 
 ```json
-{"results": [{"file": "/…/store/.cache/readings/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md", "line": 39, "heading_line": 14, "heading": "Jailbreak Protection > Jailbreak Detection", "snippet": "…server_endpoint: \"http://0.0.0.0:1337/heuristics\" [length_per_perplexity_threshold]: 89.79 prefix_suffix_perplexity_threshold: 1845.65 ``…", "url": "https://docs.nvidia.com/nemo/guardrails/latest/configure-guardrails/guardrail-catalog/jailbreak-protection", "tag": ["nvidia"]}], "other_tags": 0}
+{"results": [{"file": "/…/store/.cache/readings/docs.nvidia.com--nemo-guardrails-latest-configure-guardrails-guardrail-catalog-jailbreak-protection--96543394.md", "line": 39, "heading_line": 14, "heading": "Jailbreak Protection > Jailbreak Detection", "snippet": "…server_endpoint: \"http://0.0.0.0:1337/heuristics\" [length_per_perplexity_threshold]: 89.79 prefix_suffix_perplexity_threshold: 1845.65 ``…", "url": "https://docs.nvidia.com/nemo/guardrails/latest/configure-guardrails/guardrail-catalog/jailbreak-protection", "tag": ["nvidia"], "publisher": "nvidia", "authority": "primary"}], "other_tags": 0}
 ```
 
 ## `lorekeep status`
