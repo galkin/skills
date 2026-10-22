@@ -1,4 +1,5 @@
-"""`read`: build the Readings that are missing or stale, under a prefix or in the whole Store."""
+"""`read`: build the Readings that are missing or stale, under a prefix or in the whole Store; a
+withdrawn Source's Versions get none."""
 
 from __future__ import annotations
 
@@ -8,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from lorekeep import readings
 from lorekeep.commands import plural
-from lorekeep.store import OWNER_SCHEME, scan
+from lorekeep.store import OWNER_SCHEME, scan, withdrawn
 from lorekeep.urls import under
 
 if TYPE_CHECKING:
@@ -17,8 +18,9 @@ if TYPE_CHECKING:
 
 def run(args: argparse.Namespace, ctx: Context) -> int:
     built = current = 0
+    taken_back = withdrawn(ctx.store)
     for info in scan(ctx.store):
-        if info.url.startswith(OWNER_SCHEME):
+        if info.url.startswith(OWNER_SCHEME) or info.url in taken_back:
             continue
         if args.prefix and not under(info.url, args.prefix):
             continue

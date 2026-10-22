@@ -46,6 +46,10 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
     print(f"Store: {ctx.store}")
     print(f"{plural(found.versions, 'Version')} of {plural(found.sources, 'Source')}")
     print(
+        f"Withdrawn: {plural(found.withdrawn_sources, 'Source')} "
+        f"({plural(found.withdrawn_versions, 'Version')})"
+    )
+    print(
         f"Readings: {found.readings} of {plural(found.versions, 'Version')}, "
         f"{plural(len(ctx.project.readings), 'rule')}"
     )

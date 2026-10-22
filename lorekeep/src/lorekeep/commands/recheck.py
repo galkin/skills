@@ -1,5 +1,6 @@
 """`recheck`: ask the publisher of every Source in scope whether it changed, and with
-`--citations` list the works whose cited Sources changed since they were written."""
+`--citations` list the works whose cited Sources changed since they were written. A withdrawn
+Source is in no scope, and a work citing one is a failure of `--citations`."""
 
 from __future__ import annotations
 
@@ -59,11 +60,19 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
 
 
 def report_citations(reader: index.Reader) -> int:
-    """A pure report: no request, no Tag, nothing written."""
+    """A pure report: no request, no Tag, nothing written. Exits 1 when a work cites a withdrawn
+    Source, after naming each such Citation on stderr."""
     found, warnings = reader.revisits()
     for warning in warnings:
         print(warning, file=sys.stderr)
     for revisit in found:
         old, new = revisit.old_sha256[:8], revisit.new_sha256[:8]
         print(f"{revisit.work_id}, {revisit.url}, {old} → {new}")
-    return 0
+    failures = reader.withdrawn_citations()
+    for cited in failures:
+        print(
+            f"lorekeep: error: {cited.work_id} cites {cited.url}, withdrawn at "
+            f"{cited.withdrawn_at}: {cited.reason}",
+            file=sys.stderr,
+        )
+    return 1 if failures else 0

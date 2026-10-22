@@ -167,7 +167,7 @@ its settings and exit codes, and which reference each way of using it reads. A *
 the Store and cites what it finds ([`references/reading.md`](src/lorekeep/skill/references/reading.md));
 a **Collector** fills it for a guide or a section, then reports what failed
 ([`references/collecting.md`](src/lorekeep/skill/references/collecting.md)); the owner curates it
-with `recheck`, `tag add`, `backup`, `restore`, `index`, `skill` and `[[hosts]]` rules
+with `recheck`, `tag add`, `withdraw`, `backup`, `restore`, `index`, `skill` and `[[hosts]]` rules
 ([`references/curating.md`](src/lorekeep/skill/references/curating.md)).
 [`references/store.md`](src/lorekeep/skill/references/store.md) holds the Store's layout,
 frontmatter, `--json` fields and `citations.csv`. It ships
@@ -188,9 +188,9 @@ its skill lock (such as `skills-lock.json`).
 ## Backup and recovery
 
 `lorekeep backup` copies the Store to `gs://<bucket>` with `gcloud storage`: an `rsync
---no-clobber` that never deletes and never replaces an object, then a `cp` of the six files that
-grow (`tags.csv`, `checks.csv`, `aliases.csv`, `citations.csv`, `datapackage.json`,
-`lorekeep.toml`), whose history the bucket's versioning keeps. The Index, the lock file and
+--no-clobber` that never deletes and never replaces an object, then a `cp` of the seven files
+that grow (`tags.csv`, `checks.csv`, `aliases.csv`, `withdrawals.csv`, `citations.csv`,
+`datapackage.json`, `lorekeep.toml`), whose history the bucket's versioning keeps. The Index, the lock file and
 half-written files are left out. Both upload with `--gzip-in-flight-all`, compressed on the wire
 only, because the Store's HTML and Markdown shrink about fivefold and the upload is the wait. Run `lorekeep backup --dry-run` first to see what it would do.
 It needs an authenticated `gcloud` (`gcloud auth login`).
