@@ -10,7 +10,7 @@ The **Curator**, the owner, keeps a Store over time with these commands; a Run n
 Asks the publisher of every Source in scope whether it changed since its Latest Version (a
 conditional request when the server supports one), records every answer in `checks.csv`, and
 stores a changed page as a new Version beside the old. `owner:` Sources and browser-rendered
-Versions are `skipped`.
+Versions are `skipped`; a withdrawn Source is left out ([store.md](store.md#withdrawals)).
 
 - `--tag TAG` — limit the scope to this Tag; repeat it for several (default: `$LOREKEEP_TAG`,
   else everything).
@@ -37,7 +37,8 @@ guides/cca/subagents, https://claude.termidy.com/learn/ccar-f/agentic-architectu
 `--dry-run` prints `would ask <address>` or `skipped <url>: <reason>` per Source, then
 `Would ask N Sources; N skipped`. `--citations` prints one line per work to revisit
 (`<work_id>, <url>, <old sha8> → <new sha8>`), nothing when there is none, and a warning per cited
-`url` with no Version.
+`url` with no Version; a work citing a withdrawn Source fails it
+([store.md](store.md#withdrawals)).
 
 ## `lorekeep tag add`
 
@@ -54,13 +55,40 @@ tagged https://docs.nvidia.com/nemo/guardrails/latest/configure-guardrails/guard
 Tagged 1 Source guardrails; 0 already carried it
 ```
 
+## `lorekeep withdraw`
+
+`lorekeep withdraw URL --reason TEXT [--undo] [--store DIR]`
+
+Takes a Source stored by mistake out of every Run's view without removing a file (ADR 0010):
+appends a `withdrawals.csv` row naming the Source, which covers every Version of it. `URL` is
+resolved as `get` resolves it — normalised, Twin-reduced, through `aliases.csv` — so the address a
+Run reported works. What a withdrawal changes, command by command: [store.md](store.md#withdrawals).
+
+- `--reason TEXT` — why, kept in the row (required, for `--undo` too).
+- `--undo` — take the withdrawal back: appends an `undo` row; the Source is searchable again once
+  the next reader rebuilds the Index and its Readings.
+- `--store DIR` — the Store folder (default: `$LOREKEEP_STORE`).
+
+A URL with no Source exits `2` and writes nothing. A second `withdraw` of a withdrawn Source, or an
+`--undo` of one not withdrawn, writes nothing and says so (exit `0`).
+
+```text
+$ lorekeep withdraw https://www.okf.dev/ --reason "parked domain, not the OKF specification"
+Withdrew https://www.okf.dev/: parked domain, not the OKF specification
+$ lorekeep withdraw https://www.okf.dev/ --reason "again"
+https://www.okf.dev/ was already withdrawn at 2026-10-22T19:40:00Z: parked domain, not the OKF specification; nothing written
+$ lorekeep withdraw --undo https://www.okf.dev/ --reason "the owner took it back"
+Brought back https://www.okf.dev/ (withdrawn at 2026-10-22T19:40:00Z: parked domain, not the OKF specification)
+```
+
 ## `lorekeep backup`
 
 `lorekeep backup [--dry-run] [--store DIR]`
 
 Copies the Store to the Project's bucket (`bucket` in `lorekeep.toml`) with `gcloud storage`,
 never deleting there and never replacing a Version or an Original; the growing files (`tags.csv`,
-`checks.csv`, `aliases.csv`, `citations.csv`, `datapackage.json`, `lorekeep.toml`) are copied
+`checks.csv`, `aliases.csv`, `withdrawals.csv`, `citations.csv`, `datapackage.json`,
+`lorekeep.toml`) are copied
 every time and the bucket's versioning keeps their history. Regenerates `datapackage.json` first.
 Uploads are gzipped on the wire only; the bucket holds the files as they are.
 `.cache/` is never backed up, nor is the Index: the Readings in it are rebuilt from the Versions
@@ -101,7 +129,7 @@ Indexed 2 Versions, 26 Sections, 1 Tag row, 1 Recheck, 0 aliases, 1 Citation int
 
 `lorekeep read [--prefix URL] [--force] [--store DIR]`
 
-Builds the Reading of every Version (owner-added ones aside) whose Reading is missing or stale:
+Builds the Reading of every Version (owner-added and [withdrawn](store.md#withdrawals) ones aside) whose Reading is missing or stale:
 the Version after the `[[readings]]` rules that apply to it, in `.cache/readings/<stem>.md` (see
 [store.md](store.md#readings)). Rarely needed: `get` builds the Reading it returns, `recheck` the
 Reading of a changed page, and `search` every missing or stale one when it rebuilds the Index. A

@@ -33,7 +33,7 @@ from lorekeep.project import (
     removes_text,
     with_readings,
 )
-from lorekeep.store import OWNER_SCHEME, lock, parse_version, scan
+from lorekeep.store import OWNER_SCHEME, kept, lock, parse_version
 from lorekeep.urls import host_path
 
 if TYPE_CHECKING:
@@ -80,9 +80,10 @@ class _Version:
 
 
 def versions(store: Path) -> list[_Version]:
-    """Every Version in the Store that may have a Reading (`owner:` Sources never do)."""
+    """Every Version in the Store that may have a Reading (`owner:` and withdrawn Sources never
+    do)."""
     found: list[_Version] = []
-    for info in scan(store):
+    for info in kept(store):
         if info.url.startswith(OWNER_SCHEME):
             continue
         data = info.path.read_bytes()

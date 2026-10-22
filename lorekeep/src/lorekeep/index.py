@@ -1,14 +1,15 @@
 """The Index: `sources.db`, derived from the Store's files.
 
-It holds every Version's Provenance, the rows of `tags.csv`, `checks.csv` and `aliases.csv`, and
-the Versions' Sections with an FTS5 table over them, each Section read from the Version's Reading
-where it has one (else the Version) and naming that file. It is rebuilt in place, in one
-transaction, under the Store lock (`rebuild`, `ensure`), which first builds the Readings that are
-missing or stale; every commit and every Reading built or removed notifies it (`notify`,
-`notify_reading`), so it stays current between rebuilds. It answers through one `Reader`:
-`current` opens one over a current Index without any lock and never rebuilds (`None` when the
-Index is missing, stale or unreadable, and the caller reads the files); `ensured` brings the Index
-up to date first.
+It holds every Version's Provenance, the rows of `tags.csv`, `checks.csv`, `aliases.csv` and
+`withdrawals.csv`, and the Versions' Sections with an FTS5 table over them, each Section read from
+the Version's Reading where it has one (else the Version) and naming that file; a withdrawn Source
+(ADR 0010) keeps its `versions` rows, so its address still resolves, and has no Sections. It is
+rebuilt in place, in one transaction, under the Store lock (`rebuild`, `ensure`), which first builds
+the Readings that are missing or stale; every commit and every Reading built or removed notifies it
+(`notify`, `notify_reading`), so it stays current between rebuilds. It answers through one `Reader`:
+`current` opens one over a current Index without any lock and never rebuilds (`None` when the Index
+is missing, stale or unreadable, and the caller reads the files); `ensured` brings the Index up to
+date first.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ import hashlib
 import json
 import sqlite3
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Container, Iterator, Sequence
 from dataclasses import astuple, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -40,6 +41,7 @@ from lorekeep.store import (
     Row,
     TagRow,
     VersionInfo,
+    WithdrawalRow,
 )
 from lorekeep.urls import bare_root, effective_trust, normalise, unknown_host
 
@@ -59,7 +61,7 @@ _VERSION_COLUMNS = (
     "warnings",
 )
 _ORIGINAL_COLUMNS = ("url", "mediatype", "sha256", "stored")
-SCHEMA_VERSION = "8"
+SCHEMA_VERSION = "9"
 """Bumped whenever a table's columns or what they hold change, so an Index built by an older
 lorekeep reads as stale and is rebuilt with the new tables (2: `versions.canonical`; 3:
 `sections.heading_line` beside `sections.line`, which is now the Section's first text line; 4:
@@ -68,7 +70,8 @@ with its ligatures read as letters; 6: `sections.source`, the file a Section was
 Version's Reading where it has one — and `versions.reading`; 7: `versions.effective_publisher`
 and `versions.effective_authority`, the Version's trust under the host rules the Index was built
 with; 8: the same columns judged with a site's root under its `host/` rule and a GitHub
-contribution third-party)."""
+contribution third-party; 9: `withdrawals` and the view `withdrawn`, and no Sections of a
+withdrawn Source)."""
 
 _SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -87,6 +90,8 @@ CREATE TABLE IF NOT EXISTS checks(url TEXT, checked_at TEXT, result TEXT, status
 CREATE INDEX IF NOT EXISTS checks_url ON checks(url);
 CREATE TABLE IF NOT EXISTS aliases(alias TEXT, url TEXT, added_at TEXT);
 CREATE TABLE IF NOT EXISTS citations(work_id TEXT, url TEXT, as_of TEXT);
+CREATE TABLE IF NOT EXISTS withdrawals(url TEXT, recorded_at TEXT, action TEXT, reason TEXT);
+CREATE INDEX IF NOT EXISTS withdrawals_url ON withdrawals(url);
 CREATE TABLE IF NOT EXISTS sections(
   id INTEGER PRIMARY KEY,
   file TEXT NOT NULL,
@@ -117,6 +122,13 @@ WHERE v.file = (
   ) DESC, w.fetched_at DESC, w.file
   LIMIT 1
 );
+-- The Sources withdrawn now, as `store.withdrawn` says: those whose last row (in file order, which
+-- is `rowid` order) is a `withdraw`.
+DROP VIEW IF EXISTS withdrawn;
+CREATE VIEW withdrawn AS
+SELECT w.url, w.recorded_at, w.reason FROM withdrawals w
+WHERE w.action = 'withdraw'
+  AND w.rowid = (SELECT max(x.rowid) FROM withdrawals x WHERE x.url = w.url);
 """
 
 
@@ -192,7 +204,9 @@ def _looks_current(store: Path, project: Project) -> bool:
 
 
 def _rebuild_locked(store: Path, project: Project) -> Counts:
-    built = _ensure_readings(store, project.readings)
+    withdrawals = store_module.read_rows(store, WithdrawalRow)
+    withdrawn = store_module.in_force(withdrawals)
+    built = _ensure_readings(store, project.readings, withdrawn)
     con = _connect(store)
     try:
         if _schema_of(con) != SCHEMA_VERSION:
@@ -202,14 +216,23 @@ def _rebuild_locked(store: Path, project: Project) -> Counts:
         con.executescript(_SCHEMA)
         con.execute("BEGIN IMMEDIATE")
         try:
-            tables = ("versions", "tags", "checks", "aliases", "citations", "sections", "meta")
+            tables = (
+                "versions",
+                "tags",
+                "checks",
+                "aliases",
+                "withdrawals",
+                "citations",
+                "sections",
+                "meta",
+            )
             for table in tables:
                 con.execute(f"DELETE FROM {table}")
             con.execute("INSERT INTO sections_fts(sections_fts) VALUES('delete-all')")
             versions = sections = ignored = 0
             for path in sorted(store.glob("*.md")):
                 try:
-                    sections += _index_version(con, path, project.hosts)
+                    sections += _index_version(con, path, project.hosts, withdrawn)
                 except FrontmatterError as error:
                     store_module.not_a_version(path, error)
                     ignored += 1
@@ -218,6 +241,7 @@ def _rebuild_locked(store: Path, project: Project) -> Counts:
             tags = _insert_rows(con, TagRow, store_module.read_rows(store, TagRow))
             checks = _insert_rows(con, RecheckRow, store_module.read_rows(store, RecheckRow))
             aliases = _insert_rows(con, AliasRow, store_module.read_rows(store, AliasRow))
+            _insert_rows(con, WithdrawalRow, withdrawals)
             cited, warnings = _read_citations(store, project.hosts)
             con.executemany("INSERT INTO citations VALUES(?, ?, ?)", cited)
             _write_meta(con, store, ignored, _rules_of(project))
@@ -230,13 +254,18 @@ def _rebuild_locked(store: Path, project: Project) -> Counts:
     return Counts(versions, sections, tags, checks, aliases, len(cited), (*built, *warnings))
 
 
-def _ensure_readings(store: Path, rules: Sequence[ReadingRule]) -> list[str]:
+def _ensure_readings(
+    store: Path, rules: Sequence[ReadingRule], withdrawn: Container[str]
+) -> list[str]:
     """Build every Version's Reading that is missing or stale, the Store lock held; the guard's
     warnings of each one built now (or left out because its only rule was held back), as `read`
-    prints them. A file that is not a Version is left to the rebuild to name."""
+    prints them. A file that is not a Version is left to the rebuild to name, and a withdrawn
+    Version gets no Reading."""
     warnings: list[str] = []
     for path in sorted(store.glob("*.md")):
         try:
+            if store_module.read_head(path)["url"] in withdrawn:
+                continue
             reading = readings.ensure_held(store, path, rules)
         except FrontmatterError:
             continue
@@ -306,12 +335,16 @@ def _as_of(text: str | None) -> str | None:
 
 
 def _index_version(
-    con: sqlite3.Connection, path: Path, hosts: Sequence[HostRule] | None = None
+    con: sqlite3.Connection,
+    path: Path,
+    hosts: Sequence[HostRule] | None = None,
+    withdrawn: Container[str] = (),
 ) -> int:
     """Insert one Version's row and its Sections (with their FTS rows), read from its Reading
-    when it has one; how many Sections. Its effective trust is what `hosts` say of its `url`;
-    without them (a commit's notification) it is the frontmatter's, which the fetch took from
-    the very rules the Index was built with, or else the Index is stale by their hash."""
+    when it has one; how many Sections — none when its Source is `withdrawn`. Its effective
+    trust is what `hosts` say of its `url`; without them (a commit's notification) it is the
+    frontmatter's, which the fetch took from the very rules the Index was built with, or else the
+    Index is stale by their hash."""
     data = path.read_bytes()
     head, body = store_module.parse_version(data)
     original = head.get("original")
@@ -326,6 +359,8 @@ def _index_version(
     else:
         values += list(effective_trust(head, hosts))
     con.execute(f"INSERT INTO versions VALUES({', '.join('?' * len(values))})", values)
+    if head["url"] in withdrawn:
+        return 0
     return _index_sections(con, path.name, source, source_data, source_body)
 
 
@@ -434,6 +469,7 @@ _READINGS = "readings"
 
 _DROP = """
 DROP VIEW IF EXISTS latest;
+DROP VIEW IF EXISTS withdrawn;
 DROP TABLE IF EXISTS sections_fts;
 DROP TABLE IF EXISTS sections;
 DROP TABLE IF EXISTS versions;
@@ -441,6 +477,7 @@ DROP TABLE IF EXISTS tags;
 DROP TABLE IF EXISTS checks;
 DROP TABLE IF EXISTS aliases;
 DROP TABLE IF EXISTS citations;
+DROP TABLE IF EXISTS withdrawals;
 """
 
 
@@ -518,7 +555,8 @@ def notify(
     touched and no file it did not touch has changed, `meta` is brought up to date in the same
     transaction, so the commit never looks like staleness. Otherwise `meta` is left as it was and
     the Index stays stale for the next reader to rebuild. An Index built with another
-    `SCHEMA_VERSION` is left alone the same way.
+    `SCHEMA_VERSION` is left alone the same way. A withdrawal is never told
+    (`store.change_withdrawal`): the Index stays stale until the next reader rebuilds it.
     """
     if not _exists(store):
         return
@@ -704,8 +742,19 @@ class Revisit:
 
 
 @dataclass(frozen=True)
+class WithdrawnCitation:
+    """A work that cites a withdrawn Source: the row that withdrew it says when and why."""
+
+    work_id: str
+    url: str
+    withdrawn_at: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class Summary:
-    """What `status` reports from the Index."""
+    """What `status` reports from the Index: every count but `withdrawn_*` and `checks` leaves
+    the withdrawn Sources out."""
 
     versions: int
     sources: int
@@ -715,6 +764,8 @@ class Summary:
     checks: dict[str, int]
     unknown_hosts: list[str]
     readings: int
+    withdrawn_sources: int = 0
+    withdrawn_versions: int = 0
 
 
 @contextlib.contextmanager
@@ -777,8 +828,9 @@ class Reader:
 
     def latest_in_scope(self, scope: Scope, prefix: str | None = None) -> list[VersionInfo]:
         """The latest Version of every Source in `scope` whose `url` is `under` `prefix`, by
-        url."""
+        url; a withdrawn Source is in no scope."""
         filters, args = _filters(scope)
+        filters += _NOT_WITHDRAWN
         tag_filter, tag_args = _tag_filter(scope.tags)
         if prefix is not None:
             filters += " AND (substr(l.url, 1, ?) = ? OR l.url = ?)"
@@ -853,7 +905,8 @@ class Reader:
 
     def revisits(self) -> tuple[list[Revisit], list[str]]:
         """Every Citation whose Source changed since the work was written, and one warning per
-        Citation of a `url` the Store has no Version of.
+        Citation of a `url` the Store has no Version of; a Citation of a withdrawn Source is
+        neither (`withdrawn_citations`).
 
         The work was written from the Latest Version at `as_of` (`history.latest`), or from
         the oldest Version when `as_of` is absent or earlier than every Version. It is measured
@@ -861,7 +914,8 @@ class Reader:
         """
         con = self.con
         citations = con.execute(
-            "SELECT work_id, url, as_of FROM citations ORDER BY work_id, url"
+            "SELECT work_id, url, as_of FROM citations "
+            "WHERE url NOT IN (SELECT url FROM withdrawn) ORDER BY work_id, url"
         ).fetchall()
         found: list[Revisit] = []
         warnings: list[str] = []
@@ -883,18 +937,32 @@ class Reader:
                 found.append(Revisit(work_id, url, written_from, now))
         return found, warnings
 
+    def withdrawn_citations(self) -> list[WithdrawnCitation]:
+        """Every Citation of a withdrawn Source, by work and url."""
+        rows = self.con.execute(
+            "SELECT c.work_id, c.url, w.recorded_at, w.reason FROM citations c "
+            "JOIN withdrawn w ON w.url = c.url ORDER BY c.work_id, c.url"
+        ).fetchall()
+        return [WithdrawnCitation(*row) for row in rows]
+
     def summary(self) -> Summary:
         """Versions, Sources, Sources per Tag, the oldest and newest `fetched_at`, Rechecks per
         result, the hosts no rule knows (a Version whose effective publisher is its url's host),
-        and the Versions that have a Reading."""
+        the Versions that have a Reading, and apart from them the withdrawn Sources and their
+        Versions."""
         con = self.con
+        kept = " WHERE url NOT IN (SELECT url FROM withdrawn)"
         versions, sources, oldest, newest, read = con.execute(
             "SELECT count(*), count(DISTINCT url), min(fetched_at), max(fetched_at), "
-            "count(reading) FROM versions"
+            f"count(reading) FROM versions{kept}"
+        ).fetchone()
+        withdrawn_versions, withdrawn_sources = con.execute(
+            "SELECT count(*), count(DISTINCT url) FROM versions "
+            "WHERE url IN (SELECT url FROM withdrawn)"
         ).fetchone()
         tags = dict(
             con.execute(
-                "SELECT tag, count(DISTINCT url) FROM tags GROUP BY tag ORDER BY tag"
+                f"SELECT tag, count(DISTINCT url) FROM tags{kept} GROUP BY tag ORDER BY tag"
             ).fetchall()
         )
         checks: dict[str, int] = dict.fromkeys(store_module.RECHECK_RESULTS, 0)
@@ -903,7 +971,7 @@ class Reader:
         hosts = {
             host
             for url, publisher in con.execute(
-                "SELECT DISTINCT url, effective_publisher FROM versions"
+                f"SELECT DISTINCT url, effective_publisher FROM versions{kept}"
             )
             if (host := unknown_host(url, publisher))
         }
@@ -916,6 +984,8 @@ class Reader:
             checks=checks,
             unknown_hosts=sorted(hosts),
             readings=read,
+            withdrawn_sources=withdrawn_sources,
+            withdrawn_versions=withdrawn_versions,
         )
 
 
@@ -976,6 +1046,9 @@ def _fts_query(query: str, *, any_word: bool = False) -> str:
     joined by `OR` with `any_word`."""
     joiner = " OR " if any_word else " "
     return joiner.join('"' + word.replace('"', '""') + '"' for word in query.split())
+
+
+_NOT_WITHDRAWN = " AND l.url NOT IN (SELECT url FROM withdrawn)"
 
 
 def _filters(scope: Scope) -> tuple[str, list[object]]:

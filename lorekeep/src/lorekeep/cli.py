@@ -23,6 +23,7 @@ from lorekeep.commands import search as search_command
 from lorekeep.commands import skill as skill_command
 from lorekeep.commands import status as status_command
 from lorekeep.commands import tag as tag_command
+from lorekeep.commands import withdraw as withdraw_command
 from lorekeep.edges import Edges
 from lorekeep.project import AUTHORITIES, Project, ProjectError, load_project
 
@@ -206,6 +207,14 @@ def build_parser() -> argparse.ArgumentParser:
     tag_add.add_argument("--prefix", metavar="URL", help="every Source whose url starts so")
     _store_flag(tag_add)
 
+    withdraw = command(
+        "withdraw", "take a Source stored by mistake out of every Run's view (the owner's)"
+    )
+    withdraw.add_argument("url", help="the Source's url, as get takes it")
+    withdraw.add_argument("--reason", required=True, help="why, kept in withdrawals.csv")
+    withdraw.add_argument("--undo", action="store_true", help="take a withdrawal back")
+    _store_flag(withdraw)
+
     status = command("status", "summarise the Store")
     status.add_argument("--rules", action="store_true", help="also print the host rules")
     _json_flag(status)
@@ -258,6 +267,7 @@ HANDLERS: dict[str, Callable[[argparse.Namespace, Context], int]] = {
     "backup": backup_command.run_backup,
     "restore": backup_command.run_restore,
     "tag": tag_command.run,
+    "withdraw": withdraw_command.run,
     "status": status_command.run,
 }
 
@@ -295,7 +305,12 @@ def run(
         print(f"lorekeep: error: {error}", file=sys.stderr)
         return 2
     ctx = Context(store=store, project=project, tag=tag, edges=edges or Edges.production())
-    return HANDLERS[args.command](args, ctx)
+    try:
+        return HANDLERS[args.command](args, ctx)
+    except store_module.WithdrawnError as error:
+        # A Source the owner withdrew (ADR 0010): nothing was written; a Run reports it.
+        print(f"lorekeep: error: {error}", file=sys.stderr)
+        return 1
 
 
 def _query_after_dashes(argv: list[str]) -> tuple[list[str], str | None]:

@@ -93,6 +93,8 @@ def test_status_json_is_one_object_in_the_spec_shape(tmp_path: Path) -> None:
         "checks": {"unchanged": 3, "changed": 1, "gone": 1, "error": 1},
         "unknown_hosts": ["vertex.unknown.test"],
         "readings": 0,
+        "withdrawn_sources": 0,
+        "withdrawn_versions": 0,
         "rules": 6,
         "bytes": store_bytes(tmp_path),
         "browser": {"ready": True, "crawl4ai": "0.9.5", "detail": "Chromium starts", "fix": None},

@@ -32,6 +32,13 @@ _COLUMN_TYPES: dict[str, dict[str, dict[str, Any]]] = {
     },
     store_module.ALIASES_FILE: {"added_at": {"type": "datetime"}},
     store_module.CITATIONS_FILE: {"as_of": {"type": "string"}},
+    store_module.WITHDRAWALS_FILE: {
+        "recorded_at": {"type": "datetime"},
+        "action": {
+            "type": "string",
+            "constraints": {"enum": list(store_module.WITHDRAWAL_ACTIONS)},
+        },
+    },
 }
 
 _SOURCES_SCHEMA: dict[str, Any] = {

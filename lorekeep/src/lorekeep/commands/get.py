@@ -23,7 +23,16 @@ from lorekeep.http import make_client
 from lorekeep.project import HostRule
 from lorekeep.provenance import build as provenance
 from lorekeep.provenance import now
-from lorekeep.store import AliasRow, NewVersion, TagRow, VersionInfo, commit, latest, read_head
+from lorekeep.store import (
+    AliasRow,
+    NewVersion,
+    TagRow,
+    VersionInfo,
+    commit,
+    latest,
+    read_head,
+    refuse_withdrawn,
+)
 from lorekeep.urls import Trust, normalise, other_canonical, trust
 
 if TYPE_CHECKING:
@@ -37,6 +46,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
 
     stored = latest(ctx.store, args.url, rules)
     if stored is not None:
+        refuse_withdrawn(ctx.store, stored.url)  # before asking anyone; the commit decides
         say_trust(stored.url, rules)
         return return_stored(args, ctx, stored)
 

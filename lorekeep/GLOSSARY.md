@@ -104,6 +104,11 @@ Asking a Source's publisher whether it changed since its latest Version, recorde
 answer.
 _Avoid_: check (a quiz in the first consuming Project), refresh, poll, sync
 
+**Withdrawal**:
+The owner taking a Source stored by mistake out of every Run's view by a row in `withdrawals.csv`,
+never by removing a file; a later row undoes it.
+_Avoid_: deletion, removal, hiding, quarantine
+
 **Citation**:
 A link from a finished work to the Source it rests on, as the work states it.
 _Avoid_: reference, usage
@@ -113,7 +118,8 @@ The LLM step that finds a fact in the Store, opens it and cites the Source it re
 _Avoid_: consumer, user
 
 **Curator**:
-The owner, keeping a Store over time: host and reading rules, Rechecks, Tags, backups.
+The owner, keeping a Store over time: host and reading rules, Rechecks, Tags, Withdrawals,
+backups.
 _Avoid_: admin, maintainer
 
 **Collector**:

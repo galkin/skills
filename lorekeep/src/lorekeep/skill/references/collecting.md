@@ -10,7 +10,8 @@ here too.
 Run `lorekeep status` once first: `Browser: not ready: …; fix: …` means browser pages will fail.
 Report that line to the owner, never run its fix yourself, and go on.
 
-Summarises the Store: Versions, Sources, Readings and reading rules, Tags, oldest and newest
+Summarises the Store: Versions, Sources, the Sources the owner
+[withdrew](store.md#withdrawals), Readings and reading rules, Tags, oldest and newest
 fetch, Recheck results, hosts no rule knows, size, the Project's settings, and whether the browser
 (Crawl4AI and Chromium) can start here. `--rules` also prints the host rules, merged (a Project's
 own marked `(lorekeep.toml)`); `--json` prints no settings and no host rules.
@@ -18,6 +19,7 @@ own marked `(lorekeep.toml)`); `--json` prints no settings and no host rules.
 ```text
 Store: /…/store
 5 Versions of 5 Sources
+Withdrawn: 0 Sources (0 Versions)
 Readings: 1 of 5 Versions, 6 rules
 Tags: nvidia 5
 Oldest fetched_at: 2026-10-17T20:08:26Z

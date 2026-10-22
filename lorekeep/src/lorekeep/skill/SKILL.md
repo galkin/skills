@@ -20,7 +20,7 @@ no LLM. You decide what to read and cite.
 | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | **Reader**: find a fact in the Store, open it, cite it; `get` a page your brief names              | [references/reading.md](references/reading.md)                          |
 | **Collector**: fetch the Sources a guide or a section needs, log every `get`, report the failures | [references/reading.md](references/reading.md), then [references/collecting.md](references/collecting.md) |
-| **Curator**, the owner: `recheck`, `tag add`, `backup`, `restore`, `index`, `skill`, host rules — never a Run's to call | [references/curating.md](references/curating.md)                        |
+| **Curator**, the owner: `recheck`, `tag add`, `withdraw`, `backup`, `restore`, `index`, `skill`, host rules — never a Run's to call | [references/curating.md](references/curating.md)                        |
 | Any: the Store's files, a Version's frontmatter, every `--json` field                              | [references/store.md](references/store.md)                              |
 
 ## Before you start
@@ -35,6 +35,7 @@ no LLM. You decide what to read and cite.
 - stdout carries only the result; stderr lines start `lorekeep: error:`, `warning:` or `note:`.
 - Exit `0` is success, `1` a failure of the work (nothing could be fetched), `2` a usage error
   (no Store, no Tag, a bad flag): fix the command.
-- Write to the Store only through `get` and `add`; never edit its files or `lorekeep.toml`.
+- Write to the Store only through `get` and `add`; never edit its files or `lorekeep.toml`. A page
+  stored by mistake is reported to the owner, with its `url` and why; the owner withdraws it.
 - Never fetch a page another way (`curl`, a web tool, a browser), and never `add` a page `get` could not store.
 - Put everything this skill says to report in your final report to the owner, with its URL.
