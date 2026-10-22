@@ -4,8 +4,10 @@ Everything that writes to a Store goes through `commit`, which takes the one loc
 Version and its Original into place, appends the CSV rows that are not already there and notifies
 the Index. `lock` is the only place the lock file (`LOCK_FILE`) is opened; the commit, an Index
 rebuild and the package regeneration share it and none of them nests it (`flock` is not re-entrant).
-A Tag row and an alias row are appended once; a Recheck row and a withdrawal row are appended
-every time.
+A Tag row and an alias row are appended once; a Recheck row is appended every time. A commit
+that names a withdrawn Source writes nothing and raises `WithdrawnError`, decided under the lock;
+a withdrawal row is appended by `change_withdrawal`, under the same lock, only when it changes what
+holds (ADR 0010).
 """
 
 from __future__ import annotations
@@ -132,8 +134,7 @@ def table_of(row_type: type[Row]) -> str:
 def row_key(row: Row) -> tuple[str, ...] | None:
     """What makes a row 'already present', as its leading columns: a Tag by Source and Tag, an
     alias by its pair. A Recheck has no key: every Recheck is appended whatever its answer, two
-    in one second too; nor has a withdrawal, which `withdraw` appends only when it changes what
-    holds."""
+    in one second too."""
     if isinstance(row, TagRow):
         return (row.url, row.tag)
     if isinstance(row, AliasRow):
@@ -207,15 +208,18 @@ def commit(
     tags: Sequence[TagRow] = (),
     checks: Sequence[RecheckRow] = (),
     aliases: Sequence[AliasRow] = (),
-    withdrawals: Sequence[WithdrawalRow] = (),
 ) -> Path | None:
     """The one commit point: write what is new, append what is not there yet, notify the Index.
 
     Returns the Version's path (new or already present) when a Version was given. Every writer
-    passes what it has — a Version, Tag rows, Recheck rows, alias rows, withdrawal rows, any of
-    them empty.
+    passes what it has — a Version, Tag rows, Recheck rows, alias rows, any of them empty. When
+    any of them names a withdrawn Source, nothing is written and `WithdrawnError` is raised.
     """
     with lock(store):
+        named = [row.url for row in (*tags, *checks, *aliases)]
+        if version is not None:
+            named.append(str(version.frontmatter["url"]))
+        refuse_withdrawn(store, *named)
         path: Path | None = None
         if version is not None:
             url = str(version.frontmatter["url"])
@@ -228,18 +232,42 @@ def commit(
         _append_missing(store, TagRow, tags)
         _append_missing(store, RecheckRow, checks)
         _append_missing(store, AliasRow, aliases)
-        _append_missing(store, WithdrawalRow, withdrawals)
         from lorekeep import index  # the Index derives from the Store, so it imports this module
 
-        index.notify(
-            store,
-            version=path,
-            tags=tags,
-            checks=checks,
-            aliases=aliases,
-            withdrawals=withdrawals,
-        )
+        index.notify(store, version=path, tags=tags, checks=checks, aliases=aliases)
         return path
+
+
+class WithdrawnError(Exception):
+    """A write or a read named a Source the owner withdrew; the message names the withdrawal."""
+
+    def __init__(self, row: WithdrawalRow) -> None:
+        super().__init__(
+            f"{row.url} was withdrawn by the owner at {row.recorded_at}: {row.reason} "
+            "(lorekeep withdraw --undo takes it back)"
+        )
+        self.row = row
+
+
+def refuse_withdrawn(store: Path, *urls: str) -> None:
+    """Raise `WithdrawnError` for the first of `urls` that is a withdrawn Source."""
+    held = withdrawn(store)
+    for url in urls:
+        if url in held:
+            raise WithdrawnError(held[url])
+
+
+def change_withdrawal(store: Path, row: WithdrawalRow) -> WithdrawalRow | None:
+    """Append `row` when it changes what holds for its Source, deciding under the Store lock, so
+    two calls at once append one row; return the `withdraw` row in force before it (`None` when
+    the Source was not withdrawn). A `withdraw` of a withdrawn Source, or an `undo` of one not
+    withdrawn, appends nothing. The Index is not told: a withdrawal changes which Sections it
+    holds, so it is left stale for the next reader to rebuild."""
+    with lock(store):
+        before = withdrawn(store).get(row.url)
+        if (before is None) == (row.action == WITHDRAW):
+            _append_missing(store, WithdrawalRow, [row])
+        return before
 
 
 def _write_once(target: Path, data: bytes) -> None:
@@ -312,11 +340,20 @@ def latest(store: Path, url: str, rules: Sequence[HostRule]) -> VersionInfo | No
 def withdrawn(store: Path) -> dict[str, WithdrawalRow]:
     """The Sources withdrawn now, by `url`, each with the row that withdrew it: those whose last
     `withdrawals.csv` row is a `withdraw`. The file is read directly, so the answer never waits
-    for the Index."""
-    last: dict[str, WithdrawalRow] = {}
-    for row in read_rows(store, WithdrawalRow):
-        last[row.url] = row
+    for the Index. The one predicate every command leaves a withdrawn Source out by."""
+    return in_force(read_rows(store, WithdrawalRow))
+
+
+def in_force(rows: Sequence[WithdrawalRow]) -> dict[str, WithdrawalRow]:
+    """`withdrawn` over rows already read, in file order."""
+    last = {row.url: row for row in rows}
     return {url: row for url, row in last.items() if row.action == WITHDRAW}
+
+
+def kept(store: Path) -> Iterator[VersionInfo]:
+    """Every Version in the Store (`scan`) but those of a withdrawn Source."""
+    out = withdrawn(store)
+    return (info for info in scan(store) if info.url not in out)
 
 
 def source_urls(store: Path, prefix: str) -> list[str]:

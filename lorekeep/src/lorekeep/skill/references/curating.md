@@ -10,7 +10,7 @@ The **Curator**, the owner, keeps a Store over time with these commands; a Run n
 Asks the publisher of every Source in scope whether it changed since its Latest Version (a
 conditional request when the server supports one), records every answer in `checks.csv`, and
 stores a changed page as a new Version beside the old. `owner:` Sources and browser-rendered
-Versions are `skipped`; a withdrawn Source is in no scope.
+Versions are `skipped`; a withdrawn Source is left out ([store.md](store.md#withdrawals)).
 
 - `--tag TAG` — limit the scope to this Tag; repeat it for several (default: `$LOREKEEP_TAG`,
   else everything).
@@ -37,8 +37,8 @@ guides/cca/subagents, https://claude.termidy.com/learn/ccar-f/agentic-architectu
 `--dry-run` prints `would ask <address>` or `skipped <url>: <reason>` per Source, then
 `Would ask N Sources; N skipped`. `--citations` prints one line per work to revisit
 (`<work_id>, <url>, <old sha8> → <new sha8>`), nothing when there is none, and a warning per cited
-`url` with no Version. A work citing a withdrawn Source is an error line on stderr
-(`<work_id> cites <url>, withdrawn at <time>: <reason>`), and the command exits `1`.
+`url` with no Version; a work citing a withdrawn Source fails it
+([store.md](store.md#withdrawals)).
 
 ## `lorekeep tag add`
 
@@ -62,10 +62,7 @@ Tagged 1 Source guardrails; 0 already carried it
 Takes a Source stored by mistake out of every Run's view without removing a file (ADR 0010):
 appends a `withdrawals.csv` row naming the Source, which covers every Version of it. `URL` is
 resolved as `get` resolves it — normalised, Twin-reduced, through `aliases.csv` — so the address a
-Run reported works. A withdrawn Source is out of `search` and the Index's Sections, gets no
-Reading, is left out of `recheck`, counts only on `status`'s `Withdrawn:` line; `get` refuses it
-with an error naming the withdrawal, and `recheck --citations` fails on a work citing it. A Run
-never withdraws: it reports the page to you.
+Run reported works. What a withdrawal changes, command by command: [store.md](store.md#withdrawals).
 
 - `--reason TEXT` — why, kept in the row (required, for `--undo` too).
 - `--undo` — take the withdrawal back: appends an `undo` row; the Source is searchable again once
@@ -132,7 +129,7 @@ Indexed 2 Versions, 26 Sections, 1 Tag row, 1 Recheck, 0 aliases, 1 Citation int
 
 `lorekeep read [--prefix URL] [--force] [--store DIR]`
 
-Builds the Reading of every Version (owner-added and withdrawn ones aside) whose Reading is missing or stale:
+Builds the Reading of every Version (owner-added and [withdrawn](store.md#withdrawals) ones aside) whose Reading is missing or stale:
 the Version after the `[[readings]]` rules that apply to it, in `.cache/readings/<stem>.md` (see
 [store.md](store.md#readings)). Rarely needed: `get` builds the Reading it returns, `recheck` the
 Reading of a changed page, and `search` every missing or stale one when it rebuilds the Index. A

@@ -18,12 +18,21 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from lorekeep import cascade, readings, recheck
-from lorekeep.commands import refused_as_withdrawn, version_json
+from lorekeep.commands import version_json
 from lorekeep.http import make_client
 from lorekeep.project import HostRule
 from lorekeep.provenance import build as provenance
 from lorekeep.provenance import now
-from lorekeep.store import AliasRow, NewVersion, TagRow, VersionInfo, commit, latest, read_head
+from lorekeep.store import (
+    AliasRow,
+    NewVersion,
+    TagRow,
+    VersionInfo,
+    commit,
+    latest,
+    read_head,
+    refuse_withdrawn,
+)
 from lorekeep.urls import Trust, normalise, other_canonical, trust
 
 if TYPE_CHECKING:
@@ -37,8 +46,7 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
 
     stored = latest(ctx.store, args.url, rules)
     if stored is not None:
-        if refused_as_withdrawn(ctx.store, stored.url):
-            return 1
+        refuse_withdrawn(ctx.store, stored.url)  # before asking anyone; the commit decides
         say_trust(stored.url, rules)
         return return_stored(args, ctx, stored)
 
@@ -60,8 +68,6 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
         print(f"lorekeep: error: nothing stored for {args.url}: {reasons}", file=sys.stderr)
         return 1
     url = normalise(outcome.final_url, rules)
-    if refused_as_withdrawn(ctx.store, url):
-        return 1  # a redirect to a withdrawn Source: nothing is stored, no Tag added
     found = say_trust(url, rules)
     canonical = other_canonical(outcome.canonical, url, rules)
     if canonical is not None:

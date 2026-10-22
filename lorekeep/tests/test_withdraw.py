@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
+import pytest
 from frictionless import validate
 
 from lorekeep.edges import Edges
+from lorekeep.store import (
+    WITHDRAW,
+    TagRow,
+    WithdrawalRow,
+    WithdrawnError,
+    change_withdrawal,
+    commit,
+)
 from tests.support import (
     FIXTURES,
     FakeFetcher,
@@ -21,6 +31,7 @@ from tests.support import (
     run_cli,
     write_version,
 )
+from tests.test_index import store_lock_held
 
 NIM = "https://docs.nvidia.com/nim/large-language-models/latest/about-nim-llm/overview.html"
 AWS = "https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html"
@@ -304,3 +315,91 @@ def test_a_twin_address_withdraws_the_page_it_is_the_twin_of(tmp_path: Path) -> 
 
     assert code == 0, err
     assert [row["url"] for row in rows(store, "withdrawals.csv")] == [page]
+
+
+def test_whether_a_row_changes_anything_is_decided_under_the_lock(tmp_path: Path) -> None:
+    store = two_sources(tmp_path)
+    mine = WithdrawalRow(AWS, "2026-10-22T10:00:01Z", WITHDRAW, "mine")
+    returned: list[WithdrawalRow | None] = []
+
+    with store_lock_held(store):
+        worker = threading.Thread(target=lambda: returned.append(change_withdrawal(store, mine)))
+        worker.start()
+        worker.join(timeout=0.5)
+        assert worker.is_alive(), "change_withdrawal did not wait for the lock"
+        # Another worker's withdrawal lands while this one waits.
+        (store / "withdrawals.csv").write_text(
+            f"url,recorded_at,action,reason\n{AWS},2026-10-22T10:00:00Z,withdraw,theirs\n",
+            encoding="utf-8",
+        )
+    worker.join(timeout=30)
+
+    [before] = returned
+    assert before is not None and before.reason == "theirs"
+    assert [row["reason"] for row in rows(store, "withdrawals.csv")] == ["theirs"]
+
+
+def test_a_commit_naming_a_withdrawn_source_writes_nothing(tmp_path: Path) -> None:
+    store = two_sources(tmp_path)
+    withdraw(store, AWS)
+    tags = (store / "tags.csv").read_bytes()
+    rows_of = [
+        TagRow(NIM, "late", "2026-10-22T10:00:00Z"),
+        TagRow(AWS, "late", "2026-10-22T10:00:00Z"),
+    ]
+
+    with pytest.raises(WithdrawnError, match=f"{AWS} was withdrawn by the owner"):
+        commit(store, tags=rows_of)
+
+    assert (store / "tags.csv").read_bytes() == tags
+
+
+def test_tag_add_of_a_withdrawn_url_says_so_and_tags_nothing(tmp_path: Path) -> None:
+    store = two_sources(tmp_path)
+    withdraw(store, AWS)
+    tags = (store / "tags.csv").read_bytes()
+
+    result = run_cli(["tag", "add", "specifications", AWS, "--store", str(store)])
+
+    assert result.exit_code == 0, result.stderr
+    assert f"{AWS} was withdrawn by the owner" in result.stderr
+    assert "not tagged" in result.stderr
+    assert "Tagged 0 Sources" in result.stdout
+    assert (store / "tags.csv").read_bytes() == tags
+
+
+def test_tag_add_under_a_prefix_leaves_a_withdrawn_source_out(tmp_path: Path) -> None:
+    store = two_sources(tmp_path)
+    withdraw(store, AWS)
+
+    result = run_cli(["tag", "add", "docs", "--prefix", "https://docs.", "--store", str(store)])
+
+    assert result.exit_code == 0, result.stderr
+    assert [row["url"] for row in rows(store, "tags.csv") if row["tag"] == "docs"] == [NIM]
+
+
+def test_rules_sample_leaves_withdrawn_versions_out(tmp_path: Path) -> None:
+    store = two_sources(tmp_path)
+    withdraw(store, AWS)
+
+    result = run_cli(["rules", "sample", "docs.aws.amazon.com/", "--store", str(store)])
+
+    assert result.exit_code == 1
+    assert "no Version under docs.aws.amazon.com/" in result.stderr
+
+
+def test_a_cited_withdrawn_source_is_an_error_and_not_also_a_revisit(tmp_path: Path) -> None:
+    store = two_sources(tmp_path)
+    # Written from the older AWS Version: without the withdrawal it is a revisit.
+    (store / "citations.csv").write_text(
+        f"work_id,url,as_of\nlesson-1,{AWS},2026-07-31\n", encoding="utf-8"
+    )
+    before = run_cli(["recheck", "--citations", "--store", str(store)])
+    assert before.stdout.startswith(f"lesson-1, {AWS}, ")
+    withdraw(store, AWS)
+
+    result = run_cli(["recheck", "--citations", "--store", str(store)])
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert f"lesson-1 cites {AWS}, withdrawn at " in result.stderr

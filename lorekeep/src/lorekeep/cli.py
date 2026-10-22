@@ -305,7 +305,12 @@ def run(
         print(f"lorekeep: error: {error}", file=sys.stderr)
         return 2
     ctx = Context(store=store, project=project, tag=tag, edges=edges or Edges.production())
-    return HANDLERS[args.command](args, ctx)
+    try:
+        return HANDLERS[args.command](args, ctx)
+    except store_module.WithdrawnError as error:
+        # A Source the owner withdrew (ADR 0010): nothing was written; a Run reports it.
+        print(f"lorekeep: error: {error}", file=sys.stderr)
+        return 1
 
 
 def _query_after_dashes(argv: list[str]) -> tuple[list[str], str | None]:

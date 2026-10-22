@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from lorekeep import index, readings, recheck
 from lorekeep.commands import plural, scope_tags
 from lorekeep.http import make_client
-from lorekeep.store import RECHECK_RESULTS
+from lorekeep.store import RECHECK_RESULTS, WithdrawnError
 
 if TYPE_CHECKING:
     from lorekeep.cli import Context
@@ -44,7 +44,13 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
                 counts["skipped"] += 1
                 print(f"skipped {stored.url}")
                 continue
-            answer = recheck.perform(ctx.store, stored, client, ctx.project.hosts)
+            try:
+                answer = recheck.perform(ctx.store, stored, client, ctx.project.hosts)
+            except WithdrawnError:
+                # Withdrawn since the scope was read: the commit refused it; nothing written.
+                counts["skipped"] += 1
+                print(f"skipped {stored.url}: withdrawn")
+                continue
             counts[answer.result] += 1
             if answer.warning:
                 print(f"lorekeep: warning: {answer.warning}", file=sys.stderr)

@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 from lorekeep.project import HostRule
 from lorekeep.recheck import verified_at
-from lorekeep.store import read_head, withdrawn
+from lorekeep.store import read_head
 from lorekeep.urls import effective_trust
 
 
@@ -23,20 +22,6 @@ def scope_tags(
     if given:
         return list(given)
     return [run_tag] if run_tag else None
-
-
-def refused_as_withdrawn(store: Path, url: str) -> bool:
-    """Whether the Source `url` is withdrawn (ADR 0010); if so the error naming the withdrawal is
-    on stderr, so a Run reports the page to the owner instead of reading it."""
-    row = withdrawn(store).get(url)
-    if row is None:
-        return False
-    print(
-        f"lorekeep: error: {url} was withdrawn by the owner at {row.recorded_at}: {row.reason} "
-        f"(lorekeep withdraw --undo takes it back)",
-        file=sys.stderr,
-    )
-    return True
 
 
 def plural(count: int, word: str, plural_word: str | None = None) -> str:

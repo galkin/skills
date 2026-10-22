@@ -17,31 +17,33 @@ anyone being told; a `restore` would even bring it back. Provenance is the tool'
 keeps readable what was stored, when, and why it was taken back. A withdrawal is reversible, and a
 Citation that still names a withdrawn Source fails loudly instead of pointing at a missing file.
 
-What a withdrawal does: the Source's files stay, its `versions` rows stay in the Index (so its
-address still resolves), but the Index holds no Section of it, so `search` never finds it; `read`
-and an Index rebuild build no Reading of it; `recheck` leaves it out of every scope; `status` counts
-it on its own `Withdrawn:` line and leaves it out of every other count; `get` refuses it, exit `1`,
-with the time and reason of the withdrawal — before fetching when the address is known, and
-before storing when a new address redirects to it — and so does `add` of a withdrawn `owner:`
-Source; `recheck --citations` names every work citing it as an error and exits `1`. `backup` copies
-`withdrawals.csv` with the other growing files and `datapackage.json` describes it.
+A withdrawn Source is out of every Run's view and nothing is written for it: its files stay, and
+its `versions` rows stay in the Index so its address still resolves, but the Index holds no Section
+of it, no Reading is built for it, no Recheck asks about it, and every command that would read it,
+tag it or store a Version of it refuses or leaves it out. The skill's `references/store.md` ›
+Withdrawals lists what each command does; this record keeps why.
+
+The refusal is decided at the commit point, under the Store lock (ADR 0009): a commit whose
+Version or rows name a withdrawn Source writes nothing and raises, so a `get` racing a `withdraw`
+cannot slip a Version or a Tag in after it. The commands also check before they fetch, but only to
+save a request; the commit's check is the one that holds.
 
 **Undo** is a row too: `withdraw --undo URL --reason TEXT` appends `action` `undo`, and the last row
 of a `url` decides. `--reason` is required both ways, so the file says why each change was made. A
-row is appended only when it changes what holds: a second `withdraw` of a withdrawn Source, or an
+row is appended only when it changes what holds — a second `withdraw` of a withdrawn Source, or an
 `--undo` of one not withdrawn, writes nothing and says so (exit `0`, as `tag add` of a Tag a Source
-already carries). A withdrawal row has no key and is never de-duplicated by the commit point; the
-command's own check is what keeps the file to real changes.
+already carries) — and that is decided under the lock too (`store.change_withdrawal`), so two
+`withdraw` calls at once append one row.
 
-A commit of a withdrawal row leaves the Index stale instead of notifying it: withdrawing takes
-Sections out, and undoing brings them back read from Readings that were not built while the Source
-was withdrawn, so the next reader rebuilds the Index (and those Readings) under the lock as it does
-after any other change it cannot follow. Withdrawals are rare and the owner's; the rebuild they cost
-is the price of one code path for Sections.
+A withdrawal leaves the Index stale instead of notifying it: withdrawing takes Sections out, and
+undoing brings them back read from Readings that were not built while the Source was withdrawn, so
+the next reader rebuilds the Index (and those Readings) under the lock as it does after any other
+change it cannot follow. Withdrawals are rare and the owner's; the rebuild they cost is the price
+of one code path for Sections.
 
-`withdraw` is a Curator's command, like `tag add`, and is not in any Run's brief: a Run that finds
-a page stored by mistake reports it to the owner with its `url` and why, and the rule "write to the
-Store only through `get` and `add`" stays true for Runs.
+`withdraw` is a Curator's command, like `tag add`, and in no Run's brief: deciding that a page is a
+mistake is a judgement about the Project, which the owner makes, so the rule that a Run writes only
+through `get` and `add` stays true.
 
 ## Considered Options
 

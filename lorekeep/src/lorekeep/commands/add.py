@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from lorekeep.commands import refused_as_withdrawn, version_json
+from lorekeep.commands import version_json
 from lorekeep.provenance import TIME_FORMAT, now, parse_time
 from lorekeep.store import OWNER_SCHEME, NewVersion, TagRow, commit, version_name
 
@@ -57,8 +57,6 @@ def run(args: argparse.Namespace, ctx: Context) -> int:
         "title": args.title,
         "origin": "owner",
     }
-    if refused_as_withdrawn(ctx.store, head["url"]):
-        return 1
     already = (ctx.store / version_name(head["url"], head["sha256"])).exists()
     path = commit(
         ctx.store,

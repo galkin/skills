@@ -117,3 +117,68 @@ The real Store still has no `withdrawals.csv`, and its Index still reads schema 
 - plus the commit that adds this report
 
 DONE withdraw
+
+## Review fixes
+
+From [`REVIEW.md`](REVIEW.md), in one commit on `lorekeep-withdraw`.
+
+1. **One rule, one place.** The skill now lists what a withdrawal does to each command in one
+   place, `references/store.md` › Withdrawals; that list now also covers `add`, `rules`, `tag add`
+   and the redirect case. The other docs only link to it or say less:
+   - `curating.md` keeps the command, its flags and its examples. Its `recheck`, `recheck --citations`
+     and `read` text link to the store.md list.
+   - The `citations.csv` bullet in store.md links to it as well, and so does the `status` text in
+     `collecting.md`.
+   - ADR 0010 keeps only the reasons. It adds two: why the refusal is decided under the lock, and
+     why `withdraw` belongs to the owner.
+   - `GLOSSARY.md` › Withdrawal is one sentence.
+   - The rule "report a page stored by mistake to the owner" is now only in `SKILL.md`. I removed it
+     from store.md (twice), curating.md and the ADR.
+2. **Check under the lock.**
+   - `store.change_withdrawal(store, row)` takes the lock, decides whether the row changes the
+     state, appends it only then, and returns the `withdraw` row that held before. `withdraw.run`
+     uses it, so two concurrent calls append one row.
+   - `commit` now calls `store.refuse_withdrawn` under its lock. If the Version or any Tag, Recheck
+     or alias row names a withdrawn Source, it writes nothing and raises `WithdrawnError`.
+   - `cli.run` turns `WithdrawnError` into `lorekeep: error: <url> was withdrawn …` with exit `1`.
+     `recheck` instead catches it per Source, counts that Source as `skipped … : withdrawn` and goes
+     on.
+   - `refused_as_withdrawn` is gone. `get` still checks a known address before asking anyone, but
+     only to save a request; the commit is the check that decides.
+   - New tests: `change_withdrawal` waits for a held lock and then finds another worker's row, so it
+     appends nothing; and a `commit` naming a withdrawn Source raises and leaves `tags.csv`
+     unchanged.
+3. **`revisits()`** leaves withdrawn Sources out (`WHERE url NOT IN (SELECT url FROM withdrawn)`).
+   New test: a Citation that was a revisit before the withdrawal produces only the error line
+   afterwards, with empty stdout.
+4. **`tag add`, `rules sample` and `rules check`.** They share two functions in `store.py`:
+   `store.withdrawn(store)`, a dict of the withdrawn Sources by url, and `store.kept(store)`,
+   which is `scan` without the withdrawn Versions.
+   - `tag add URL` of a withdrawn Source prints `lorekeep: warning: <url> was withdrawn … ; not
+     tagged`, then `Tagged 0 Sources …`, and exits `0`.
+   - `tag add --prefix` leaves withdrawn Sources out without saying so.
+   - `rules sample` and `rules check` read their Versions through `kept`, and so does `read`.
+   - New tests cover `tag add` with a URL, `tag add --prefix` and `rules sample`.
+5. **Smaller fixes.**
+   - `commit` and `notify` no longer have a `withdrawals` parameter. Withdrawal rows never go
+     through `commit`; `change_withdrawal` appends them and never notifies the Index, so the Index
+     is left stale. This gives the same result as the review's "`commit` skips `notify`", but
+     `commit` has nothing to skip.
+   - A rebuild reads `withdrawals.csv` once (`store.in_force(rows)`) and passes the result to
+     `_ensure_readings` and the row insert.
+   - The `taken_back` variable is gone rather than renamed, because `read.py` now iterates over
+     `kept(ctx.store)`.
+   - `index.notify`'s docstring is rewrapped.
+
+Gate after the fixes (from `lorekeep/`):
+
+```text
+$ uv run pytest -q            → 428 passed in 15.68s, exit 0
+$ uv run ruff check           → All checks passed!, exit 0
+$ uv run ruff format --check  → 200 files already formatted, exit 0
+$ uv run pyright              → 0 errors, 0 warnings, 0 informations, exit 0
+```
+
+The real Store is still untouched.
+
+DONE withdraw-fixes

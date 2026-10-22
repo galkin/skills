@@ -105,9 +105,8 @@ answer.
 _Avoid_: check (a quiz in the first consuming Project), refresh, poll, sync
 
 **Withdrawal**:
-The owner taking a Source stored by mistake out of every Run's view — out of search, the Readings
-and Rechecks, refused by `get` — by a row in `withdrawals.csv`, never by removing a file; undone by
-a later row.
+The owner taking a Source stored by mistake out of every Run's view by a row in `withdrawals.csv`,
+never by removing a file; a later row undoes it.
 _Avoid_: deletion, removal, hiding, quarantine
 
 **Citation**:

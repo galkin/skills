@@ -204,7 +204,9 @@ def _looks_current(store: Path, project: Project) -> bool:
 
 
 def _rebuild_locked(store: Path, project: Project) -> Counts:
-    built = _ensure_readings(store, project.readings)
+    withdrawals = store_module.read_rows(store, WithdrawalRow)
+    withdrawn = store_module.in_force(withdrawals)
+    built = _ensure_readings(store, project.readings, withdrawn)
     con = _connect(store)
     try:
         if _schema_of(con) != SCHEMA_VERSION:
@@ -228,7 +230,6 @@ def _rebuild_locked(store: Path, project: Project) -> Counts:
                 con.execute(f"DELETE FROM {table}")
             con.execute("INSERT INTO sections_fts(sections_fts) VALUES('delete-all')")
             versions = sections = ignored = 0
-            withdrawn = store_module.withdrawn(store)
             for path in sorted(store.glob("*.md")):
                 try:
                     sections += _index_version(con, path, project.hosts, withdrawn)
@@ -240,7 +241,7 @@ def _rebuild_locked(store: Path, project: Project) -> Counts:
             tags = _insert_rows(con, TagRow, store_module.read_rows(store, TagRow))
             checks = _insert_rows(con, RecheckRow, store_module.read_rows(store, RecheckRow))
             aliases = _insert_rows(con, AliasRow, store_module.read_rows(store, AliasRow))
-            _insert_rows(con, WithdrawalRow, store_module.read_rows(store, WithdrawalRow))
+            _insert_rows(con, WithdrawalRow, withdrawals)
             cited, warnings = _read_citations(store, project.hosts)
             con.executemany("INSERT INTO citations VALUES(?, ?, ?)", cited)
             _write_meta(con, store, ignored, _rules_of(project))
@@ -253,13 +254,14 @@ def _rebuild_locked(store: Path, project: Project) -> Counts:
     return Counts(versions, sections, tags, checks, aliases, len(cited), (*built, *warnings))
 
 
-def _ensure_readings(store: Path, rules: Sequence[ReadingRule]) -> list[str]:
+def _ensure_readings(
+    store: Path, rules: Sequence[ReadingRule], withdrawn: Container[str]
+) -> list[str]:
     """Build every Version's Reading that is missing or stale, the Store lock held; the guard's
     warnings of each one built now (or left out because its only rule was held back), as `read`
     prints them. A file that is not a Version is left to the rebuild to name, and a withdrawn
     Version gets no Reading."""
     warnings: list[str] = []
-    withdrawn = store_module.withdrawn(store)
     for path in sorted(store.glob("*.md")):
         try:
             if store_module.read_head(path)["url"] in withdrawn:
@@ -545,21 +547,18 @@ def notify(
     tags: Sequence[TagRow],
     checks: Sequence[RecheckRow],
     aliases: Sequence[AliasRow],
-    withdrawals: Sequence[WithdrawalRow] = (),
 ) -> None:
     """Tell the Index what a commit wrote, in one small transaction, under the Store lock.
 
-    A missing Index is left missing (a commit never builds one). A commit of withdrawal rows is not
-    told at all: a withdrawal takes a Source's Sections out and an undo brings them back read from
-    Readings that may not be built yet, so the Index is left stale for the next reader to rebuild.
-    Otherwise the Version and the rows not already in the Index are inserted; then, when every
-    table agrees with the files the commit touched and no file it did not touch has changed,
-    `meta` is brought up to date in the same transaction, so the commit never looks like
-    staleness. Otherwise `meta` is left as it was and the Index stays stale for the next reader to
-    rebuild. An Index built with another
-    `SCHEMA_VERSION` is left alone the same way.
+    A missing Index is left missing (a commit never builds one). The Version and the rows not
+    already in the Index are inserted; then, when every table agrees with the files the commit
+    touched and no file it did not touch has changed, `meta` is brought up to date in the same
+    transaction, so the commit never looks like staleness. Otherwise `meta` is left as it was and
+    the Index stays stale for the next reader to rebuild. An Index built with another
+    `SCHEMA_VERSION` is left alone the same way. A withdrawal is never told
+    (`store.change_withdrawal`): the Index stays stale until the next reader rebuilds it.
     """
-    if withdrawals or not _exists(store):
+    if not _exists(store):
         return
     try:
         con = _connect(store)
@@ -906,7 +905,8 @@ class Reader:
 
     def revisits(self) -> tuple[list[Revisit], list[str]]:
         """Every Citation whose Source changed since the work was written, and one warning per
-        Citation of a `url` the Store has no Version of.
+        Citation of a `url` the Store has no Version of; a Citation of a withdrawn Source is
+        neither (`withdrawn_citations`).
 
         The work was written from the Latest Version at `as_of` (`history.latest`), or from
         the oldest Version when `as_of` is absent or earlier than every Version. It is measured
@@ -914,7 +914,8 @@ class Reader:
         """
         con = self.con
         citations = con.execute(
-            "SELECT work_id, url, as_of FROM citations ORDER BY work_id, url"
+            "SELECT work_id, url, as_of FROM citations "
+            "WHERE url NOT IN (SELECT url FROM withdrawn) ORDER BY work_id, url"
         ).fetchall()
         found: list[Revisit] = []
         warnings: list[str] = []

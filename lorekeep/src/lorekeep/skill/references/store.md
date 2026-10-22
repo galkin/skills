@@ -2,8 +2,7 @@
 
 A Store is one flat folder per Project, named by `LOREKEEP_STORE`. A Version or an Original is
 written once and never rewritten or deleted; a page that changed upstream gets a new Version beside
-the old one. Read the files freely; write only through `lorekeep get` and `lorekeep add`. A page
-stored by mistake is withdrawn by the owner, never removed (below).
+the old one. Read the files freely; write only through `lorekeep get` and `lorekeep add`.
 
 ## Files
 
@@ -181,14 +180,22 @@ its last Recheck.
 
 ## Withdrawals
 
-A Source stored by mistake (a parked domain, a redirect to another site, a namesake) is withdrawn
-by the owner with `lorekeep withdraw`, which appends a `withdrawals.csv` row with `action`
-`withdraw`; `withdraw --undo` appends one with `action` `undo`. The last row of a `url` decides, and
-a withdrawal covers every Version of the Source. Its files stay, but `search` never finds it,
-`get` refuses it (`lorekeep: error: <url> was withdrawn by the owner at <time>: <reason> …`, exit
-`1`), no Reading is built for it, `recheck` leaves it out, and a work citing it fails
-`recheck --citations`. A page you find stored by mistake is reported to the owner with its `url`
-and why.
+The owner withdraws a Source stored by mistake (a parked domain, a redirect to another site, a
+namesake) with `lorekeep withdraw`, which appends a `withdrawals.csv` row with `action` `withdraw`;
+`withdraw --undo` appends one with `action` `undo`. The last row of a `url` decides, and a
+withdrawal covers every Version of the Source. Its files stay; what changes for it:
+
+- `search` never finds it: the Index holds no Section of it.
+- `get` refuses it, also when a new address redirects to it, and `add` refuses a withdrawn
+  `owner:` Source: `lorekeep: error: <url> was withdrawn by the owner at <time>: <reason> …`, exit
+  `1`, nothing written.
+- `read` and an Index rebuild build no Reading of it; `rules sample` and `rules check` leave it out.
+- `recheck` leaves it out of every scope.
+- `recheck --citations` names each work citing it
+  (`lorekeep: error: <work_id> cites <url>, withdrawn at <time>: <reason>`), lists none of them as
+  a revisit, and exits `1`.
+- `status` counts it only on its `Withdrawn:` line (`withdrawn_sources`, `withdrawn_versions`).
+- `tag add` never tags it: a `URL` names the withdrawal on stderr, a `--prefix` leaves it out.
 
 ## `citations.csv`
 
@@ -211,8 +218,7 @@ guides/cca/subagents,https://claude.termidy.com/learn/ccar-f/agentic-architectur
 - A row that cannot be read is skipped with a warning naming its line.
 - A cited `url` with no Version is a warning of `recheck --citations`
   (`<work_id> cites <url>, which is not stored`).
-- A cited `url` the owner withdrew is a failure: `recheck --citations` names it
-  (`lorekeep: error: <work_id> cites <url>, withdrawn at <time>: <reason>`) and exits `1`.
+- A cited `url` the owner withdrew fails the command ([Withdrawals](#withdrawals)).
 
 ## Host rules
 
