@@ -1,2 +1,4 @@
 # uv writes a lock beside a skill run with `uv run`; a skill ships no lock
 skills/*/uv.lock
+# the machine's projects that install these skills; AGENTS.md › After you change a skill
+local-projects.txt
