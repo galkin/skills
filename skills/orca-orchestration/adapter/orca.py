@@ -145,6 +145,53 @@ def reply(message_id: str, body: str) -> None:
     call("orchestration", "reply", "--id", message_id, "--body", body)
 
 
+def payload(m: dict) -> dict:
+    """A message's payload as a dict (Orca 1.4.237 sends it as a JSON string: ``taskId``,
+    ``dispatchId``; ``outcome`` and ``reportPath`` on worker_done; ``question`` and ``options``
+    on a question)."""
+    p = m.get("payload")
+    try:
+        p = json.loads(p) if isinstance(p, str) else p
+    except ValueError:
+        return {}
+    return p if isinstance(p, dict) else {}
+
+
+def in_run(m: dict, run: str) -> bool:
+    return m.get("run_id") == run or m.get("to_handle") == f"run:{run}"
+
+
+# ----- runs -----------------------------------------------------------------------
+
+
+def current_run() -> str | None:
+    """The Run this terminal is bound to (``run-current``), None when it is bound to none or
+    Orca does not say. A process started from the coordinator's terminal inherits its binding."""
+    try:
+        r = call("orchestration", "run-current")
+    except OrcaError:
+        return None
+    return find(r, "run.id", "runId", "run_id")
+
+
+def workers(run: str) -> list[dict]:
+    """``worker-list --run``: every Dispatch of the Run with its terminal (Orca 1.4.237:
+    ``dispatchId``, ``taskId``, ``dispatchStatus``, ``agentTerminalHandle``, ``terminalState``
+    and ``resource.retainedReason`` / ``resource.ownerDispatchId``), all pages."""
+    rows: list[dict] = []
+    cursor = None
+    for _ in range(50):
+        argv = ["orchestration", "worker-list", "--run", run, "--limit", "100"]
+        if cursor:
+            argv += ["--cursor", cursor]
+        r = call(*argv)
+        rows += [w for w in (r.get("workers") or r.get("items") or []) if isinstance(w, dict)]
+        cursor = find(r, "page.nextCursor", "nextCursor")
+        if not cursor:
+            break
+    return rows
+
+
 # ----- terminals ------------------------------------------------------------------
 
 

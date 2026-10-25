@@ -23,8 +23,12 @@ and `reply` (a message in the thread), completes tasks after `$FAKE_ORCA_AUTOCOM
 runs `$FAKE_ORCA_ON_START` in the worker's worktree on `worker-start` so a whole workflow can
 be tried without a vendor, answers `runtime_unavailable` for as many calls as the file named
 by `$FAKE_ORCA_DOWN` counts down, and refuses `worker-release` for the dispatches in its
-state's `retained` list); `tests/test_actions.py` drives `commit.sh` on temporary git
-repositories. Add `--offline` when the machine must not reach the network.
+state's `retained` list, answering `external_terminal` for its `external` list); it answers
+`run-current` from the state's `bound` (and refuses `check --run` for another Run with
+`consumer_fenced`), `worker-list --run` from its tasks, posts the state's `on_start` messages
+for a task on `worker-start`, and a worker_done built from `done_message` when a task
+completes; `tests/test_actions.py` drives `commit.sh` on temporary git repositories, including
+slot histories with merge commits. Add `--offline` when the machine must not reach the network.
 
 To try a real workflow file end to end without Orca: a scratch git repository with the
 project's workflow files, role files and `.task/`, a `git worktree` as the slot, stubs for the
@@ -60,6 +64,19 @@ on a one-item queue file.
 
 `adapter/orca.py` reads every receipt tolerantly (`find` over several candidate names), so a
 renamed field degrades to a lookup, not a crash.
+
+## Orca 1.4.237 (verified 2026-10-25)
+
+- `inbox` returns every Run's messages whatever the terminal's binding; `payload` is a JSON
+  string (`taskId`, `dispatchId`; worker_done adds `outcome`, `filesModified`, `reportPath`; a
+  question adds `question`, `options`); a question's `thread_id` is its own id, a reply's the
+  question's.
+- `check --run <another Run>` from a bound terminal: `ok: false`, `error.code:
+  consumer_fenced`.
+- `run-current`: `run.id`, `run.coordinator_handle`.
+- `worker-list --run`: `workers[].dispatchId`, `taskId`, `dispatchStatus`, `workerState`,
+  `agentTerminalHandle`, `terminalState`, `resource.ownerDispatchId`,
+  `resource.retainedReason`; `page.nextCursor`.
 
 ## Vendor log shapes (verified 2026-10)
 

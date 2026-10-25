@@ -1,6 +1,6 @@
 ---
 name: orca-orchestration
-description: Runs a project's agent workflows (author → review → fix → commit and the like) unattended with its own runner for a subset of Dagu YAML, a queue per slot worktree, plain-file run state under .task/runs, and an adapter CLI for Orca workers (start, wait, wake, drain, budget, cost). Use when starting, watching, resuming or retiring such a run, when a slot reports HELD or STALLED, or when writing or changing a workflow or queue file.
+description: Runs a project's agent workflows (author → review → fix → commit and the like) unattended with its own runner for a subset of Dagu YAML, a queue per slot worktree, plain-file run state under .task/runs, and an adapter CLI for Orca workers (start, wait, watch, wake, drain, close, budget, cost). Use when starting, watching, resuming or retiring such a run, when running a one-off Orca worker to completion, when watching several Orca Runs for questions, when a slot reports HELD or STALLED, or when writing or changing a workflow or queue file.
 ---
 
 # orca-orchestration
@@ -31,8 +31,10 @@ cd .agents/skills/orca-orchestration
 | `bin/runner status [--run-id <id>]`                                          | Per-step status, exit code, outputs and error; without `--run-id`, every run.                |
 | `bin/runner queue <q.yaml> --slot <worktree> [--resume <item> [--step <s>]]` | Continuous mode for one slot. Exit 0 queue empty or retired, 2 an item is held, 7 only held. |
 | `bin/runner queue <q.yaml> --status`                                         | Item states.                                                                                 |
+| `bin/adapter run [--run <run id>] --worktree W --launch V:M:E --role R --title T --spec-file F --wait` | A one-off worker to its end: launches, prints each question as it arrives, prints the done message (subject, body, report path), frees the terminal. Exit 0 done, 3 escalated, 4 failed, 5 usage limit. `--run` defaults to the bound Run; `--keep-terminal` keeps it for a `--reuse-task` follow-up. See [One-off workers](#one-off-workers). |
+| `bin/adapter watch --state F [--run <run id>]… [--runs-file F] [--log slots.log]…` | One line per new question, escalation and worker_done of every Run given, and per `HELD`, stall, `queue empty` and `retired` in the slot logs; heartbeats dropped; ids kept in `--state`, so a restart repeats nothing. Runs until stopped: the coordinator's one Monitor. See [Watch](#watch). |
 | `bin/adapter drain --run <run id>`                                            | Consumes worker heartbeats and done messages and keeps running; prints an `ATTENTION` line for every unanswered question or escalation, again each round until its thread holds a reply. `--ack <msg id>` answers one that needs no words. Only beside a running queue: see [adapter.md](references/adapter.md#commands). |
-| `bin/adapter unstall`, `bin/adapter close --worktree W`, `bin/adapter release --task <id>`      | Wake limit-stalled terminals; release the worktree's settled terminals the adapter started (`--all`: every terminal); release a settled task. |
+| `bin/adapter unstall`, `bin/adapter close (--worktree W \| --run <run id>)`, `bin/adapter release --task <id>`      | Wake limit-stalled terminals; free the settled worker terminals the adapter started in the worktree (`--all`: every terminal), or every settled worker terminal of a Run, whoever launched it; release a settled task. |
 | `bin/adapter cost --worktree <slot> [--write]`                                | Tokens per worker session by item and step (joined through the launch ledger); `--write` records them beside the run state. |
 
 `--runs-dir` goes before the subcommand and defaults to `.task/runs` relative to the cwd, so
@@ -53,11 +55,16 @@ the workflow file, not to the cwd.
    caffeinate -i -w <pid of a slot> &
    ```
 
+   and one watch for the Monitor (the [Watch](#watch) section): `bin/adapter watch --run <run
+   id> --log $W/.task/runs/slots.log --state $W/.task/runs/watch.json`.
+
    One `queue` process per slot. A slot takes the next item as soon as its own is done, idles
    while the admission hook says no, and waits out a usage limit by itself.
-3. **Sleep.** Watch `slots.log` for `HELD`, `queue empty` and `retired`, and `drain.log` for
-   `ATTENTION` (a Monitor on those words, or a check every 30 minutes). Read nothing else
-   unless one of them fires: every step's output is on disk for later. Every `ATTENTION` line
+3. **Sleep.** The watch prints a line for every `HELD`, stall, `queue empty` and `retired` in
+   `slots.log` and every question and escalation of the Run; `drain.log`'s `ATTENTION` lines
+   say the same about questions, again until each is answered (check it every 30 minutes if
+   no Monitor runs). Read nothing else unless one of them fires: every step's output is on
+   disk for later. Every `ATTENTION` line
    names a message id, its sender and its age, and the open ones are printed together again
    (at once when another arrives, else every `--repeat-sec`) until each is answered: `orca
    orchestration reply --id <msg id> --body …`, or `bin/adapter drain --run <run id> --ack
@@ -91,14 +98,62 @@ the workflow file, not to the cwd.
    - **A waiver or a follow-up to the worker**, as the project doc defines them.
 5. **Finish.** `touch <runs dir>/q/retire-<slot name>` retires an idle slot; `bin/adapter close
    --worktree <slot>` releases the terminals the adapter started there once their tasks settled
-   and names what it kept (a retained one, the owner's own); `bin/adapter cost --worktree <slot>
-   --write` records what each step cost, which is where the next queue file's `--costs` come from.
+   and names what it kept (a retained one, the owner's own). Once every slot is done, `bin/adapter
+   close --run <run id>` frees every settled worker terminal left in the Run, whoever launched
+   it, so no idle terminal outlives the Run. `bin/adapter cost --worktree <slot> --write` records
+   what each step cost, which is where the next queue file's `--costs` come from.
 
 One item by hand, without the queue: `bin/runner run <wf.yaml> --run-id <id> --param …` with the same
 `--runs-dir`. The queue adopts such a run: an item whose run directory already holds a
 `run.json` is resumed from its unfinished steps with the run's own params, not restarted, so
 a unit started by hand under the queue's runs dir and item id can be handed to a slot by
 simply listing it.
+
+## One-off workers
+
+A worker outside any queue (a fix, a review, a spike) runs to its end in one command, from the
+skill folder, in the background (the Bash tool's background mode, or `nohup … &` with a log):
+
+```sh
+bin/adapter run --worktree <path> --launch claude:opus:high --role <role> \
+  --title "<title>" --spec-file <file> --wait
+```
+
+`--run` defaults to the Run this terminal is bound to (`orca orchestration run-current`). The
+command prints `QUESTION <msg id> … | <subject> | <body>` and the reply command for every
+question as it arrives (the worker blocks until `orca orchestration reply --id <msg id> --body
+…`), then `DONE <outcome> <msg id> task <id> | <subject>`, the body and `report <path>`, and
+frees the worker's terminal. An escalation (exit 3), a usage limit (exit 5) or a failed task
+(exit 4) keeps the terminal so you can look. When a follow-up into the same session comes next
+(`--reuse-task <task>`), pass `--keep-terminal`. Several one-off workers at once are several
+such commands; a watch over their Run shows all of their questions in one stream.
+
+## Watch
+
+`bin/adapter watch` is the one Monitor for everything the coordinator answers or decides, over
+any number of Runs and queues:
+
+```sh
+bin/adapter watch --run <run id> [--run <run id>]… [--runs-file <file>] \
+  [--log $W/.task/runs/slots.log]… --state $W/.task/runs/watch.json
+```
+
+Use it whenever more than one Run or queue is live, or a worker may ask while you work on
+something else; never a hand-written loop over `inbox`. It reads Orca's whole inbox every
+`--poll-sec` (30) without consuming anything, so it needs no binding and sees every Run listed
+(a `--runs-file` is re-read every poll: append a Run to it as you create one). It prints one
+line per new `QUESTION`, `ESCALATION` and `DONE` (worker_done; `--types` narrows it, e.g.
+`question,escalation` beside a busy queue) and per `SLOT … HELD` / `stalled at` / `queue empty`
+/ `retired` line of each `--log`; heartbeats are dropped. The ids it printed and the log
+offsets are kept in `--state`, so a restart repeats nothing; a first start prints only the
+questions and escalations nobody has answered yet.
+
+**Replying to another Run's message.** The coordinator's terminal is bound to one Run
+(`run-create` binds the new one), and `reply` and `check` for a message of another Run are
+refused (`consumer_fenced`). A watch line for such a message ends `bound to <run>: orca
+orchestration run-use --id <its run> before replying`. Run exactly that, reply, then
+`run-use` back to the Run whose `drain` runs: while the terminal is bound elsewhere, the
+drain's `check` is refused, and it logs that and pauses until the binding returns.
 
 ## Run state
 
@@ -119,8 +174,11 @@ by the queue after the stall hook's time, not held.
   (the Dagu subset: fields, references, conditions, outputs, continue_on, retry, repeat, pitfalls).
 - Writing a queue file, hooks, item states: [references/queue.md](references/queue.md).
 - The adapter commands a workflow step calls, their outputs, exit codes, launch routes, the
-  fallback launch, the budget and cost commands: [references/adapter.md](references/adapter.md).
-- `actions/commit.sh` (checks, commit, cherry-pick under a lock) and its environment:
+  fallback launch, watch and Run bindings, the budget and cost commands:
+  [references/adapter.md](references/adapter.md).
+- `actions/commit.sh` (checks, commit, then a cherry-pick, a fast-forward or a merge under a
+  lock, all or nothing; `MERGE=branch` for a long-lived branch that merges its base) and its
+  environment:
   [references/actions.md](references/actions.md).
 - Tests, the shell choice, Dagu provenance, verified Orca receipt and vendor log shapes:
   [references/development.md](references/development.md).

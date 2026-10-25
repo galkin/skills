@@ -1,21 +1,24 @@
 """``adapter`` command line: the workflow steps' way to Orca workers (layer 1).
 
-    adapter run      --run <run_id> --worktree <path> --launch <vendor:model:effort> --role <role>
+    adapter run      [--run <run_id>] --worktree <path> --launch <vendor:model:effort> --role <role>
                      --title <text> (--spec <text> | --spec-file <file> | --spec-template <file>)...
                      [--reuse-task <id>] [--fallback <vendor:model:effort>] [--language <name>]
+                     [--wait [--keep-terminal] [--poll-sec 30]]
     adapter wait     --run <run_id> --task <id> [--handle <h>] [--poll-sec 60] [--runtime-wait 30]
     adapter followup --run <run_id> --handle <h> --title <text> (--spec|--spec-file|--spec-template)...
     adapter handle   --task <id>            adapter alive --handle <h>
     adapter unstall  [--worktree <path>] [--exclude <path>]
     adapter drain    --run <run_id> [--once] [--repeat-sec 300] | --run <run_id> --ack <msg_id> [--body <text>]
-    adapter close    --worktree <path> [--all]   adapter release --task <id>
+    adapter watch    --state <file> [--run <run_id>]... [--runs-file <file>] [--log <slots.log>]... [--poll-sec 30] [--once]
+    adapter close    (--worktree <path> [--all] | --run <run_id>)   adapter release --task <id>
     adapter budget   [--costs step=pct,...] [--new pct] [--week pct] [--margin pct] [--reset] [--why]
     adapter cost     [--worktree <path>]... [--hours 12] [--json] [--write]
 
 Outputs go to ``$DAGU_OUTPUT_FILE`` when it is set (``task=``, ``dispatch=``, ``handle=``,
 ``status=``), so a workflow step declares them as ``outputs``. Exit codes follow the old
 drivers: 0 ok, 4 the task ended badly, 5 the agent sits on a usage limit, 6 provider errors
-persist, 3 (``drain --once``) a question or escalation is unanswered, 1 other failures.
+persist, 3 (``drain --once``) a question or escalation is unanswered (``run --wait``: the
+worker escalated), 1 other failures.
 
 The spec is the ``--spec`` texts and files joined in order. ``--spec-file`` is literal;
 ``--spec-template`` resolves ``${params.x}`` from ``$DAG_PARAMS_JSON`` and ``${env.X}`` from
@@ -127,12 +130,19 @@ def add_spec(p: argparse.ArgumentParser) -> None:
     p.add_argument("--runs-dir", default=None, help="where the launch ledger lives (default: $RUNS_DIR, else the parent of $DAG_RUN_WORK_DIR)")
 
 
+def add_wait_args(p: argparse.ArgumentParser, poll_sec: float) -> None:
+    p.add_argument("--poll-sec", type=float, default=poll_sec)
+    p.add_argument("--stall-every", type=int, default=5, help="check the screen for a limit every N polls")
+    p.add_argument("--max-reprompts", type=int, default=8)
+    p.add_argument("--runtime-wait", type=float, default=30, help="minutes to keep polling while Orca itself is unavailable (runtime_unavailable) before failing")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="adapter", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
 
     r = sub.add_parser("run", help="start a worker in a role, or send the task into a live session with --reuse-task")
-    r.add_argument("--run", required=True, help="Orca Run id")
+    r.add_argument("--run", default=None, help="Orca Run id (default: the Run this terminal is bound to, per run-current)")
     r.add_argument("--worktree", required=True)
     r.add_argument("--launch", required=True, metavar="VENDOR:MODEL:EFFORT")
     r.add_argument("--role", required=True, help="Claude: .claude/agents/<role>.md; Codex: informational")
@@ -142,6 +152,11 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--fallback", default="", metavar="VENDOR:MODEL:EFFORT",
                    help="launch for a fresh worker when the --launch vendor is at its usage limit (its reused terminal shows the limit, or its windows are spent)")
     r.add_argument("--language", default="", help="claude: the session's output language (--settings), overriding the user's global one; codex: no-op, the role body carries it")
+    r.add_argument("--wait", action="store_true",
+                   help="a one-off worker to completion: wait for its worker_done (printed with the report path) or escalation, print each question as it arrives, close its terminal when done")
+    r.add_argument("--keep-terminal", action="store_true", help="with --wait: keep the terminal on done (a --reuse-task follow-up comes next)")
+    r.add_argument("--inbox-limit", type=int, default=500, help="with --wait: how many of the newest inbox messages each poll reads")
+    add_wait_args(r, poll_sec=30)
 
     f = sub.add_parser("followup", help="create a task and inject it into a live terminal")
     f.add_argument("--run", required=True)
@@ -152,10 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--run", required=True)
     w.add_argument("--task", required=True)
     w.add_argument("--handle", nargs="?", default=None, help="optional; looked up from the task when empty")
-    w.add_argument("--poll-sec", type=float, default=60)
-    w.add_argument("--stall-every", type=int, default=5, help="check the screen for a limit every N polls")
-    w.add_argument("--max-reprompts", type=int, default=8)
-    w.add_argument("--runtime-wait", type=float, default=30, help="minutes to keep polling while Orca itself is unavailable (runtime_unavailable) before failing")
+    add_wait_args(w, poll_sec=60)
 
     h = sub.add_parser("handle", help="print the terminal handle of a task")
     h.add_argument("--task", required=True)
@@ -177,8 +189,20 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--ack", metavar="MSG_ID", help="answer one question or escalation that needs no words: reply in its thread with --body, then exit")
     d.add_argument("--body", default="Acknowledged by the coordinator.", help="with --ack: the reply text")
 
-    c = sub.add_parser("close", help="release the worktree's terminals the adapter started whose tasks have settled; retained and user-owned ones stay (exit 0, named in the log)")
-    c.add_argument("--worktree", required=True)
+    ws = sub.add_parser("watch", help="one line per new question, escalation and worker_done of the given Runs, and per HELD or stall in the slot logs; heartbeats dropped; runs until stopped")
+    ws.add_argument("--run", action="append", help="a Run to watch (repeatable); default with no --runs-file: the bound Run")
+    ws.add_argument("--runs-file", help="a file of Run ids, one per line (# comments), re-read every poll so a Run is added without a restart")
+    ws.add_argument("--log", action="append", help="a slots.log to follow for HELD, stalled, queue empty, retired (repeatable)")
+    ws.add_argument("--state", required=True, help="JSON file of the ids already printed and the log offsets, so a restart repeats nothing")
+    ws.add_argument("--types", default="question,escalation,worker_done", help="message types printed (default %(default)s)")
+    ws.add_argument("--poll-sec", type=float, default=30)
+    ws.add_argument("--inbox-limit", type=int, default=1000, help="how many of the newest inbox messages (every Run's) each poll reads")
+    ws.add_argument("--once", action="store_true", help="one poll, then exit 0")
+
+    c = sub.add_parser("close", help="release the worktree's (or Run's) settled worker terminals; running, retained and user-owned ones stay (exit 0, named in the log)")
+    cw = c.add_mutually_exclusive_group(required=True)
+    cw.add_argument("--worktree", help="the terminals of this worktree that the launch ledger lists")
+    cw.add_argument("--run", help="every worker terminal of this Run (worker-list), whoever launched it")
     c.add_argument("--all", action="store_true", help="close every terminal of the worktree, whoever owns it (the playbook's last resort)")
     c.add_argument("--runs-dir", default=None, help="where the launch ledger lives (default: $RUNS_DIR, else the parent of $DAG_RUN_WORK_DIR)")
 
@@ -214,7 +238,22 @@ def parse_launch(text: str) -> tuple[str, str, str]:
 
 
 def cmd_run(args) -> int:
+    if not args.run:
+        args.run = orca.current_run()
+        if not args.run:
+            raise SystemExit("adapter: no --run, and this terminal is bound to no Run (orca orchestration run-current); pass --run <run id>")
+        log(f"no --run: using the bound Run {args.run}")
     spec = spec_text(args)
+    task, dispatch, handle, fresh = start(args, spec)
+    if not task:
+        return 1
+    if not args.wait:
+        return 0
+    return see_through(args, task, dispatch if fresh else None, handle)
+
+
+def start(args, spec: str) -> tuple[str | None, str | None, str | None, bool]:
+    """Launch (or follow up into a live terminal); (task, dispatch, handle, fresh worker)."""
     launch = args.launch
     if args.reuse_task:
         handle = orca.task_handle(args.reuse_task)
@@ -224,7 +263,7 @@ def cmd_run(args) -> int:
                 launch = args.fallback
             else:
                 log(f"reusing {handle} of task {args.reuse_task}")
-                return followup(args.run, handle, args.title, spec, args.runs_dir, args.worktree)
+                return (*followup(args.run, handle, args.title, spec, args.runs_dir, args.worktree), False)
         else:
             log(f"task {args.reuse_task} has no live terminal; starting fresh")
     vendor, model, effort = parse_launch(launch)
@@ -265,7 +304,7 @@ def cmd_run(args) -> int:
     record(args.runs_dir, run=args.run, task=task, dispatch=dispatch, handle=handle, vendor=vendor, model=model,
            role=args.role, title=args.title, worktree=args.worktree, kind="start")
     out(task=task, dispatch=dispatch, handle=handle)
-    return 0 if task else 1
+    return task, dispatch, handle, True
 
 
 def record(runs_dir: str | None, **rec: str | None) -> None:
@@ -300,7 +339,7 @@ def write_codex_config(worktree: Path, role: str) -> Path:
     return out
 
 
-def followup(run: str, handle: str, title: str, spec: str, runs_dir: str | None = None, worktree: str = "") -> int:
+def followup(run: str, handle: str, title: str, spec: str, runs_dir: str | None = None, worktree: str = "") -> tuple[str, str, str]:
     t = orca.call("orchestration", "task-create", "--run", run, "--task-title", title, "--spec", spec)
     task = find(t, "task.id", "taskId", "task_id", "id")
     d = orca.call("orchestration", "dispatch", "--run", run, "--task", task, "--to", handle, "--inject")
@@ -311,11 +350,12 @@ def followup(run: str, handle: str, title: str, spec: str, runs_dir: str | None 
     record(runs_dir, run=run, task=task, dispatch=dispatch, handle=handle, vendor=first.get("vendor", ""),
            model=first.get("model", ""), role=first.get("role", ""), title=title, worktree=worktree or first.get("worktree", ""), kind="followup")
     out(task=task, dispatch=dispatch, handle=handle)
-    return 0
+    return task, dispatch, handle
 
 
 def cmd_followup(args) -> int:
-    return followup(args.run, args.handle, args.title, spec_text(args), args.runs_dir)
+    followup(args.run, args.handle, args.title, spec_text(args), args.runs_dir)
+    return 0
 
 
 WAKE = "The usage limit has reset. Continue the task exactly where you stopped."
@@ -336,7 +376,13 @@ def wake(handle: str) -> bool:
 
 
 def cmd_wait(args) -> int:
-    handle = args.handle or orca.task_handle(args.task)
+    return wait_task(args, args.run, args.task, args.handle)
+
+
+def wait_task(args, run: str, task: str, handle: str | None, on_poll=None) -> int:
+    """Poll the task until it settles (the ``wait`` command). ``on_poll()``, when given, runs
+    first on every poll and ends the wait with its ``(exit code, status)`` when it returns one."""
+    handle = handle or orca.task_handle(task)
     if handle and orca.stalled(handle):
         log(f"{handle} shows a usage limit at the start of the wait; trying to wake it")
         if not wake(handle):
@@ -348,8 +394,13 @@ def cmd_wait(args) -> int:
     n = 0
     down_since = 0.0
     while True:
+        if on_poll:
+            stop = on_poll()
+            if stop is not None:
+                out(status=stop[1])
+                return stop[0]
         try:
-            status = orca.task_status(args.run, args.task)
+            status = orca.task_status(run, task)
         except OrcaError as e:
             # Orca itself is down (a restart, a power cut): the task may still be running; keep
             # polling for --runtime-wait minutes, then fail as any other Orca error does.
@@ -360,7 +411,7 @@ def cmd_wait(args) -> int:
             if waited >= args.runtime_wait:
                 log(f"Orca unavailable for {waited:.0f} min: {e}")
                 raise
-            log(f"Orca unavailable ({waited:.0f} of {args.runtime_wait:g} min): still waiting for task {args.task}")
+            log(f"Orca unavailable ({waited:.0f} of {args.runtime_wait:g} min): still waiting for task {task}")
             time.sleep(args.poll_sec)
             continue
         if down_since:
@@ -370,14 +421,14 @@ def cmd_wait(args) -> int:
             out(status=status)
             return 0
         if status not in orca.RUNNING:
-            log(f"task {args.task} ended {status}")
+            log(f"task {task} ended {status}")
             out(status=status)
             return EXIT_BAD_TASK
         n += 1
         if handle is None:
-            handle = orca.task_handle(args.task)
+            handle = orca.task_handle(task)
         if n % args.stall_every == 0 and orca.stalled(handle):
-            log(f"STALLED on a usage limit: task {args.task} handle {handle}")
+            log(f"STALLED on a usage limit: task {task} handle {handle}")
             out(status="stalled")
             return EXIT_STALLED
         # provider errors: re-prompt after 1, 2, 4, 8, 16, 32, 32… minutes; reset after 10 clean polls
@@ -387,22 +438,122 @@ def cmd_wait(args) -> int:
             if next_at == 0:
                 minutes = min(2**tries, 32)
                 next_at = now + 60 * minutes
-                log(f"provider error on {args.task}; re-prompt in {minutes} min")
+                log(f"provider error on {task}; re-prompt in {minutes} min")
             elif now >= next_at:
                 if tries >= args.max_reprompts:
-                    log(f"provider errors persist after {tries} re-prompts: {args.task}")
+                    log(f"provider errors persist after {tries} re-prompts: {task}")
                     out(status="provider_error")
                     return EXIT_PROVIDER
                 orca.send(handle, REPROMPT)
                 tries += 1
                 next_at = 0
-                log(f"re-prompted {args.task} (attempt {tries})")
+                log(f"re-prompted {task} (attempt {tries})")
         else:
             next_at = 0
             clean += 1
             if clean >= 10:
                 tries = 0
         time.sleep(args.poll_sec)
+
+
+def see_through(args, task: str, dispatch: str | None, handle: str | None) -> int:
+    """``run --wait``: a one-off worker to its end, with the coordinator's questions on the way.
+
+    Every poll reads the inbox for this task's messages (by ``taskId``, or the dispatch): a
+    question is printed once as it arrives, with the reply command, and the wait goes on (the
+    worker blocks on its ``ask`` until the reply); an escalation is printed and ends the wait
+    with exit 3, the terminal kept; a worker_done is printed in full with its report path and
+    ends it, and the terminal is freed unless ``--keep-terminal``. A usage limit, provider
+    errors and a task that ends badly end it as ``wait`` does, the terminal kept.
+    """
+    seen: set[str] = set()
+    found: dict[str, dict] = {}
+    bound = orca.current_run()
+
+    def on_poll():
+        try:
+            rows = orca.inbox(args.inbox_limit)
+        except OrcaError as e:
+            log(f"inbox unavailable ({e}); questions are looked for again next poll")
+            return None
+        for m in reversed(rows):  # oldest first
+            pl = orca.payload(m)
+            if m.get("id") in seen or not (pl.get("taskId") == task or (dispatch and pl.get("dispatchId") == dispatch)):
+                continue
+            kind = m.get("type")
+            if kind not in ("question", "escalation", "worker_done"):
+                continue
+            seen.add(m.get("id"))
+            if kind == "worker_done":
+                found["done"] = m
+                return (0 if pl.get("outcome") != "failed" else EXIT_BAD_TASK), "worker_done"
+            print(event_line(m, bound), flush=True)
+            if kind == "escalation":
+                return EXIT_ATTENTION, "escalation"
+            print(f"  reply: orca orchestration reply --id {m.get('id')} --body '…'", flush=True)
+        return None
+
+    code = wait_task(args, args.run, task, handle, on_poll=on_poll)
+    if code == 0 and "done" not in found:
+        on_poll()  # the task completed between two polls: its worker_done is in the inbox by now
+    m = found.get("done")
+    if m is None:
+        if code == 0:
+            print(f"DONE task {task} completed without a worker_done message", flush=True)
+        else:
+            log(f"task {task} did not finish (exit {code}); terminal {handle} kept")
+            return code
+    else:
+        pl = orca.payload(m)
+        print(f"DONE {pl.get('outcome') or '?'} {m.get('id')} task {task} | {m.get('subject')}", flush=True)
+        if str(m.get("body") or "").strip():
+            print(str(m["body"]).rstrip(), flush=True)
+        if pl.get("reportPath"):
+            print(f"report {pl['reportPath']}", flush=True)
+    if args.keep_terminal:
+        log(f"terminal {handle} kept (--keep-terminal)")
+    elif handle:
+        settle(args.run, task)
+        owner = dispatch or owner_dispatch(args.run, handle)
+        said = free(handle, owner) if owner else "no dispatch owns it"
+        log(f"{said.split(' ', 1)[0]} {handle}" if freed(said) else f"kept {handle}: {said}")
+    return code
+
+
+def settle(run: str, task: str, tries: int = 20, pause: float = 3) -> None:
+    """Wait a little for Orca to settle the task a worker_done just completed (a release of an
+    unsettled dispatch is refused)."""
+    for _ in range(tries):
+        if orca.task_status(run, task) not in orca.RUNNING:
+            return
+        time.sleep(pause)
+
+
+def owner_dispatch(run: str, handle: str) -> str | None:
+    """The dispatch that owns a terminal (worker-start's, not a follow-up's), per worker-list."""
+    for w in orca.workers(run):
+        if w.get("agentTerminalHandle") == handle:
+            owner = find(w, "resource.ownerDispatchId")
+            if owner:
+                return owner
+    return None
+
+
+def free(handle: str, owner: str) -> str:
+    """Release the terminal through the dispatch that owns it; a terminal Orca never owned
+    (``external_terminal``: the claude route created it) is closed. "released", "closed (…)",
+    or why it was kept (the user's takeover, an unsettled dispatch)."""
+    ok, said = orca.release(owner)
+    if ok:
+        return "released"
+    if "external_terminal" in said:
+        orca.close(handle)
+        return f"closed (Orca never owned it: {said})"
+    return f"worker-release refused: {said}"
+
+
+def freed(said: str) -> bool:
+    return said == "released" or said.startswith("closed")
 
 
 def cmd_handle(args) -> int:
@@ -457,6 +608,45 @@ def attention_line(m: dict, now: float) -> str:
     return f"ATTENTION {m.get('id')} {m.get('type')} from {sender}{f' task {task}' if task else ''} age {age} | {m.get('subject')} | {body}"
 
 
+SHOWN = {"question": "QUESTION", "escalation": "ESCALATION", "worker_done": "DONE"}
+
+
+def event_line(m: dict, bound: str | None = None) -> str:
+    """``<TYPE> <msg id> run <run> from <sender> [task <id>] | <subject> | <body> [| options …]
+    [| report …] [| bound to <run>: … run-use …]``; the last part only for a question or
+    escalation of a Run other than the bound one, whose reply needs that Run bound first."""
+    pl = orca.payload(m)
+    kind = SHOWN.get(m.get("type"), str(m.get("type") or "?").upper())
+    if m.get("type") == "worker_done" and pl.get("outcome"):
+        kind += f" {pl['outcome']}"
+    run = m.get("run_id") or str(m.get("to_handle") or "").removeprefix("run:")
+    sender = m.get("from_handle") or m.get("from") or "?"
+    task = f" task {pl['taskId']}" if pl.get("taskId") else ""
+    parts = [f"{kind} {m.get('id')} run {run} from {sender}{task}", str(m.get("subject") or ""),
+             " ".join(str(m.get("body") or pl.get("question") or "").split())[:400]]
+    if isinstance(pl.get("options"), list) and pl["options"]:
+        parts.append("options: " + " / ".join(map(str, pl["options"])))
+    if pl.get("reportPath"):
+        parts.append(f"report {pl['reportPath']}")
+    if m.get("type") in ANSWERABLE and bound and run and run != bound:
+        parts.append(f"bound to {bound}: orca orchestration run-use --id {run} before replying")
+    return " | ".join(parts)
+
+
+def replied_by(rows: list[dict]) -> dict[str, set[str]]:
+    """thread id -> the senders of the replies in it."""
+    replied: dict[str, set[str]] = {}
+    for m in rows:
+        thread = m.get("thread_id")
+        if thread and thread != m.get("id"):
+            replied.setdefault(thread, set()).add(str(m.get("from_handle") or ""))
+    return replied
+
+
+def answered(m: dict, replied: dict[str, set[str]]) -> bool:
+    return bool(replied.get(m.get("id"), set()) - {str(m.get("from_handle") or "")})
+
+
 def pending_attention(run: str, seen: dict[str, dict], limit: int) -> tuple[dict[str, dict], set[str]] | None:
     """The run's questions and escalations nobody has answered, and the ids the inbox holds.
 
@@ -470,17 +660,11 @@ def pending_attention(run: str, seen: dict[str, dict], limit: int) -> tuple[dict
     except OrcaError as e:
         log(f"inbox unavailable ({e}); pending questions cannot be listed this round")
         return None
-    replied: dict[str, set[str]] = {}
-    for m in rows:
-        thread = m.get("thread_id")
-        if thread and thread != m.get("id"):
-            replied.setdefault(thread, set()).add(str(m.get("from_handle") or ""))
-    candidates = {m["id"]: m for m in rows if m.get("id") and m.get("type") in ANSWERABLE
-                  and (m.get("run_id") == run or m.get("to_handle") == f"run:{run}")}
+    replied = replied_by(rows)
+    candidates = {m["id"]: m for m in rows if m.get("id") and m.get("type") in ANSWERABLE and orca.in_run(m, run)}
     for mid, m in seen.items():
         candidates.setdefault(mid, m)
-    pending = {mid: m for mid, m in candidates.items()
-               if not (replied.get(mid, set()) - {str(m.get("from_handle") or "")})}
+    pending = {mid: m for mid, m in candidates.items() if not answered(m, replied)}
     return pending, {m.get("id") for m in rows}
 
 
@@ -509,6 +693,12 @@ def cmd_drain(args) -> int:
         if prev:
             argv += ["--ack", prev]
         r = orca.call(*argv, check=False, timeout=args.timeout_ms / 1000 + 60)
+        if r.get("ok") is False and not args.once:
+            # check answers at once on an error (consumer_fenced: the coordinator's terminal was
+            # bound to another Run): say so and pause instead of spinning on it.
+            log(f"check --run {args.run} refused: {find(r, 'error.message', 'message') or r}; retrying in {args.retry_sec:g}s")
+            time.sleep(args.retry_sec)
+            continue
         prev = None
         messages = r.get("messages") or []
         delivery = find(r, "deliveryId", "delivery_id")
@@ -542,6 +732,112 @@ def cmd_drain(args) -> int:
             time.sleep(args.retry_sec)  # an unrecorded batch is replayed at once: do not spin on it
 
 
+SLOT_EVENT = re.compile(r" HELD: | stalled at | queue empty$| retired$| only held items")
+
+
+def watched_runs(args) -> list[str]:
+    runs = list(args.run or [])
+    if args.runs_file:
+        try:
+            lines = Path(args.runs_file).read_text(encoding="utf-8").splitlines()
+        except OSError as e:
+            log(f"runs file unreadable ({e}); watching {runs or 'nothing else'}")
+            lines = []
+        runs += [line.split("#", 1)[0].strip() for line in lines]
+    return list(dict.fromkeys(r for r in runs if r))
+
+
+def load_watch_state(path: Path) -> dict | None:
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except ValueError:
+        raise SystemExit(f"adapter: {path} is not a watch state file (JSON); move it away or name another --state")
+    return state if isinstance(state, dict) else None
+
+
+def save_watch_state(path: Path, state: dict) -> None:
+    state["seen"] = state["seen"][-20000:]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(state), encoding="utf-8")
+    tmp.replace(path)
+
+
+def cmd_watch(args) -> int:
+    """One line per new event of the watched Runs and slots, for one long Monitor.
+
+    The inbox Orca keeps is read whole (every Run's, newest first), never through ``check``, so
+    no batch is consumed and no Run needs to be bound: a terminal bound to one Run reads another
+    Run's messages this way (verified on Orca 1.4.237, where ``check --run <other>`` answers
+    ``consumer_fenced``). A question or escalation of a Run other than the bound one says to
+    ``run-use`` that Run before replying; watch itself never rebinds (it would fence the bound
+    Run's drain). The ids printed and the slot logs' offsets are kept in ``--state``, so a
+    restart repeats nothing; the first start prints only the questions and escalations still
+    unanswered, not the history. A slot log is followed from its end when first seen.
+    """
+    state_path = Path(args.state)
+    state = load_watch_state(state_path)
+    first = state is None
+    state = state or {"seen": [], "logs": {}, "seq": 0}
+    seen = set(state["seen"])
+    types = {t.strip() for t in args.types.split(",") if t.strip()}
+    runs = watched_runs(args)
+    if not runs:
+        bound = orca.current_run()
+        if not bound:
+            raise SystemExit("adapter: watch needs --run or --runs-file (this terminal is bound to no Run)")
+        args.run = [bound]
+        log(f"watching the bound Run {bound}")
+    while True:
+        runs = watched_runs(args)
+        try:
+            rows = orca.inbox(args.inbox_limit)
+        except OrcaError as e:
+            log(f"inbox unavailable ({e}); trying again in {args.poll_sec:g}s")
+            rows = None
+        if rows is not None:
+            seqs = [int(m["sequence"]) for m in rows if str(m.get("sequence") or "").isdigit()]
+            if seqs and state.get("seq") and min(seqs) > state["seq"] + 1 and len(rows) >= args.inbox_limit:
+                log(f"more than {args.inbox_limit} messages since the last poll: some may be missed; raise --inbox-limit")
+            state["seq"] = max([state.get("seq") or 0, *seqs])
+            replied = replied_by(rows) if first else {}
+            bound = None
+            for m in reversed(rows):  # oldest first
+                mid = m.get("id")
+                if not mid or mid in seen or m.get("type") not in types or not any(orca.in_run(m, r) for r in runs):
+                    continue
+                seen.add(mid)
+                state["seen"].append(mid)
+                if first and (m.get("type") not in ANSWERABLE or answered(m, replied)):
+                    continue  # history: done before this watch began
+                if m.get("type") in ANSWERABLE and bound is None:
+                    bound = orca.current_run() or ""
+                print(f"{time.strftime('%H:%M')} {event_line(m, bound)}", flush=True)
+        for log_path in args.log or []:
+            offset = state["logs"].get(log_path)
+            try:
+                size = os.path.getsize(log_path)
+            except OSError:
+                continue
+            if offset is None or offset > size:  # first seen: from its end; truncated: from the start
+                offset = size if offset is None else 0
+            with open(log_path, "rb") as f:
+                f.seek(offset)
+                chunk = f.read()
+            done = chunk.rfind(b"\n") + 1  # a line still being written waits for the next poll
+            for line in chunk[:done].decode("utf-8", "replace").splitlines():
+                if SLOT_EVENT.search(line):
+                    print(f"SLOT {line}", flush=True)
+            state["logs"][log_path] = offset + done
+        save_watch_state(state_path, state)
+        first = False
+        if args.once:
+            return 0
+        time.sleep(args.poll_sec)
+
+
 def cmd_close(args) -> int:
     """Release the terminals the adapter started in the worktree once their tasks settled.
 
@@ -556,6 +852,8 @@ def cmd_close(args) -> int:
     closes), so the exit is 0 and the log says what stayed. ``--all`` is the old behaviour,
     every terminal of the worktree, for the playbook's last resort.
     """
+    if args.run:
+        return close_run(args.run)
     live = {t.get("handle"): t for t in orca.terminals(args.worktree)}
     if args.all:
         for h in live:
@@ -588,20 +886,58 @@ def cmd_close(args) -> int:
             log(f"kept {h}: not started by the adapter (re-tasked only; task {r['task']} {status})")
             kept += 1
             continue
-        ok, said = orca.release(owner[h])
-        if ok:
+        said = free(h, owner[h])
+        if said == "released":
             log(f"released {h} (task {r['task']} {status})")
-        elif "external_terminal" in said:
-            orca.close(h)
-            log(f"closed {h} (task {r['task']} {status}; Orca never owned it: {said})")
+        elif freed(said):
+            log(f"closed {h} (task {r['task']} {status}; {said.removeprefix('closed (')}")
         else:
-            log(f"kept {h}: worker-release refused: {said}")
+            log(f"kept {h}: {said}")
             kept += 1
     for h in live:
         if h not in mine:
             log(f"kept {h}: not started by the adapter")
     if kept:
         log(f"{kept} terminal(s) of {args.worktree} kept; see above")
+    return 0
+
+
+def close_run(run: str) -> int:
+    """``close --run``: free every worker terminal of the Run whose dispatches have all settled.
+
+    The Run's workers come from Orca (``worker-list``), not the launch ledger, so one-off workers
+    launched outside any runs dir are found too. A terminal still running a dispatch, one Orca
+    keeps for the user, one already gone and the caller's own terminal are kept and named.
+    """
+    me = os.environ.get("ORCA_TERMINAL_HANDLE")
+    live = {t.get("handle") for t in orca.terminals()}
+    by_handle: dict[str, list[dict]] = {}
+    for w in orca.workers(run):
+        h = w.get("agentTerminalHandle") or find(w, "resource.terminalHandle")
+        if h:
+            by_handle.setdefault(h, []).append(w)
+    kept = n_freed = 0
+    for h, ws in by_handle.items():
+        if h not in live:
+            continue
+        if h == me:
+            log(f"kept {h}: the caller's own terminal")
+            kept += 1
+            continue
+        busy = [w for w in ws if str(w.get("dispatchStatus") or "") in orca.RUNNING or w.get("terminalState") == "active"]
+        if busy:
+            log(f"kept {h}: dispatch {busy[0].get('dispatchId')} is {busy[0].get('dispatchStatus') or busy[0].get('terminalState')}")
+            kept += 1
+            continue
+        owner = next((find(w, "resource.ownerDispatchId") for w in ws if find(w, "resource.ownerDispatchId")), None) or ws[-1].get("dispatchId")
+        said = free(h, owner)
+        if freed(said):
+            log(f"{said.split(' ', 1)[0]} {h}")
+            n_freed += 1
+        else:
+            log(f"kept {h}: {said}")
+            kept += 1
+    log(f"run {run}: {n_freed} terminal(s) freed, {kept} kept")
     return 0
 
 

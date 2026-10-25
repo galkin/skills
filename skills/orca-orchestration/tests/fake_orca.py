@@ -31,6 +31,20 @@ def reply(result, ok=True):
     print(json.dumps({"ok": ok, "result": result} if ok else {"ok": ok, "error": result}))
 
 
+def post(s, kind, task_id, **fields):
+    """A worker's message about a task into the inbox (Orca 1.4.237's row shape)."""
+    t = s["tasks"][task_id]
+    s["n"] += 1
+    m = {"id": f"msg_{s['n']}", "type": kind, "run_id": t.get("run"), "to_handle": f"run:{t.get('run')}",
+         "from_handle": f"dispatch:{t['dispatch']}", "thread_id": None, "sequence": s["n"],
+         "created_at": f"2026-10-25T10:{s['n']:02d}:00Z", "subject": "", "body": ""}
+    payload = {"taskId": task_id, "dispatchId": t["dispatch"], **fields.pop("payload", {})}
+    m.update(fields, payload=json.dumps(payload))
+    if kind == "question":
+        m["thread_id"] = m["id"]
+    s.setdefault("inbox", []).append(m)
+
+
 def main():
     argv = sys.argv[1:]
     with open(os.environ["FAKE_ORCA_LOG"], "a") as f:
@@ -94,11 +108,15 @@ def main():
                     h = f"term_{s['n']}"
                     s["terminals"][h] = {"worktreePath": opt(rest, "--worktree", "").replace("path:", ""), "tail": ["Working"], "agent": opt(rest, "--agent")}
                 d = f"disp_{s['n']}"
-                s["tasks"][tid] = {"status": "running", "handle": h, "dispatch": d, "polls": 0, "title": opt(rest, "--task-title"), "spec": opt(rest, "--spec")}
+                s["tasks"][tid] = {"status": "running", "handle": h, "dispatch": d, "polls": 0, "title": opt(rest, "--task-title"), "spec": opt(rest, "--spec"),
+                                   "run": opt(rest, "--run")}
+                for m in s.pop("on_start", []):  # what the worker says once started: {"type": ..., "subject": ..., ...}
+                    post(s, m.pop("type"), tid, **m)
                 save(s)
                 # Orca 1.4.229 (verified 2026-10-19): the receipt names the task and dispatch, not the terminal.
                 return reply({"stage": "input_accepted", "task": {"id": tid}, "dispatch": {"id": d}, "launch": {"effective": opt(rest, "--agent", "terminal")}})
-            s["tasks"][tid] = {"status": "pending", "handle": None, "dispatch": None, "polls": 0, "title": opt(rest, "--task-title"), "spec": opt(rest, "--spec")}
+            s["tasks"][tid] = {"status": "pending", "handle": None, "dispatch": None, "polls": 0, "title": opt(rest, "--task-title"), "spec": opt(rest, "--spec"),
+                               "run": opt(rest, "--run")}
             save(s)
             return reply({"task": {"id": tid}})
         if cmd == "dispatch":
@@ -116,8 +134,11 @@ def main():
                     t["complete_after"] = t["polls"] + int(os.environ["FAKE_ORCA_AUTOCOMPLETE"]) - 1
                 if t.get("complete_after") is None and os.environ.get("FAKE_ORCA_AUTOCOMPLETE"):
                     t["complete_after"] = t["polls"] + int(os.environ["FAKE_ORCA_AUTOCOMPLETE"]) - 1
-                if t.get("complete_after") is not None and t["polls"] >= t["complete_after"]:
+                if t.get("complete_after") is not None and t["polls"] >= t["complete_after"] and t["status"] in ("running", "pending"):
                     t["status"] = t.get("final", "completed")
+                    if s.get("done_message") and t["status"] == "completed":  # the worker_done that completed it
+                        dm = dict(s["done_message"])
+                        post(s, "worker_done", tid, **dm)
                 rows.append({"id": tid, "status": t["status"], "spec": t.get("spec")})
             save(s)
             return reply({"tasks": rows})
@@ -126,7 +147,31 @@ def main():
             if not t:
                 return reply({"error": "unknown task"}, ok=False)
             return reply({"dispatch": {"id": t["dispatch"], "assignee_handle": t["handle"]}})
+        if cmd == "run-current":
+            if not s.get("bound"):
+                reply({"code": "not_found", "message": "This terminal is bound to no Run."}, ok=False)
+                sys.exit(1)
+            return reply({"run": {"id": s["bound"]}})
+        if cmd == "worker-list":
+            run = opt(rest, "--run")
+            rows = []
+            owners = {}
+            for tid, t in s["tasks"].items():
+                if t.get("run") != run or not t.get("handle"):
+                    continue
+                owners.setdefault(t["handle"], t["dispatch"])
+                running = t["status"] in ("running", "pending")
+                d = t["dispatch"]
+                reason = "user_takeover" if d in s.get("retained", []) else "external_terminal" if d in s.get("external", []) else None
+                rows.append({"dispatchId": d, "taskId": tid, "runId": run, "dispatchStatus": "dispatched" if running else t["status"],
+                             "agentTerminalHandle": t["handle"],
+                             "terminalState": "active" if running else "retained" if reason else "reclaimable",
+                             "resource": {"ownerDispatchId": owners[t["handle"]], "retainedReason": reason}})
+            return reply({"workers": rows, "page": {"nextCursor": None}})
         if cmd == "check":
+            if s.get("bound") and opt(rest, "--run") not in (None, s["bound"]):
+                reply({"code": "consumer_fenced", "message": f"This coordinator terminal is bound to {s['bound']}, not {opt(rest, '--run')}."}, ok=False)
+                sys.exit(1)
             # A bound Run replays its oldest batch until it is acked (Orca 1.4.229), so a batch
             # leaves the queue on --ack, not on delivery.
             if "--ack" in rest:

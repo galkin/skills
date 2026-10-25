@@ -606,3 +606,177 @@ def test_release_reports_a_refused_release(orca_env, wt, capsys):
     assert "retained: user_takeover" in capsys.readouterr().err
     orca_env.state(retained=[])
     assert cli.main(["release", "--task", "task_1"]) == 0
+
+
+# ----- run --wait: a one-off worker to completion -------------------------------------
+
+
+def one_off(wt, *extra, launch="codex:m:e"):
+    return cli.main(["run", "--worktree", wt, "--launch", launch, "--role", "author", "--title", "One-off", "--spec", "x",
+                     "--wait", "--poll-sec", "0", *extra])
+
+
+def test_run_wait_surfaces_a_question_prints_the_done_message_and_frees_the_terminal(orca_env, wt, monkeypatch, capsys):
+    monkeypatch.setenv("FAKE_ORCA_AUTOCOMPLETE", "3")
+    orca_env.state(bound="run_b",  # no --run: the bound Run
+                   on_start=[{"type": "heartbeat", "subject": "alive"},
+                             {"type": "question", "subject": "Question", "body": "A or B?", "payload": {"options": ["A", "B"]}}],
+                   done_message={"subject": "Cast drafted", "body": "Wrote cast.yaml.\nTwo open points.",
+                                 "payload": {"outcome": "succeeded", "reportPath": ".task/reports/cast.md"}})
+    assert one_off(wt) == 0
+    out = capsys.readouterr()
+    lines = out.out.splitlines()
+    assert "no --run: using the bound Run run_b" in out.err
+    q_line = next(l for l in lines if l.startswith("QUESTION"))
+    assert q_line.startswith("QUESTION msg_4 run run_b from dispatch:disp_2 task task_1 | Question | A or B? | options: A / B")
+    assert "run-use" not in q_line  # the bound Run: the reply needs no rebinding
+    assert "  reply: orca orchestration reply --id msg_4 --body '…'" in lines
+    assert not any(l.startswith("HEARTBEAT") for l in lines)
+    done = lines.index(next(l for l in lines if l.startswith("DONE")))
+    assert lines[done:done + 4] == ["DONE succeeded msg_5 task task_1 | Cast drafted", "Wrote cast.yaml.", "Two open points.",
+                                    "report .task/reports/cast.md"]
+    assert ["orchestration", "worker-release", "--dispatch", "disp_2", "--json"] in orca_env.calls()
+    assert "released term_2" in out.err
+    assert ["orchestration", "worker-start"] == next(c for c in orca_env.calls() if c[1] == "worker-start")[:2]
+    assert next(c for c in orca_env.calls() if c[1] == "worker-start")[3] == "run_b"
+
+
+def test_run_wait_closes_a_claude_route_terminal_and_keep_terminal_keeps_it(orca_env, wt, monkeypatch, capsys):
+    monkeypatch.setenv("FAKE_ORCA_AUTOCOMPLETE", "2")
+    orca_env.state(bound="r", external=["disp_2"], done_message={"subject": "Done", "payload": {"outcome": "succeeded"}})
+    assert one_off(wt, launch="claude:opus:medium") == 0
+    assert "closed term_1" in capsys.readouterr().err
+    assert "term_1" not in orca_env.state()["terminals"]  # Orca never owned it: terminal close
+    orca_env.state(done_message={"subject": "Done", "payload": {"outcome": "succeeded"}})
+    assert one_off(wt, "--keep-terminal") == 0
+    assert "kept (--keep-terminal)" in capsys.readouterr().err
+    assert sum(1 for c in orca_env.calls() if c[1] == "worker-release") == 1
+
+
+def test_run_wait_stops_on_an_escalation_and_keeps_the_terminal(orca_env, wt, capsys):
+    orca_env.state(bound="r", on_start=[{"type": "escalation", "subject": "Blocked", "body": "The batch API is down."}])
+    assert one_off(wt) == cli.EXIT_ATTENTION
+    out = capsys.readouterr()
+    assert any(l.startswith("ESCALATION msg_3 run r ") and "| Blocked | The batch API is down." in l for l in out.out.splitlines())
+    assert not any(c[1] == "worker-release" for c in orca_env.calls())
+    assert orca_env.outputs()["status"] == "escalation"
+
+
+def test_run_wait_reports_a_task_completed_without_a_worker_done(orca_env, wt, monkeypatch, capsys):
+    monkeypatch.setenv("FAKE_ORCA_AUTOCOMPLETE", "2")
+    orca_env.state(bound="r")
+    assert one_off(wt) == 0
+    assert "DONE task task_1 completed without a worker_done message" in capsys.readouterr().out
+
+
+def test_run_without_a_run_needs_a_binding(orca_env, wt):
+    with pytest.raises(SystemExit, match="bound to no Run"):
+        one_off(wt)
+
+
+# ----- watch ----------------------------------------------------------------------------
+
+
+def msg(mid, run, kind, created, subject="", body="", thread=None, sender="dispatch:ctx_1", **payload):
+    return {"id": mid, "type": kind, "run_id": run, "to_handle": f"run:{run}", "from_handle": sender, "thread_id": thread,
+            "created_at": created, "subject": subject, "body": body, "payload": json.dumps(payload)}
+
+
+def test_watch_prints_new_events_of_every_run_once_and_drops_heartbeats(orca_env, tmp_path, capsys):
+    state = tmp_path / "watch.json"
+    runs_file = tmp_path / "runs"
+    runs_file.write_text("run_a  # the queue's Run\nrun_b\n")
+    orca_env.state(bound="run_a", inbox=[
+        msg("m1", "run_a", "worker_done", "01", "Old unit", outcome="succeeded"),       # history: not printed on the first start
+        msg("m2", "run_b", "question", "02", "Question", "Answered already?", thread="m2"),
+        {"id": "m3", "thread_id": "m2", "from_handle": "run:run_b", "type": "status", "created_at": "03"},
+        msg("m4", "run_b", "question", "04", "Question", "Still open?", thread="m4", taskId="task_9"),
+    ])
+    assert cli.main(["watch", "--runs-file", str(runs_file), "--state", str(state), "--once"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 1 and lines[0].split(" ", 1)[1] == (
+        "QUESTION m4 run run_b from dispatch:ctx_1 task task_9 | Question | Still open? | bound to run_a: orca orchestration run-use --id run_b before replying")
+    orca_env.state(inbox=orca_env.state()["inbox"] + [
+        msg("m5", "run_a", "heartbeat", "05", "alive"),
+        msg("m6", "run_a", "worker_done", "06", "Unit 2 done", "Body", outcome="succeeded", reportPath="r.md"),
+        msg("m7", "run_c", "question", "07", "Question", "Not watched", thread="m7"),
+        msg("m8", "run_a", "escalation", "08", "Blocked", "Need a decision"),
+    ])
+    assert cli.main(["watch", "--runs-file", str(runs_file), "--state", str(state), "--once"]) == 0  # a restart
+    lines = [l.split(" ", 1)[1] for l in capsys.readouterr().out.splitlines()]
+    assert lines == ["DONE succeeded m6 run run_a from dispatch:ctx_1 | Unit 2 done | Body | report r.md",
+                     "ESCALATION m8 run run_a from dispatch:ctx_1 | Blocked | Need a decision"]
+    runs_file.write_text("run_a\nrun_b\nrun_c\n")  # a Run added while it runs
+    assert cli.main(["watch", "--runs-file", str(runs_file), "--state", str(state), "--once"]) == 0
+    assert [l.split()[2] for l in capsys.readouterr().out.splitlines()] == ["m7"]
+    assert not any(c[1] == "check" or c[1] == "run-use" for c in orca_env.calls())  # nothing consumed, nothing rebound
+
+
+def test_watch_follows_the_slot_logs_for_holds_and_stalls(orca_env, tmp_path, capsys):
+    log = tmp_path / "slots.log"
+    log.write_text("09:00 slot alpha 1.1 HELD: an old hold, before the watch\n")
+    state = tmp_path / "watch.json"
+    args = ["watch", "--run", "r", "--log", str(log), "--state", str(state), "--once"]
+    assert cli.main(args) == 0
+    assert capsys.readouterr().out == ""  # a log is followed from its end when first seen
+    with log.open("a") as f:
+        f.write("10:00 slot alpha 1.2 start\n10:05 slot alpha 1.2 stalled at author: waits until 25 15:00\n"
+                "10:06 slot beta 1.3 HELD: step review exit 1, attempt 1, log x\n10:07 slot beta partial")
+    assert cli.main(args) == 0
+    assert capsys.readouterr().out.splitlines() == ["SLOT 10:05 slot alpha 1.2 stalled at author: waits until 25 15:00",
+                                                    "SLOT 10:06 slot beta 1.3 HELD: step review exit 1, attempt 1, log x"]
+    with log.open("a") as f:
+        f.write(" line done\n10:08 slot beta queue empty\n")
+    assert cli.main(args) == 0
+    assert capsys.readouterr().out.splitlines() == ["SLOT 10:08 slot beta queue empty"]
+
+
+def test_watch_keeps_going_while_the_inbox_is_down(orca_env, tmp_path, capsys):
+    orca_env.state(inbox_down=True)
+    assert cli.main(["watch", "--run", "r", "--state", str(tmp_path / "w.json"), "--once"]) == 0
+    assert "inbox unavailable" in capsys.readouterr().err
+
+
+# ----- close --run and drain under another binding ------------------------------------------
+
+
+def test_close_run_frees_the_settled_worker_terminals_of_a_run(orca_env, wt, monkeypatch, capsys):
+    for title in ("a", "b", "c", "d"):
+        cli.main(["run", "--run", "r", "--worktree", wt, "--launch", "codex:m:e", "--role", "author", "--title", title, "--spec", "x"])
+    cli.main(["run", "--run", "other", "--worktree", wt, "--launch", "codex:m:e", "--role", "author", "--title", "e", "--spec", "x"])
+    s = orca_env.state()
+    for t in ("task_1", "task_3", "task_5", "task_9"):
+        s["tasks"][t]["status"] = "completed"
+    # task_1 term_2 settled; task_3 term_4 settled, the user took it; task_5 term_6 settled, claude route;
+    # task_7 term_8 still running; task_9 term_10 another Run's
+    orca_env.state(tasks=s["tasks"], retained=["disp_4"], external=["disp_6"])
+    monkeypatch.setenv("ORCA_TERMINAL_HANDLE", "term_coordinator")
+    capsys.readouterr()
+    assert cli.main(["close", "--run", "r"]) == 0
+    err = capsys.readouterr().err
+    assert "released term_2" in err and "closed term_6" in err
+    assert "kept term_4: worker-release refused: retained: user_takeover" in err
+    assert "kept term_8: dispatch disp_8 is dispatched" in err
+    assert "run r: 2 terminal(s) freed, 2 kept" in err
+    assert set(orca_env.state()["terminals"]) == {"term_2", "term_4", "term_8", "term_10"}  # released stays listed in the fake
+    assert ["orchestration", "worker-release", "--dispatch", "disp_10", "--json"] not in orca_env.calls()
+
+
+def test_drain_pauses_instead_of_spinning_when_its_run_is_fenced(orca_env, monkeypatch, capsys):
+    """The coordinator ran run-use for another Run: check --run answers consumer_fenced at once."""
+    orca_env.state(bound="other")
+    pauses = []
+
+    class Stop(Exception):
+        pass
+
+    def sleep(sec):
+        pauses.append(sec)
+        if len(pauses) > 1:
+            raise Stop
+
+    monkeypatch.setattr(time, "sleep", sleep)
+    with pytest.raises(Stop):
+        cli.main(["drain", "--run", "r"])
+    assert pauses == [30, 30]
+    assert "check --run r refused: This coordinator terminal is bound to other, not r." in capsys.readouterr().err

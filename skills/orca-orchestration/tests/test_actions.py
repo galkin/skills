@@ -181,3 +181,116 @@ def test_check_only_runs_the_full_checks_and_commits_nothing(repos):
     assert "unformatted" in (main / ".task" / "ci" / "Add_b.check.log").read_text()
     r = run_commit(slot, main, "Add b", CHECKS_FULL="test -f src/b.md")  # the resumed run's commit step
     assert r.returncode == 0 and git(main, "log", "--format=%s", "-1") == "Add b"
+
+
+def slot_history_with_a_merge(main, slot):
+    """A long-lived story branch: its own commit, then a merge of the integration branch after
+    an upstream change, then another commit of its own."""
+    (slot / "src" / "story.md").write_text("story 1\n")
+    git(slot, "add", "-A")
+    git(slot, "commit", "-qm", "Story: first draft")
+    (main / "src" / "upstream.md").write_text("upstream\n")
+    git(main, "add", "-A")
+    git(main, "commit", "-qm", "Upstream change")
+    git(slot, "merge", "-q", "--no-edit", "integration")
+    (slot / "src" / "story.md").write_text("story 2\n")
+
+
+@pytest.mark.parametrize("mode", ["all", "branch"])
+def test_a_slot_history_with_a_merge_commit_lands_as_a_fast_forward(repos, mode):
+    """The integration branch has not moved since the slot merged it: no cherry-pick, no partial picks."""
+    main, slot = repos
+    slot_history_with_a_merge(main, slot)
+    r = run_commit(slot, main, "Story: second draft", MERGE=mode)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "fast-forwarded to slot" in r.stdout
+    assert git(main, "rev-parse", "HEAD") == git(slot, "rev-parse", "HEAD")
+    assert (main / "src" / "story.md").read_text() == "story 2\n"
+    assert not (main / ".task" / "merge.lock").exists()
+
+
+def test_branch_mode_fast_forwards_a_linear_slot(repos):
+    main, slot = repos
+    (slot / "src" / "b.md").write_text("b\n")
+    git(slot, "add", "-A")
+    git(slot, "commit", "-qm", "Add b")
+    (slot / "src" / "c.md").write_text("c\n")
+    r = run_commit(slot, main, "Add c", MERGE="branch", AFTER_COMMIT="echo after > .task/after")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert git(main, "log", "--format=%s", "-3").splitlines() == ["Add c", "Add b", "init"]
+    assert git(main, "rev-list", "--merges", "--count", "HEAD") == "0"
+    assert (main / ".task" / "after").exists()
+    r = run_commit(slot, main, "Add c", MERGE="branch")  # a retry after failed post-merge checks
+    assert r.returncode == 0 and "already merged" in r.stdout, r.stdout + r.stderr
+
+
+@pytest.mark.parametrize("mode", ["all", "branch"])
+def test_a_diverged_integration_branch_gets_a_real_merge(repos, mode):
+    main, slot = repos
+    slot_history_with_a_merge(main, slot)
+    (main / "src" / "other.md").write_text("another slot's unit\n")  # the integration branch moved on
+    git(main, "add", "-A")
+    git(main, "commit", "-qm", "Another slot's unit")
+    r = run_commit(slot, main, "Story: second draft", MERGE=mode)
+    assert r.returncode == 0, r.stdout + r.stderr
+    head = git(main, "rev-parse", "HEAD")
+    assert git(main, "rev-list", "--parents", "-n", "1", head).split()[1:] == [
+        git(main, "rev-parse", "HEAD^1"), git(slot, "rev-parse", "HEAD")]
+    assert git(main, "log", "--format=%s", "-1") == "Merge slot: Story: second draft"
+    assert (main / "src" / "story.md").read_text() == "story 2\n"
+    assert (main / "src" / "other.md").exists() and (main / "src" / "upstream.md").exists()
+    # every commit is there once: the story's own two, upstream, the other slot's, init, two merges
+    assert git(main, "log", "--format=%s").count("Story: first draft") == 1
+
+
+def test_a_failed_merge_leaves_the_integration_branch_untouched(repos):
+    main, slot = repos
+    slot_history_with_a_merge(main, slot)
+    (slot / "src" / "a.md").write_text("a from the story\n")
+    (main / "src" / "a.md").write_text("a from main\n")
+    git(main, "commit", "-qam", "Main edits a")
+    before = git(main, "rev-parse", "HEAD")
+    r = run_commit(slot, main, "Story: second draft", MERGE="branch")
+    assert r.returncode == 1 and "MERGE FAILED: merge of slot" in r.stdout, r.stdout + r.stderr
+    assert "back at" in r.stdout and "CONFLICT" in r.stdout
+    assert git(main, "rev-parse", "HEAD") == before
+    assert git(main, "status", "--porcelain") == ""  # no merge in progress, nothing staged
+    assert not (main / ".task" / "merge.lock").exists()
+    r = run_commit(slot, main, "Story: second draft", MERGE="branch",
+                   CONFLICT_HOOK="printf 'merged %s\\n' \"$1\" > src/a.md")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert git(main, "log", "--format=%s", "-1") == "Merge slot: Story: second draft"
+    assert (main / "src" / "a.md").read_text().startswith("merged ")
+
+
+def test_a_failed_cherry_pick_midway_undoes_the_picks_before_it(repos):
+    """MERGE=all on a linear slot: the second commit conflicts, so the first one is taken back."""
+    main, slot = repos
+    (slot / "src" / "q.md").write_text("q\n")
+    assert run_commit(slot, main, "Add q", MERGE="off").returncode == 0
+    (main / "src" / "a.md").write_text("a from main\n")
+    git(main, "commit", "-qam", "Main edits a")
+    before = git(main, "rev-parse", "HEAD")
+    (slot / "src" / "a.md").write_text("a from slot\n")
+    r = run_commit(slot, main, "Improve a", MERGE="all")
+    assert r.returncode == 1 and "MERGE FAILED: Improve a" in r.stdout, r.stdout + r.stderr
+    assert git(main, "rev-parse", "HEAD") == before  # "Add q" was picked, then taken back
+    assert not (main / "src" / "q.md").exists()
+    assert git(main, "status", "--porcelain") == ""
+
+
+def test_a_failed_merge_keeps_an_unstaged_edit_in_the_integration_worktree(repos):
+    main, slot = repos
+    (main / "src" / "notes.md").write_text("notes\n")
+    git(main, "add", "-A")
+    git(main, "commit", "-qm", "Add notes")
+    (main / "src" / "notes.md").write_text("the user's unsaved edit\n")  # unstaged, never touched
+    (slot / "src" / "q.md").write_text("q\n")
+    assert run_commit(slot, main, "Add q", MERGE="off").returncode == 0
+    (main / "src" / "a.md").write_text("a from main\n")
+    git(main, "commit", "-qm", "Main edits a", "--", "src/a.md")
+    (slot / "src" / "a.md").write_text("a from slot\n")
+    r = run_commit(slot, main, "Improve a", MERGE="all")
+    assert r.returncode == 1 and "MERGE FAILED" in r.stdout
+    assert (main / "src" / "notes.md").read_text() == "the user's unsaved edit\n"
+    assert git(main, "log", "--format=%s", "-1") == "Main edits a"
