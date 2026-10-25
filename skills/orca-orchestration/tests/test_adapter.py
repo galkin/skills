@@ -791,7 +791,17 @@ def test_drain_pauses_instead_of_spinning_when_its_run_is_fenced(orca_env, monke
         if len(pauses) > 1:
             raise Stop
 
+    checks = []
+    real_call = cli.orca.call
+
+    def call(*argv, **kw):  # a drain that spins instead of pausing stops here, with no pause recorded
+        checks.append(argv)
+        if len(checks) > 2:
+            raise Stop
+        return real_call(*argv, **kw)
+
     monkeypatch.setattr(cli, "time", CliTime(sleep))
+    monkeypatch.setattr(cli.orca, "call", call)
     with pytest.raises(Stop):
         cli.main(["drain", "--run", "r"])
     assert pauses == [30, 30]
