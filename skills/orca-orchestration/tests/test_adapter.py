@@ -14,6 +14,22 @@ from adapter import budget, cli, cost
 FAKE = Path(__file__).resolve().parent / "fake_orca.py"
 
 
+class CliTime:
+    """``time`` as adapter/cli.py looks it up (``cli.time``), with a stub ``sleep``.
+
+    Not ``time.sleep`` process-wide: ``orca.call`` runs the fake orca with
+    ``subprocess.run(..., timeout=...)``, which polls a child that has closed its pipes but not
+    yet exited with ``time.sleep`` (0.0005 s, doubling); a process-wide stub would see those
+    polls as the adapter's own pauses. Every other name is the real module's, read on use, so a
+    test may still monkeypatch ``time.time``."""
+
+    def __init__(self, sleep):
+        self.sleep = sleep
+
+    def __getattr__(self, name):
+        return getattr(time, name)
+
+
 @pytest.fixture
 def wt(tmp_path):
     """A worktree with an author and a reviewer role file, for the codex route."""
@@ -32,7 +48,7 @@ def orca_env(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_ORCA_STATE", str(state))
     monkeypatch.setenv("FAKE_ORCA_LOG", str(log))
     monkeypatch.setenv("DAGU_OUTPUT_FILE", str(tmp_path / "out"))
-    monkeypatch.setattr(time, "sleep", lambda s: None)
+    monkeypatch.setattr(cli, "time", CliTime(lambda s: None))
 
     class Env:
         def calls(self):
@@ -775,7 +791,7 @@ def test_drain_pauses_instead_of_spinning_when_its_run_is_fenced(orca_env, monke
         if len(pauses) > 1:
             raise Stop
 
-    monkeypatch.setattr(time, "sleep", sleep)
+    monkeypatch.setattr(cli, "time", CliTime(sleep))
     with pytest.raises(Stop):
         cli.main(["drain", "--run", "r"])
     assert pauses == [30, 30]
